@@ -1,0 +1,80 @@
+name: Build Release APK
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version-file: .github/.java-version
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Write client_secrets.json (if available)
+        if: ${{ env.GOOGLE_CLIENT_SECRETS_JSON != '' }}
+        env:
+          GOOGLE_CLIENT_SECRETS_JSON: ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON }}
+        run: |
+          mkdir -p app/src/main/assets
+          echo "$GOOGLE_CLIENT_SECRETS_JSON" > app/src/main/assets/client_secrets.json
+
+      - name: Clean CMake cache
+        run: rm -rf app/.cxx chimahon/.cxx
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease -Penable-updater
+
+      - name: Upload arm64-v8a Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-arm64-v8a-release
+          path: app/build/outputs/apk/release/*arm64-v8a*.apk
+          if-no-files-found: error
+
+      - name: Upload all Release APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-release-apks
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v$(date +'%Y.%m.%d-%H%M')-$(git rev-parse --short HEAD)"
+          echo "Publishing release for $tag..."
+          gh release create "$tag" \
+            app/build/outputs/apk/release/*.apk \
+            --title "Chimahon Release ($tag)" \
+            --notes "Custom Release build (optimized arm64-v8a & universal) with Webtoon scroll acceleration and reading time estimate." || echo "Release creation skipped or failed."

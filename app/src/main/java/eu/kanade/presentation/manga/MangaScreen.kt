@@ -644,6 +644,7 @@ private fun MangaScreenSmallImpl(
                             manga = state.manga,
                             sourceName = remember { state.source.getNameForMangaInfo(state.mergedData?.sources) },
                             isStubSource = remember { state.source is StubSource },
+                            chapterCount = state.readingTimeChapterCount,
                             // KMK -->
                             isSourceIncognito = remember { state.source.isIncognitoModeEnabled() },
                             // KMK <--
@@ -1108,6 +1109,7 @@ private fun MangaScreenLargeImpl(
                             manga = state.manga,
                             sourceName = remember { state.source.getNameForMangaInfo(state.mergedData?.sources) },
                             isStubSource = remember { state.source is StubSource },
+                            chapterCount = state.readingTimeChapterCount,
                             // KMK -->
                             isSourceIncognito = remember { state.source.isIncognitoModeEnabled() },
                             // KMK <--

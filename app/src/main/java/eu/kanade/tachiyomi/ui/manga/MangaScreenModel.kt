@@ -401,6 +401,30 @@ class MangaScreenModel(
         }
 
         screenModelScope.launchIO {
+            getMangaAndChapters.subscribe(mangaId, applyFilter = false).distinctUntilChanged()
+                // SY -->
+                .combine(
+                    getMergedChaptersByMangaId.subscribe(mangaId, true, applyFilter = false)
+                        .distinctUntilChanged(),
+                ) { (manga, chapters), mergedChapters ->
+                    if (manga.source == MERGED_SOURCE_ID) {
+                        mergedChapters
+                    } else {
+                        chapters
+                    }
+                }
+                // SY <--
+                .map { it.readingTimeChapterCount() }
+                .distinctUntilChanged()
+                .flowWithLifecycle(lifecycle)
+                .collectLatest { readingTimeChapterCount ->
+                    updateSuccessState {
+                        it.copy(readingTimeChapterCount = readingTimeChapterCount)
+                    }
+                }
+        }
+
+        screenModelScope.launchIO {
             getExcludedScanlators.subscribe(mangaId)
                 .flowWithLifecycle(lifecycle)
                 .distinctUntilChanged()
@@ -475,6 +499,11 @@ class MangaScreenModel(
                 getMangaAndChapters.awaitChapters(mangaId, applyFilter = true)
             }
                 .toChapterListItems(manga, mergedData)
+            val readingTimeChapterCount = if (manga.source == MERGED_SOURCE_ID) {
+                getMergedChaptersByMangaId.await(mangaId, applyFilter = false)
+            } else {
+                getMangaAndChapters.awaitChapters(mangaId, applyFilter = false)
+            }.readingTimeChapterCount()
             val meta = getFlatMetadata.await(mangaId)
             // SY <--
 
@@ -495,6 +524,7 @@ class MangaScreenModel(
                     source = source,
                     isFromSource = isFromSource,
                     chapters = chapters,
+                    readingTimeChapterCount = readingTimeChapterCount,
                     // SY -->
                     availableScanlators = if (manga.source == MERGED_SOURCE_ID) {
                         getAvailableScanlators.awaitMerge(mangaId)
@@ -2149,6 +2179,7 @@ class MangaScreenModel(
             val source: Source,
             val isFromSource: Boolean,
             val chapters: List<ChapterList.Item>,
+            val readingTimeChapterCount: Int = 0,
             val availableScanlators: ImmutableSet<String>,
             val excludedScanlators: ImmutableSet<String>,
             val trackingCount: Int = 0,
@@ -2368,3 +2399,21 @@ sealed interface RelatedManga {
     }
 }
 // KMK <--
+
+private fun List<Chapter>.readingTimeChapterCount(): Int {
+    return distinctBy { it.readingTimeDeduplicationKey() }.size
+}
+
+private fun Chapter.readingTimeDeduplicationKey(): String {
+    if (isRecognizedNumber) {
+        return "number:$chapterNumber"
+    }
+
+    val normalizedName = name.trim().lowercase()
+    return if (normalizedName.isNotEmpty()) {
+        "name:$normalizedName"
+    } else {
+        "id:$id"
+    }
+}
+

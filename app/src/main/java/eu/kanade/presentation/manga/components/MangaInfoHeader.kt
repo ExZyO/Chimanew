@@ -27,6 +27,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CallMerge
+import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HourglassDisabled
@@ -126,6 +127,7 @@ fun MangaInfoBox(
     manga: Manga,
     sourceName: String,
     isStubSource: Boolean,
+    chapterCount: Int,
     // KMK -->
     isSourceIncognito: Boolean,
     // KMK <--
@@ -142,6 +144,10 @@ fun MangaInfoBox(
     // KMK -->
     val usePanoramaCover by Injekt.get<UiPreferences>().usePanoramaCoverMangaInfo().collectAsState()
     val topAlignCover by Injekt.get<UiPreferences>().topAlignCover().collectAsState()
+    val context = LocalContext.current
+    val readingTimeEstimate = remember(chapterCount, context) {
+        chapterCount.toEstimatedReadingTime(context)
+    }
     // KMK <--
     Box(modifier = modifier) {
         // Backdrop
@@ -191,6 +197,7 @@ fun MangaInfoBox(
                     manga = manga,
                     sourceName = sourceName,
                     isStubSource = isStubSource,
+                    readingTimeEstimate = readingTimeEstimate,
                     // KMK -->
                     isSourceIncognito = isSourceIncognito,
                     // KMK <--
@@ -211,6 +218,7 @@ fun MangaInfoBox(
                     manga = manga,
                     sourceName = sourceName,
                     isStubSource = isStubSource,
+                    readingTimeEstimate = readingTimeEstimate,
                     // KMK -->
                     isSourceIncognito = isSourceIncognito,
                     // KMK <--
@@ -489,6 +497,7 @@ private fun MangaAndSourceTitlesLarge(
     manga: Manga,
     sourceName: String,
     isStubSource: Boolean,
+    readingTimeEstimate: String?,
     // KMK -->
     isSourceIncognito: Boolean,
     // KMK <--
@@ -553,6 +562,7 @@ private fun MangaAndSourceTitlesLarge(
             status = manga.status,
             sourceName = sourceName,
             isStubSource = isStubSource,
+            readingTimeEstimate = readingTimeEstimate,
             // KMK -->
             isSourceIncognito = isSourceIncognito,
             // KMK <--
@@ -572,6 +582,7 @@ private fun MangaAndSourceTitlesSmall(
     manga: Manga,
     sourceName: String,
     isStubSource: Boolean,
+    readingTimeEstimate: String?,
     // KMK -->
     isSourceIncognito: Boolean,
     // KMK <--
@@ -648,6 +659,7 @@ private fun MangaAndSourceTitlesSmall(
                 status = manga.status,
                 sourceName = sourceName,
                 isStubSource = isStubSource,
+                readingTimeEstimate = readingTimeEstimate,
                 // KMK -->
                 isSourceIncognito = isSourceIncognito,
                 // KMK <--
@@ -670,6 +682,7 @@ private fun ColumnScope.MangaContentInfo(
     status: Long,
     sourceName: String,
     isStubSource: Boolean,
+    readingTimeEstimate: String?,
     // KMK -->
     isSourceIncognito: Boolean,
     // KMK <--
@@ -866,6 +879,27 @@ private fun ColumnScope.MangaContentInfo(
                 ),
                 overflow = TextOverflow.Ellipsis,
                 maxLines = 1,
+            )
+        }
+    }
+
+    if (readingTimeEstimate != null) {
+        Row(
+            modifier = Modifier.secondaryItemAlpha(),
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ChromeReaderMode,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = readingTimeEstimate,
+                style = MaterialTheme.typography.bodyMedium,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                textAlign = textAlign,
             )
         }
     }
