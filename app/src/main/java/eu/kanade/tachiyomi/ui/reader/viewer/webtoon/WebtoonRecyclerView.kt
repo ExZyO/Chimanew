@@ -112,6 +112,8 @@ class WebtoonRecyclerView @JvmOverloads constructor(
         if (eInkMode) return false
         if (currentScale > 1f) return zoomFling(velocityX, velocityY)
 
+        applyWebtoonMaxFlingVelocity()
+
         val currentSpeed = abs(velocityY).toFloat()
         val adjustedVelocity = when {
             currentSpeed < FLING_BOOST_ZONE_ONE_MIN_SPEED -> velocityY
@@ -123,34 +125,43 @@ class WebtoonRecyclerView @JvmOverloads constructor(
         return super.fling(velocityX, adjustedVelocity)
     }
 
-    private fun applyWebtoonMaxFlingVelocity() {
-        val maxFlingField = try {
-            RecyclerView::class.java.getDeclaredField(RECYCLER_VIEW_MAX_FLING_VELOCITY_FIELD)
-        } catch (e: NoSuchFieldException) {
-            logcat(LogPriority.DEBUG, e) { "RecyclerView max fling velocity field is unavailable" }
-            return
-        } catch (e: SecurityException) {
-            logcat(LogPriority.DEBUG, e) { "RecyclerView max fling velocity field is inaccessible" }
-            return
-        }
+    private var maxFlingVelocityApplied = false
 
-        if (maxFlingField.type != Int::class.javaPrimitiveType) {
-            logcat(LogPriority.DEBUG) {
-                "Unexpected RecyclerView max fling velocity field type: ${maxFlingField.type}"
-            }
-            return
-        }
+    private fun applyWebtoonMaxFlingVelocity() {
+        if (maxFlingVelocityApplied) return
+        val maxFlingField = findMaxFlingVelocityField() ?: return
 
         try {
             maxFlingField.isAccessible = true
             maxFlingField.setInt(this, WEBTOON_MAX_FLING_VELOCITY)
-        } catch (e: IllegalAccessException) {
+            maxFlingVelocityApplied = true
+        } catch (e: Exception) {
             logcat(LogPriority.DEBUG, e) { "Failed to set RecyclerView max fling velocity" }
-        } catch (e: IllegalArgumentException) {
-            logcat(LogPriority.DEBUG, e) { "Failed to set RecyclerView max fling velocity" }
-        } catch (e: SecurityException) {
-            logcat(LogPriority.DEBUG, e) { "RecyclerView max fling velocity field became inaccessible" }
         }
+    }
+
+    private fun findMaxFlingVelocityField(): java.lang.reflect.Field? {
+        try {
+            val field = RecyclerView::class.java.getDeclaredField(RECYCLER_VIEW_MAX_FLING_VELOCITY_FIELD)
+            if (field.type == Int::class.javaPrimitiveType) return field
+        } catch (_: NoSuchFieldException) {
+        } catch (_: SecurityException) {
+        }
+
+        val initialMaxFling = ViewConfiguration.get(context).scaledMaximumFlingVelocity
+        for (field in RecyclerView::class.java.declaredFields) {
+            if (field.type == Int::class.javaPrimitiveType && !java.lang.reflect.Modifier.isStatic(field.modifiers)) {
+                try {
+                    field.isAccessible = true
+                    val value = field.getInt(this)
+                    if (value == initialMaxFling || value == WEBTOON_MAX_FLING_VELOCITY) {
+                        return field
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
+        return null
     }
 
     private fun getPositionX(positionX: Float): Float {
