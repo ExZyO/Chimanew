@@ -5,9 +5,10 @@
 
 **Mihon-focused immersion fork with Manga, Novel, and Anime support.**
 
-[![GitHub downloads](https://img.shields.io/github/downloads/sohilsayed/chimahon/latest/total?label=Latest%20Downloads&labelColor=27303D&color=0D1111&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/sohilsayed/chimahon/releases/latest)
-[![GitHub downloads](https://img.shields.io/github/downloads/sohilsayed/chimahon/total?label=Total%20Downloads&labelColor=27303D&color=0D1111&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/sohilsayed/chimahon/releases)
-[![Discord](https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white&label=)](https://discord.gg/Ak2sW9Nvr9)
+> [!NOTE]
+> **Custom Fork (`app.chimahon.custom`)**: Contains Webtoon Scroll Acceleration (up to 3.2x), Manga Reading Time Estimates, and custom package ID for side-by-side installation.
+> - 📖 **[Upstream Update Guide](UPDATE_GUIDE.md)**: How to update to new upstream releases while preserving custom features.
+> - 🤖 **[AI Agent Guide](AGENTS.md)**: Instructions for AI agents working on this codebase.
 
 ---
 
