@@ -34,12 +34,6 @@ android {
         buildConfigField("boolean", "HAS_LOCAL_OCR", hasLocalOcr.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        if (targetAbi != null) {
-            ndk {
-                abiFilters += targetAbi
-            }
-        }
     }
 
     buildTypes {
