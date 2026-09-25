@@ -13,7 +13,12 @@ android {
         consumerProguardFiles("consumer-rules.pro")
 
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            val targetAbi = project.findProperty("targetAbi") as? String
+            if (targetAbi != null) {
+                abiFilters += targetAbi
+            } else {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            }
         }
     }
 

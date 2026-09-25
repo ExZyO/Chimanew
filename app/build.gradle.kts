@@ -16,12 +16,13 @@ val enableUpdater = Config.enableUpdater
 val hasLocalOcr = file("../chimahon-local-ocr/build.gradle.kts").exists()
 val releaseVersionName = providers.gradleProperty("releaseVersionName").orNull
 val releaseVersionCode = providers.gradleProperty("releaseVersionCode").orNull?.toIntOrNull()
+val targetAbi = providers.gradleProperty("targetAbi").orNull
 
 android {
     namespace = "eu.kanade.tachiyomi"
 
     defaultConfig {
-        applicationId = "app.chimahon"
+        applicationId = "app.chimahon.custom"
 
         versionCode = releaseVersionCode ?: 3
         versionName = releaseVersionName ?: "1.1.0"
@@ -33,6 +34,12 @@ android {
         buildConfigField("boolean", "HAS_LOCAL_OCR", hasLocalOcr.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        if (targetAbi != null) {
+            ndk {
+                abiFilters += targetAbi
+            }
+        }
     }
 
     buildTypes {
@@ -111,9 +118,13 @@ android {
     splits {
         abi {
             isEnable = true
-            isUniversalApk = true
+            isUniversalApk = targetAbi == null
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            if (targetAbi != null) {
+                include(targetAbi)
+            } else {
+                include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            }
         }
     }
 
