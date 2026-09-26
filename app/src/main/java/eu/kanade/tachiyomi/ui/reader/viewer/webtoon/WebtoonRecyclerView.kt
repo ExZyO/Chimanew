@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.ui.reader.viewer.GestureDetectorWithLongTap
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Implementation of a [RecyclerView] used by the webtoon reader.
@@ -25,9 +26,11 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     defStyle: Int = 0,
 ) : RecyclerView(context, attrs, defStyle) {
 
+    // KMK -->
     init {
         applyWebtoonMaxFlingVelocity()
     }
+    // KMK <--
 
     private var isZooming = false
     private var atLastPosition = false
@@ -108,33 +111,32 @@ class WebtoonRecyclerView @JvmOverloads constructor(
         }
     }
 
+    // KMK -->
     override fun fling(velocityX: Int, velocityY: Int): Boolean {
         if (eInkMode) return false
         if (currentScale > 1f) return zoomFling(velocityX, velocityY)
 
-        applyWebtoonMaxFlingVelocity()
-
         val currentSpeed = abs(velocityY).toFloat()
         val adjustedVelocity = when {
             currentSpeed < FLING_BOOST_ZONE_ONE_MIN_SPEED -> velocityY
-            currentSpeed < FLING_BOOST_ZONE_TWO_MIN_SPEED -> (velocityY * FLING_BOOST_ZONE_ONE_MULTIPLIER).toInt()
-            currentSpeed < FLING_BOOST_ZONE_THREE_MIN_SPEED -> (velocityY * FLING_BOOST_ZONE_TWO_MULTIPLIER).toInt()
-            else -> (velocityY * FLING_BOOST_ZONE_THREE_MULTIPLIER).toInt()
+            currentSpeed < FLING_BOOST_ZONE_TWO_MIN_SPEED -> (velocityY * FLING_BOOST_ZONE_ONE_MULTIPLIER).roundToInt()
+            currentSpeed < FLING_BOOST_ZONE_THREE_MIN_SPEED -> (velocityY * FLING_BOOST_ZONE_TWO_MULTIPLIER).roundToInt()
+            else -> (velocityY * FLING_BOOST_ZONE_THREE_MULTIPLIER).roundToInt()
         }
 
         return super.fling(velocityX, adjustedVelocity)
     }
 
-    private var maxFlingVelocityApplied = false
+    private var maxFlingVelocityAttempted = false
 
     private fun applyWebtoonMaxFlingVelocity() {
-        if (maxFlingVelocityApplied) return
-        val maxFlingField = findMaxFlingVelocityField() ?: return
+        if (maxFlingVelocityAttempted) return
+        maxFlingVelocityAttempted = true
 
+        val maxFlingField = findMaxFlingVelocityField() ?: return
         try {
             maxFlingField.isAccessible = true
             maxFlingField.setInt(this, WEBTOON_MAX_FLING_VELOCITY)
-            maxFlingVelocityApplied = true
         } catch (e: Exception) {
             logcat(LogPriority.DEBUG, e) { "Failed to set RecyclerView max fling velocity" }
         }
@@ -154,7 +156,7 @@ class WebtoonRecyclerView @JvmOverloads constructor(
                 try {
                     field.isAccessible = true
                     val value = field.getInt(this)
-                    if (value == initialMaxFling || value == WEBTOON_MAX_FLING_VELOCITY) {
+                    if (value == initialMaxFling) {
                         return field
                     }
                 } catch (_: Exception) {
@@ -163,6 +165,7 @@ class WebtoonRecyclerView @JvmOverloads constructor(
         }
         return null
     }
+    // KMK <--
 
     private fun getPositionX(positionX: Float): Float {
         if (currentScale < 1) {
@@ -454,6 +457,7 @@ private const val ANIMATOR_DURATION_TIME = 200
 private const val MIN_RATE = 0.5f
 private const val DEFAULT_RATE = 1f
 private const val MAX_SCALE_RATE = 3f
+// KMK -->
 private const val WEBTOON_MAX_FLING_VELOCITY = 900000
 private const val RECYCLER_VIEW_MAX_FLING_VELOCITY_FIELD = "mMaxFlingVelocity"
 private const val FLING_BOOST_ZONE_ONE_MIN_SPEED = 6500f
@@ -462,4 +466,4 @@ private const val FLING_BOOST_ZONE_THREE_MIN_SPEED = 16000f
 private const val FLING_BOOST_ZONE_ONE_MULTIPLIER = 1.1f
 private const val FLING_BOOST_ZONE_TWO_MULTIPLIER = 1.5f
 private const val FLING_BOOST_ZONE_THREE_MULTIPLIER = 3.2f
-
+// KMK <--

@@ -10,7 +10,6 @@ This rule applies whenever an agent is working in this repository or asked to up
      ```proguard
      -keepclassmembers class androidx.recyclerview.widget.RecyclerView {
          int mMaxFlingVelocity;
-         int mMinFlingVelocity;
      }
      ```
      Without this, release builds will clamp fling velocity to standard 8,000 px/s.

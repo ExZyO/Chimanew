@@ -12,6 +12,7 @@ android {
     defaultConfig {
         consumerProguardFiles("consumer-rules.pro")
 
+        // KMK -->
         ndk {
             val targetAbi = project.findProperty("targetAbi") as? String
             if (targetAbi != null) {
@@ -20,6 +21,7 @@ android {
                 abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
             }
         }
+        // KMK <--
     }
 
     externalNativeBuild {
@@ -43,7 +45,7 @@ dependencies {
     implementation(kotlinx.coroutines.core)
     implementation(kotlinx.serialization.protobuf)
     implementation(kotlinx.serialization.json)
-    
+
     // Compose
     implementation(compose.activity)
     implementation(compose.foundation)
@@ -68,7 +70,7 @@ dependencies {
 
     // Dependency injection
     implementation(libs.injekt)
-    
+
     // Mihon core
     implementation(projects.core.common)
     implementation(libs.unifile)

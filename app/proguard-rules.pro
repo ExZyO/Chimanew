@@ -347,8 +347,9 @@
 -dontwarn com.google.re2j.Matcher
 -dontwarn com.google.re2j.Pattern
 
-# RecyclerView fling velocity fields for Webtoon scroll acceleration
+# KMK -->
+# RecyclerView fling velocity field for Webtoon scroll acceleration
 -keepclassmembers class androidx.recyclerview.widget.RecyclerView {
     int mMaxFlingVelocity;
-    int mMinFlingVelocity;
 }
+# KMK <--

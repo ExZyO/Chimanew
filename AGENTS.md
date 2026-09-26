@@ -34,7 +34,6 @@ This repository is a customized fork of **Chimahon** (`https://github.com/Chimah
     ```proguard
     -keepclassmembers class androidx.recyclerview.widget.RecyclerView {
         int mMaxFlingVelocity;
-        int mMinFlingVelocity;
     }
     ```
     *CRITICAL*: Without this ProGuard rule, R8 in `assembleRelease` renames `mMaxFlingVelocity`, causing `RecyclerView.fling` to clamp all velocities down to Android's default 8,000 px/s!

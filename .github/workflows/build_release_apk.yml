@@ -41,40 +41,36 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Write client_secrets.json (if available)
-        if: ${{ env.GOOGLE_CLIENT_SECRETS_JSON != '' }}
-        env:
-          GOOGLE_CLIENT_SECRETS_JSON: ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON }}
+        if: ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON != '' }}
         run: |
           mkdir -p app/src/main/assets
-          echo "$GOOGLE_CLIENT_SECRETS_JSON" > app/src/main/assets/client_secrets.json
-
-      - name: Clean CMake cache
-        run: rm -rf app/.cxx chimahon/.cxx
+          cat << 'EOF' > app/src/main/assets/client_secrets.json
+          ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON }}
+          EOF
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease -Penable-updater -PtargetAbi=arm64-v8a -PreleaseVersionName=2.4.5 -PreleaseVersionCode=20405
+        run: ./gradlew assembleRelease -Penable-updater -PtargetAbi=arm64-v8a
 
-      - name: Upload arm64-v8a Release APK
+      - name: Upload arm64-v8a Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-arm64-v8a-release
           path: app/build/outputs/apk/release/*arm64-v8a*.apk
           if-no-files-found: error
 
-      - name: Upload all Release APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: all-release-apks
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: warn
-
-      - name: Publish GitHub Release
+      - name: Publish or Update GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v$(date +'%Y.%m.%d-%H%M')-$(git rev-parse --short HEAD)"
-          echo "Publishing release for $tag..."
-          gh release create "$tag" \
-            app/build/outputs/apk/release/*.apk \
-            --title "Chimahon Custom Release ($tag)" \
-            --notes "Custom Release build (arm64-v8a, package: app.chimahon.custom) with Webtoon scroll acceleration and reading time estimate. Can be installed alongside normal Chimahon." || echo "Release creation skipped or failed."
+          tag="v2.4.5"
+          echo "Publishing or updating release for $tag..."
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "Release $tag already exists, updating assets..."
+            gh release upload "$tag" app/build/outputs/apk/release/*.apk --clobber
+          else
+            echo "Creating release $tag..."
+            gh release create "$tag" \
+              app/build/outputs/apk/release/*.apk \
+              --title "Chimahon Custom ($tag)" \
+              --notes "Custom Release build (arm64-v8a, package: app.chimahon.custom) with Webtoon scroll acceleration and reading time estimate. Can be installed alongside normal Chimahon."
+          fi

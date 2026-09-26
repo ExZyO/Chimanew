@@ -883,6 +883,7 @@ private fun ColumnScope.MangaContentInfo(
         }
     }
 
+    // KMK -->
     if (readingTimeEstimate != null) {
         Row(
             modifier = Modifier.secondaryItemAlpha(),
@@ -891,7 +892,7 @@ private fun ColumnScope.MangaContentInfo(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.ChromeReaderMode,
-                contentDescription = null,
+                contentDescription = readingTimeEstimate,
                 modifier = Modifier.size(16.dp),
             )
             Text(
@@ -903,6 +904,7 @@ private fun ColumnScope.MangaContentInfo(
             )
         }
     }
+    // KMK <--
 }
 
 @Composable

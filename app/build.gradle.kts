@@ -22,10 +22,12 @@ android {
     namespace = "eu.kanade.tachiyomi"
 
     defaultConfig {
+        // KMK -->
         applicationId = "app.chimahon.custom"
 
         versionCode = releaseVersionCode ?: 20405
         versionName = releaseVersionName ?: "2.4.5"
+        // KMK <--
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getGitSha()}\"")
@@ -49,7 +51,11 @@ android {
 
             proguardFiles("proguard-android-optimize.txt", "proguard-rules.pro")
 
+            // KMK -->
+            // In this custom fork, signing release variant with debug key allows building installable release APKs
+            // in local and GitHub Actions environments without requiring private keystore secrets.
             signingConfig = debug.signingConfig
+            // KMK <--
 
             buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLastCommitTime = true)}\"")
             buildConfigField("boolean", "UPDATER_ENABLED", enableUpdater.toString())
@@ -109,6 +115,7 @@ android {
         getByName("benchmark").res.srcDirs("src/debug/res")
     }
 
+    // KMK -->
     splits {
         abi {
             isEnable = true
@@ -121,6 +128,7 @@ android {
             }
         }
     }
+    // KMK <--
 
     packaging {
         jniLibs {
@@ -256,7 +264,6 @@ dependencies {
     implementation(androidx.paging.compose)
 
     implementation(libs.bundles.sqlite)
-
 
     implementation(kotlinx.reflect)
     implementation(kotlinx.immutables)

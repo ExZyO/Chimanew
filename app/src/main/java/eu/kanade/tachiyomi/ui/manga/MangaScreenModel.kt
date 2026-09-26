@@ -71,9 +71,9 @@ import eu.kanade.tachiyomi.ui.manga.RelatedManga.Companion.sorted
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
-import eu.kanade.tachiyomi.util.updateLocalCoverFromSourceFetch
 import eu.kanade.tachiyomi.util.system.getBitmapOrNull
 import eu.kanade.tachiyomi.util.system.toast
+import eu.kanade.tachiyomi.util.updateLocalCoverFromSourceFetch
 import exh.debug.DebugToggles
 import exh.eh.EHentaiUpdateHelper
 import exh.log.xLogD
@@ -92,7 +92,6 @@ import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CancellationException
-
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
@@ -400,6 +399,7 @@ class MangaScreenModel(
                 }
         }
 
+        // KMK -->
         screenModelScope.launchIO {
             getMangaAndChapters.subscribe(mangaId, applyFilter = false).distinctUntilChanged()
                 // SY -->
@@ -423,6 +423,7 @@ class MangaScreenModel(
                     }
                 }
         }
+        // KMK <--
 
         screenModelScope.launchIO {
             getExcludedScanlators.subscribe(mangaId)
@@ -499,11 +500,13 @@ class MangaScreenModel(
                 getMangaAndChapters.awaitChapters(mangaId, applyFilter = true)
             }
                 .toChapterListItems(manga, mergedData)
+            // KMK -->
             val readingTimeChapterCount = if (manga.source == MERGED_SOURCE_ID) {
                 getMergedChaptersByMangaId.await(mangaId, applyFilter = false)
             } else {
                 getMangaAndChapters.awaitChapters(mangaId, applyFilter = false)
             }.readingTimeChapterCount()
+            // KMK <--
             val meta = getFlatMetadata.await(mangaId)
             // SY <--
 
@@ -524,7 +527,9 @@ class MangaScreenModel(
                     source = source,
                     isFromSource = isFromSource,
                     chapters = chapters,
+                    // KMK -->
                     readingTimeChapterCount = readingTimeChapterCount,
+                    // KMK <--
                     // SY -->
                     availableScanlators = if (manga.source == MERGED_SOURCE_ID) {
                         getAvailableScanlators.awaitMerge(mangaId)
@@ -2179,7 +2184,9 @@ class MangaScreenModel(
             val source: Source,
             val isFromSource: Boolean,
             val chapters: List<ChapterList.Item>,
+            // KMK -->
             val readingTimeChapterCount: Int = 0,
+            // KMK <--
             val availableScanlators: ImmutableSet<String>,
             val excludedScanlators: ImmutableSet<String>,
             val trackingCount: Int = 0,
@@ -2400,6 +2407,7 @@ sealed interface RelatedManga {
 }
 // KMK <--
 
+// KMK -->
 private fun List<Chapter>.readingTimeChapterCount(): Int {
     return distinctBy { it.readingTimeDeduplicationKey() }.size
 }
@@ -2416,4 +2424,4 @@ private fun Chapter.readingTimeDeduplicationKey(): String {
         "id:$id"
     }
 }
-
+// KMK <--

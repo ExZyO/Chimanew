@@ -95,7 +95,15 @@ class AppUpdateChecker(
 
 val GITHUB_REPO: String by lazy { getGithubRepo() }
 
-fun getGithubRepo(peekIntoPreview: Boolean = false): String = "Chimahon/chimahon"
+// KMK -->
+fun getGithubRepo(peekIntoPreview: Boolean = false): String {
+    return if (BuildConfig.APPLICATION_ID == "app.chimahon.custom") {
+        "ExZyO/chimahon"
+    } else {
+        "Chimahon/chimahon"
+    }
+}
+// KMK <--
 
 val RELEASE_TAG: String by lazy { getReleaseTag() }
 
