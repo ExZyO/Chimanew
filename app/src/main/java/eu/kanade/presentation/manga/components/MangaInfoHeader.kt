@@ -127,7 +127,6 @@ fun MangaInfoBox(
     manga: Manga,
     sourceName: String,
     isStubSource: Boolean,
-    chapterCount: Int,
     // KMK -->
     isSourceIncognito: Boolean,
     // KMK <--
@@ -140,14 +139,11 @@ fun MangaInfoBox(
     onCoverLoaded: (DomainMangaCover) -> Unit,
     coverRatio: MutableFloatState,
     // KMK <--
+    readingTime: String? = null,
 ) {
     // KMK -->
     val usePanoramaCover by Injekt.get<UiPreferences>().usePanoramaCoverMangaInfo().collectAsState()
     val topAlignCover by Injekt.get<UiPreferences>().topAlignCover().collectAsState()
-    val context = LocalContext.current
-    val readingTimeEstimate = remember(chapterCount, context) {
-        chapterCount.toEstimatedReadingTime(context)
-    }
     // KMK <--
     Box(modifier = modifier) {
         // Backdrop
@@ -197,7 +193,7 @@ fun MangaInfoBox(
                     manga = manga,
                     sourceName = sourceName,
                     isStubSource = isStubSource,
-                    readingTimeEstimate = readingTimeEstimate,
+                    readingTime = readingTime,
                     // KMK -->
                     isSourceIncognito = isSourceIncognito,
                     // KMK <--
@@ -218,7 +214,7 @@ fun MangaInfoBox(
                     manga = manga,
                     sourceName = sourceName,
                     isStubSource = isStubSource,
-                    readingTimeEstimate = readingTimeEstimate,
+                    readingTime = readingTime,
                     // KMK -->
                     isSourceIncognito = isSourceIncognito,
                     // KMK <--
@@ -497,7 +493,7 @@ private fun MangaAndSourceTitlesLarge(
     manga: Manga,
     sourceName: String,
     isStubSource: Boolean,
-    readingTimeEstimate: String?,
+    readingTime: String?,
     // KMK -->
     isSourceIncognito: Boolean,
     // KMK <--
@@ -562,7 +558,7 @@ private fun MangaAndSourceTitlesLarge(
             status = manga.status,
             sourceName = sourceName,
             isStubSource = isStubSource,
-            readingTimeEstimate = readingTimeEstimate,
+            readingTime = readingTime,
             // KMK -->
             isSourceIncognito = isSourceIncognito,
             // KMK <--
@@ -582,7 +578,7 @@ private fun MangaAndSourceTitlesSmall(
     manga: Manga,
     sourceName: String,
     isStubSource: Boolean,
-    readingTimeEstimate: String?,
+    readingTime: String?,
     // KMK -->
     isSourceIncognito: Boolean,
     // KMK <--
@@ -659,7 +655,7 @@ private fun MangaAndSourceTitlesSmall(
                 status = manga.status,
                 sourceName = sourceName,
                 isStubSource = isStubSource,
-                readingTimeEstimate = readingTimeEstimate,
+                readingTime = readingTime,
                 // KMK -->
                 isSourceIncognito = isSourceIncognito,
                 // KMK <--
@@ -682,7 +678,7 @@ private fun ColumnScope.MangaContentInfo(
     status: Long,
     sourceName: String,
     isStubSource: Boolean,
-    readingTimeEstimate: String?,
+    readingTime: String?,
     // KMK -->
     isSourceIncognito: Boolean,
     // KMK <--
@@ -884,7 +880,7 @@ private fun ColumnScope.MangaContentInfo(
     }
 
     // KMK -->
-    if (readingTimeEstimate != null) {
+    if (readingTime != null) {
         Row(
             modifier = Modifier.secondaryItemAlpha(),
             horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
@@ -892,11 +888,11 @@ private fun ColumnScope.MangaContentInfo(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.ChromeReaderMode,
-                contentDescription = readingTimeEstimate,
+                contentDescription = readingTime,
                 modifier = Modifier.size(16.dp),
             )
             Text(
-                text = readingTimeEstimate,
+                text = readingTime,
                 style = MaterialTheme.typography.bodyMedium,
                 overflow = TextOverflow.Ellipsis,
                 maxLines = 1,
