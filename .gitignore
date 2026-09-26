@@ -32,9 +32,9 @@ app/standard/preview/*
 !CHANGELOG.md
 !CODE_OF_CONDUCT.md
 !CONTRIBUTING.md
-!AGENTS.md
-!UPDATE_GUIDE.md
-!.agents/**
+AGENTS.md
+UPDATE_GUIDE.md
+.agents/
 /ref
 /reference/
 /external_ocr_refs
