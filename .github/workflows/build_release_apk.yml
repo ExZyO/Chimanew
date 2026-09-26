@@ -41,12 +41,13 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Write client_secrets.json (if available)
-        if: ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON != '' }}
+        env:
+          GOOGLE_CLIENT_SECRETS_JSON: ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON }}
         run: |
-          mkdir -p app/src/main/assets
-          cat << 'EOF' > app/src/main/assets/client_secrets.json
-          ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON }}
-          EOF
+          if [ -n "$GOOGLE_CLIENT_SECRETS_JSON" ]; then
+            mkdir -p app/src/main/assets
+            printf '%s\n' "$GOOGLE_CLIENT_SECRETS_JSON" > app/src/main/assets/client_secrets.json
+          fi
 
       - name: Build Release APK
         run: ./gradlew assembleRelease -Penable-updater -PtargetAbi=arm64-v8a
