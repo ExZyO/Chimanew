@@ -255,16 +255,12 @@ class GoogleDriveService(private val context: Context) {
     }
 
     private fun getRedirectUri(secrets: GoogleClientSecrets): String {
-        val configuredUri = secrets.details?.redirectUris?.firstOrNull()
-        if (!configuredUri.isNullOrBlank()) {
-            return configuredUri
-        }
         val clientId = secrets.details?.clientId ?: return REDIRECT_URI
         val prefix = clientId.substringBefore(".apps.googleusercontent.com")
         return if (prefix != clientId) {
             "com.googleusercontent.apps.$prefix:/oauth2redirect"
         } else {
-            REDIRECT_URI
+            secrets.details?.redirectUris?.firstOrNull() ?: REDIRECT_URI
         }
     }
 
