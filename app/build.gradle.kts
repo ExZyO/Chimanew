@@ -25,8 +25,8 @@ android {
         // KMK -->
         applicationId = "app.chimahon.custom"
 
-        versionCode = releaseVersionCode ?: 20405
-        versionName = releaseVersionName ?: "2.4.5"
+        versionCode = releaseVersionCode ?: 20406
+        versionName = releaseVersionName ?: "2.4.6"
         // KMK <--
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")

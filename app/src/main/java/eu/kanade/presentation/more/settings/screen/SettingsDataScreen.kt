@@ -886,8 +886,12 @@ object SettingsDataScreen : SearchableSettings {
             Preference.PreferenceItem.TextPreference(
                 title = stringResource(SYMR.strings.pref_google_drive_sign_in),
                 onClick = {
-                    val intent = googleDriveSync.getSignInIntent()
-                    context.startActivity(intent)
+                    try {
+                        val intent = googleDriveSync.getSignInIntent()
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        context.toast(e.message ?: "Error signing in to Google Drive")
+                    }
                 },
             ),
             getGoogleDrivePurge(),

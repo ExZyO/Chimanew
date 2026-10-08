@@ -63,7 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.4.5"
+          tag="v2.4.6"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -72,6 +72,6 @@ jobs:
             echo "Creating release $tag..."
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \
-              --title "Chimahon Custom ($tag)" \
+              --title "Chimahon+ ($tag)" \
               --notes "Custom Release build (arm64-v8a, package: app.chimahon.custom) with Webtoon scroll acceleration and reading time estimate. Can be installed alongside normal Chimahon."
           fi

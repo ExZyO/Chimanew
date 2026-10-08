@@ -57,9 +57,7 @@ class GoogleDriveSyncService(context: Context, json: Json, syncPreferences: Sync
         ERROR,
     }
 
-    private val appName = context.stringResource(MR.strings.app_name)
-
-    private val remoteFileName = "${appName}_sync.proto.gz"
+    private val remoteFileName = "Chimahon_sync.proto.gz"
 
     private val googleDriveService = GoogleDriveService(context)
 
@@ -242,15 +240,32 @@ class GoogleDriveSyncService(context: Context, json: Json, syncPreferences: Sync
     }
 }
 
+class GoogleDriveConfigurationException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
+
 class GoogleDriveService(private val context: Context) {
     var driveService: Drive? = null
     companion object {
-        const val REDIRECT_URI = "app.chimahon.google.oauth:/oauth2redirect"
+        const val REDIRECT_URI = "eu.kanade.google.oauth:/oauth2redirect"
+        private const val CLIENT_SECRETS_FILE = "client_secrets.json"
     }
     private val syncPreferences = Injekt.get<SyncPreferences>()
 
     init {
         initGoogleDriveService()
+    }
+
+    private fun getRedirectUri(secrets: GoogleClientSecrets): String {
+        val configuredUri = secrets.details?.redirectUris?.firstOrNull()
+        if (!configuredUri.isNullOrBlank()) {
+            return configuredUri
+        }
+        val clientId = secrets.details?.clientId ?: return REDIRECT_URI
+        val prefix = clientId.substringBefore(".apps.googleusercontent.com")
+        return if (prefix != clientId) {
+            "com.googleusercontent.apps.$prefix:/oauth2redirect"
+        } else {
+            REDIRECT_URI
+        }
     }
 
     /**
@@ -266,7 +281,12 @@ class GoogleDriveService(private val context: Context) {
             return
         }
 
-        setupGoogleDriveService(accessToken, refreshToken)
+        try {
+            setupGoogleDriveService(accessToken, refreshToken)
+        } catch (e: GoogleDriveConfigurationException) {
+            driveService = null
+            logcat(LogPriority.ERROR, throwable = e) { "Google Drive sync is not configured" }
+        }
     }
 
     /**
@@ -293,10 +313,8 @@ class GoogleDriveService(private val context: Context) {
      */
     private fun generateAuthorizationUrl(): String {
         val jsonFactory: GsonFactory = GsonFactory.getDefaultInstance()
-        val secrets = GoogleClientSecrets.load(
-            jsonFactory,
-            context.assets.open("client_secrets.json").reader(),
-        )
+        val secrets = loadClientSecrets(jsonFactory)
+        val redirectUri = getRedirectUri(secrets)
 
         val flow = GoogleAuthorizationCodeFlow.Builder(
             NetHttpTransport(),
@@ -306,28 +324,26 @@ class GoogleDriveService(private val context: Context) {
         ).setAccessType("offline").build()
 
         return flow.newAuthorizationUrl()
-            .setRedirectUri(REDIRECT_URI)
+            .setRedirectUri(redirectUri)
             .setApprovalPrompt("force")
             .build()
     }
+
     internal suspend fun refreshToken() = withIOContext {
         val refreshToken = syncPreferences.googleDriveRefreshToken().get()
 
+        if (refreshToken == "") {
+            throw Exception(context.stringResource(SYMR.strings.google_drive_not_signed_in))
+        }
+
         val jsonFactory: GsonFactory = GsonFactory.getDefaultInstance()
-        val secrets = GoogleClientSecrets.load(
-            jsonFactory,
-            context.assets.open("client_secrets.json").reader(),
-        )
+        val secrets = loadClientSecrets(jsonFactory)
 
         val credential = GoogleCredential.Builder()
             .setJsonFactory(jsonFactory)
             .setTransport(NetHttpTransport())
             .setClientSecrets(secrets)
             .build()
-
-        if (refreshToken == "") {
-            throw Exception(context.stringResource(SYMR.strings.google_drive_not_signed_in))
-        }
 
         credential.refreshToken = refreshToken
 
@@ -338,7 +354,7 @@ class GoogleDriveService(private val context: Context) {
             syncPreferences.googleDriveAccessToken().set(newAccessToken)
             setupGoogleDriveService(newAccessToken, credential.refreshToken)
         } catch (e: TokenResponseException) {
-            if (e.details.error == "invalid_grant") {
+            if (e.details?.error == "invalid_grant") {
                 // The refresh token is invalid, prompt the user to sign in again
                 this@GoogleDriveService.logcat(LogPriority.ERROR, throwable = e) {
                     "Refresh token is invalid, prompt user to sign in again"
@@ -365,10 +381,7 @@ class GoogleDriveService(private val context: Context) {
      */
     private fun setupGoogleDriveService(accessToken: String, refreshToken: String) {
         val jsonFactory: GsonFactory = GsonFactory.getDefaultInstance()
-        val secrets = GoogleClientSecrets.load(
-            jsonFactory,
-            context.assets.open("client_secrets.json").reader(),
-        )
+        val secrets = loadClientSecrets(jsonFactory)
 
         val credential = GoogleCredential.Builder()
             .setJsonFactory(jsonFactory)
@@ -403,22 +416,21 @@ class GoogleDriveService(private val context: Context) {
         onSuccess: () -> Unit,
         onFailure: (String) -> Unit,
     ) {
-        val jsonFactory: GsonFactory = GsonFactory.getDefaultInstance()
-        val secrets = GoogleClientSecrets.load(
-            jsonFactory,
-            context.assets.open("client_secrets.json").reader(),
-        )
-
-        val tokenResponse: GoogleTokenResponse = GoogleAuthorizationCodeTokenRequest(
-            NetHttpTransport(),
-            jsonFactory,
-            secrets.installed.clientId,
-            secrets.installed.clientSecret,
-            authorizationCode,
-            REDIRECT_URI,
-        ).setGrantType("authorization_code").execute()
-
         try {
+            val jsonFactory: GsonFactory = GsonFactory.getDefaultInstance()
+            val secrets = loadClientSecrets(jsonFactory)
+            val details = secrets.details
+            val redirectUri = getRedirectUri(secrets)
+
+            val tokenResponse: GoogleTokenResponse = GoogleAuthorizationCodeTokenRequest(
+                NetHttpTransport(),
+                jsonFactory,
+                details.clientId,
+                details.clientSecret,
+                authorizationCode,
+                redirectUri,
+            ).setGrantType("authorization_code").execute()
+
             // Save the access token and refresh token
             val accessToken = tokenResponse.accessToken
             val refreshToken = tokenResponse.refreshToken
@@ -439,5 +451,35 @@ class GoogleDriveService(private val context: Context) {
                 onFailure(e.localizedMessage ?: "Unknown error")
             }
         }
+    }
+
+    fun isConfigured(): Boolean {
+        return try {
+            loadClientSecrets(GsonFactory.getDefaultInstance())
+            true
+        } catch (_: GoogleDriveConfigurationException) {
+            false
+        }
+    }
+
+    private fun loadClientSecrets(jsonFactory: GsonFactory): GoogleClientSecrets {
+        val secrets = try {
+            context.assets.open(CLIENT_SECRETS_FILE).reader().use {
+                GoogleClientSecrets.load(jsonFactory, it)
+            }
+        } catch (e: IOException) {
+            throw GoogleDriveConfigurationException(
+                "Google Drive client secrets file is missing",
+                e,
+            )
+        }
+
+        if (secrets.details == null) {
+            throw GoogleDriveConfigurationException(
+                "Google Drive client secrets file is invalid",
+            )
+        }
+
+        return secrets
     }
 }

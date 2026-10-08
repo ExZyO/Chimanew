@@ -308,6 +308,24 @@
                 <data
                     android:scheme="app.chimahon.google.oauth" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="eu.kanade.google.oauth" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="com.googleusercontent.apps.200996152039-eknno6cfcpgk1tgqpmunkhkshfv9mk3f" />
+            </intent-filter>
         </activity>
 
         <activity
