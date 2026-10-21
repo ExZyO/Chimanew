@@ -72,6 +72,6 @@ jobs:
             echo "Creating release $tag..."
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \
-              --title "Chimahon+ ($tag)" \
-              --notes "Custom Release build (arm64-v8a, package: app.chimahon.custom) with Webtoon scroll acceleration and reading time estimate. Can be installed alongside normal Chimahon."
+              --title "Chimanew ($tag)" \
+              --notes "Release build (arm64-v8a, package: app.chimanew) with Webtoon scroll acceleration, reading time estimate, and Google Drive sync."
           fi

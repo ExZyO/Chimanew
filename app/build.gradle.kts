@@ -22,8 +22,8 @@ android {
     namespace = "eu.kanade.tachiyomi"
 
     defaultConfig {
-        // KMK -->
-        applicationId = "app.chimahon.custom"
+        // EaZy Nuvio+ / Chimanew
+        applicationId = "app.chimanew"
 
         versionCode = releaseVersionCode ?: 20406
         versionName = releaseVersionName ?: "2.4.6"

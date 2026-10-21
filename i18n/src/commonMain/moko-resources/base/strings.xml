@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Chimahon+</string>
+    <!-- EaZy Nuvio+ / Chimanew -->
+    <string name="app_name" translatable="false">Chimanew</string>
 
     <!-- Generic strings -->
     <string name="on">On</string>
