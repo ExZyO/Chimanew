@@ -118,6 +118,11 @@ class PreferenceModule(val app: Application) : InjektModule {
         addSingletonFactory {
             UiPreferences(get())
         }
+        // EaZy Nuvio+ / Chimanew -->
+        addSingletonFactory {
+            eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences(get())
+        }
+        // EaZy Nuvio+ / Chimanew <--
         addSingletonFactory {
             BasePreferences(app, get())
         }

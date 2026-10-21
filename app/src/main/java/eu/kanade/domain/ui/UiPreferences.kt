@@ -86,7 +86,9 @@ class UiPreferences(
 
     fun navTabLayout() = preferenceStore.getString("pref_nav_tab_layout", "")
 
-    fun navStartScreen() = preferenceStore.getString("pref_nav_start_screen", "Library")
+    // EaZy Nuvio+ / Chimanew -->
+    fun navStartScreen() = preferenceStore.getString("pref_nav_start_screen", "Home")
+    // EaZy Nuvio+ / Chimanew <--
 
     fun lastUsedBrowseMode() = preferenceStore.getInt("browse_last_used_mode", 0)
 

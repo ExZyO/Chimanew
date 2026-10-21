@@ -63,7 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.4.6"
+          tag="v2.4.7"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -73,5 +73,11 @@ jobs:
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \
               --title "Chimanew ($tag)" \
-              --notes "Release build (arm64-v8a, package: app.chimanew) with Webtoon scroll acceleration, reading time estimate, and Google Drive sync."
+              --notes "### What's New in v2.4.7
+- **Nuvio Netflix-Style Home Tab**: Brand new landing experience with dynamic top Hero carousel and horizontal manga shelves.
+- **Dynamic Hero Carousel**: Auto-advancing banner with Palette ambient color glow, 1-tap chapter resume pill, and manga details on cover tap.
+- **Horizontal Manga Shelves**: Continue Reading (with 1-tap direct resume and long-press options), Recently Updated, and Library Categories.
+- **Sleek Cards**: Ambient bottom gradient fade, floating chapter progress, 2px progress bar, and unread badges.
+- **Nuvio Enhanced Settings**: Dedicated top-level settings section to toggle and configure Hero source, shelves, and card appearance.
+- **Google Drive Sync**: Pre-configured with client secrets."
           fi

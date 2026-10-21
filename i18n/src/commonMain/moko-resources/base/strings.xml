@@ -28,6 +28,28 @@
     <string name="scanlator">Scanlator</string>
 
     <!-- Screen titles -->
+    <!-- EaZy Nuvio+ / Chimanew -->
+    <string name="label_home">Home</string>
+    <string name="nuvio_resume_chapter">Resume Ch. %s</string>
+    <string name="nuvio_start_reading">Start Reading</string>
+    <string name="nuvio_continue_reading">Continue Reading</string>
+    <string name="nuvio_recently_updated">Recently Updated</string>
+    <string name="nuvio_my_library">My Library</string>
+    <string name="pref_category_nuvio">Nuvio Enhanced</string>
+    <string name="pref_nuvio_summary">Customize Home Hero banner, shelves, and cards</string>
+    <string name="pref_nuvio_hero_section">Hero Carousel</string>
+    <string name="pref_nuvio_show_hero">Enable Hero carousel</string>
+    <string name="pref_nuvio_show_hero_summary">Show dynamic top-featured carousel on Home</string>
+    <string name="pref_nuvio_hero_source">Hero content source</string>
+    <string name="pref_nuvio_hero_source_history">In-Progress Reading (Recent)</string>
+    <string name="pref_nuvio_hero_source_favorites">Library Favorites</string>
+    <string name="pref_nuvio_shelves_section">Home Shelves</string>
+    <string name="pref_nuvio_show_continue_reading">Continue Reading</string>
+    <string name="pref_nuvio_show_recently_updated">Recently Updated</string>
+    <string name="pref_nuvio_show_category_shelves">Library Category Shelves</string>
+    <string name="pref_nuvio_cards_section">Card Appearance</string>
+    <string name="pref_nuvio_show_progress">Show reading progress bars</string>
+    <string name="pref_nuvio_show_unread_badge">Show unread count badges</string>
     <string name="label_more">More</string>
     <string name="label_settings">Settings</string>
     <string name="label_download_queue">Download queue</string>

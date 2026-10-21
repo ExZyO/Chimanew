@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.CloudOff
@@ -84,6 +85,7 @@ fun MoreScreen(
     onClickUpdates: () -> Unit,
     onClickHistory: () -> Unit,
     onClickLibrary: () -> Unit,
+    onClickHome: () -> Unit = {}, // EaZy Nuvio+ / Chimanew
     onClickBrowse: () -> Unit,
     onClickDictionary: () -> Unit,
     onClickNovels: () -> Unit,
@@ -201,6 +203,11 @@ fun MoreScreen(
             moreTabKeys.forEach { key ->
                 item {
                     when (key) {
+                        NavTabLayout.KEY_HOME -> TextPreferenceWidget(
+                            title = stringResource(MR.strings.label_home),
+                            icon = Icons.Filled.Home,
+                            onPreferenceClick = onClickHome,
+                        )
                         NavTabLayout.KEY_LIBRARY -> TextPreferenceWidget(
                             title = stringResource(MR.strings.label_library),
                             icon = Icons.Outlined.CollectionsBookmark,

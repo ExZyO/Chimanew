@@ -29,6 +29,9 @@ data class NavTabLayout(
 
     companion object {
         /** All customizable tab keys in default order. */
+        // EaZy Nuvio+ / Chimanew -->
+        const val KEY_HOME = "Home"
+        // EaZy Nuvio+ / Chimanew <--
         const val KEY_LIBRARY = "Library"
         const val KEY_UPDATES = "Updates"
         const val KEY_HISTORY = "History"
@@ -38,7 +41,7 @@ data class NavTabLayout(
         const val KEY_ANIME = "Anime"
 
         val ALL_KEYS = listOf(
-            KEY_LIBRARY, KEY_NOVELS, KEY_ANIME, KEY_UPDATES, KEY_HISTORY,
+            KEY_HOME, KEY_LIBRARY, KEY_NOVELS, KEY_ANIME, KEY_UPDATES, KEY_HISTORY,
             KEY_BROWSE, KEY_DICTIONARY,
         )
 
@@ -78,10 +81,14 @@ data class NavTabLayout(
                 }
             }
 
-            // Append any missing keys as navbar
+            // Append any missing keys as navbar (prepend KEY_HOME to navbar if missing)
             for (key in ALL_KEYS) {
                 if (key !in seenKeys) {
-                    parsed.add(NavTabEntry(key, NavSection.NAVBAR))
+                    if (key == KEY_HOME) {
+                        parsed.add(0, NavTabEntry(key, NavSection.NAVBAR))
+                    } else {
+                        parsed.add(NavTabEntry(key, NavSection.NAVBAR))
+                    }
                 }
             }
 

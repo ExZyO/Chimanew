@@ -342,6 +342,7 @@ object SettingsAppearanceScreen : SearchableSettings {
                 }
                 .associateWith { key ->
                     when (key) {
+                        eu.kanade.domain.ui.model.NavTabLayout.KEY_HOME -> "Home" // EaZy Nuvio+ / Chimanew
                         eu.kanade.domain.ui.model.NavTabLayout.KEY_LIBRARY -> "Library"
                         eu.kanade.domain.ui.model.NavTabLayout.KEY_UPDATES -> "Updates"
                         eu.kanade.domain.ui.model.NavTabLayout.KEY_HISTORY -> "History"

@@ -111,6 +111,7 @@ data object MoreTab : Tab {
             onClickUpdates = { navigator.push(UpdatesTab) },
             onClickHistory = { navigator.push(HistoryTab) },
             onClickLibrary = { navigator.push(eu.kanade.tachiyomi.ui.library.LibraryTab) },
+            onClickHome = { navigator.push(eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeTab) }, // EaZy Nuvio+ / Chimanew
             onClickBrowse = { navigator.push(eu.kanade.tachiyomi.ui.browse.BrowseTab) },
             onClickDictionary = { navigator.push(eu.kanade.tachiyomi.ui.dictionary.DictionaryTab) },
             onClickNovels = { navigator.push(eu.kanade.tachiyomi.ui.library.novels.NovelsTab) },

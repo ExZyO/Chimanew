@@ -55,6 +55,7 @@ import eu.kanade.tachiyomi.ui.dictionary.DictionaryTab
 import eu.kanade.tachiyomi.ui.download.DownloadQueueScreen
 import eu.kanade.tachiyomi.ui.history.HistoryTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeTab
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeTab
 import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.library.LibraryViewMode
 import eu.kanade.tachiyomi.ui.library.novels.NovelsTab
@@ -91,6 +92,7 @@ object HomeScreen : Screen() {
     private const val TAB_NAVIGATOR_KEY = "HomeTabs"
 
     private val ALL_TABS_MAP = mapOf(
+        NavTabLayout.KEY_HOME to ChimanewHomeTab, // EaZy Nuvio+ / Chimanew
         NavTabLayout.KEY_LIBRARY to LibraryTab,
         NavTabLayout.KEY_NOVELS to NovelsTab,
         NavTabLayout.KEY_ANIME to AnimeTab,

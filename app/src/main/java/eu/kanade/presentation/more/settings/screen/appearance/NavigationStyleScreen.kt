@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.DragHandle
@@ -72,6 +73,7 @@ class NavigationStyleScreen : Screen() {
 
         // Resolve tab titles
         val resolvedTabTitles = mapOf(
+            NavTabLayout.KEY_HOME to stringResource(MR.strings.label_home),
             NavTabLayout.KEY_LIBRARY to stringResource(MR.strings.label_library),
             NavTabLayout.KEY_NOVELS to stringResource(MR.strings.label_novels),
             NavTabLayout.KEY_ANIME to stringResource(MR.strings.label_anime),
@@ -211,6 +213,7 @@ sealed class NavListItem {
 
 private fun getTabIcon(key: String): ImageVector {
     return when (key) {
+        NavTabLayout.KEY_HOME -> Icons.Filled.Home
         NavTabLayout.KEY_LIBRARY -> Icons.Outlined.CollectionsBookmark
         NavTabLayout.KEY_NOVELS -> Icons.Outlined.Book
         NavTabLayout.KEY_ANIME -> Icons.Outlined.VideoLibrary
