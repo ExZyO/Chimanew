@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.data.track.TrackStatus
+import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -47,6 +48,7 @@ data class HomeShelf(
     val id: String,
     val title: String,
     val items: List<HomeMangaItem>,
+    val isResumeOnTap: Boolean = false,
 )
 
 @Immutable
@@ -58,14 +60,33 @@ private data class DataBundle(
 )
 
 @Immutable
-private data class NuvioHomePrefs(
+private data class HeroPrefs(
     val showHero: Boolean,
     val heroSource: Int,
     val heroStyle: Int,
+    val useAnilistArtwork: Boolean,
+)
+
+@Immutable
+private data class ShelvesPrefs(
     val showContinue: Boolean,
     val showUpdated: Boolean,
     val showCategoryShelves: Boolean,
     val showTrackingShelves: Boolean,
+    val homeShelfOrder: String,
+)
+
+@Immutable
+private data class NuvioHomePrefs(
+    val showHero: Boolean,
+    val heroSource: Int,
+    val heroStyle: Int,
+    val useAnilistArtwork: Boolean,
+    val showContinue: Boolean,
+    val showUpdated: Boolean,
+    val showCategoryShelves: Boolean,
+    val showTrackingShelves: Boolean,
+    val homeShelfOrder: String,
     val showProgressBars: Boolean,
     val showUnreadBadges: Boolean,
 )
@@ -86,8 +107,6 @@ class ChimanewHomeScreenModel(
         val isLoading: Boolean = true,
         val heroItems: List<HomeMangaItem> = emptyList(),
         val heroStyle: Int = 0,
-        val continueReading: List<HomeMangaItem> = emptyList(),
-        val recentlyUpdated: List<HomeMangaItem> = emptyList(),
         val shelves: List<HomeShelf> = emptyList(),
         val showProgressBars: Boolean = true,
         val showUnreadBadges: Boolean = true,
@@ -108,8 +127,9 @@ class ChimanewHomeScreenModel(
                 preferences.showHeroCarousel().changes(),
                 preferences.heroSource().changes(),
                 preferences.heroStyle().changes(),
-            ) { showHero: Boolean, heroSource: Int, heroStyle: Int ->
-                Triple(showHero, heroSource, heroStyle)
+                preferences.useAnilistArtwork().changes(),
+            ) { showHero: Boolean, heroSource: Int, heroStyle: Int, useAnilist: Boolean ->
+                HeroPrefs(showHero, heroSource, heroStyle, useAnilist)
             }
 
             val shelvesPrefsFlow = combine(
@@ -117,19 +137,22 @@ class ChimanewHomeScreenModel(
                 preferences.showRecentlyUpdated().changes(),
                 preferences.showCategoryShelves().changes(),
                 preferences.showTrackingShelves().changes(),
-            ) { showContinue: Boolean, showUpdated: Boolean, showCategoryShelves: Boolean, showTrackingShelves: Boolean ->
-                listOf(showContinue, showUpdated, showCategoryShelves, showTrackingShelves)
+                preferences.homeShelfOrder().changes(),
+            ) { showContinue: Boolean, showUpdated: Boolean, showCategoryShelves: Boolean, showTrackingShelves: Boolean, homeShelfOrder: String ->
+                ShelvesPrefs(showContinue, showUpdated, showCategoryShelves, showTrackingShelves, homeShelfOrder)
             }
 
-            val prefsFlow = combine(heroPrefsFlow, shelvesPrefsFlow) { (showHero, heroSource, heroStyle), shelvesPrefs ->
+            val prefsFlow = combine(heroPrefsFlow, shelvesPrefsFlow) { heroPrefs, shelvesPrefs ->
                 NuvioHomePrefs(
-                    showHero = showHero,
-                    heroSource = heroSource,
-                    heroStyle = heroStyle,
-                    showContinue = shelvesPrefs[0],
-                    showUpdated = shelvesPrefs[1],
-                    showCategoryShelves = shelvesPrefs[2],
-                    showTrackingShelves = shelvesPrefs[3],
+                    showHero = heroPrefs.showHero,
+                    heroSource = heroPrefs.heroSource,
+                    heroStyle = heroPrefs.heroStyle,
+                    useAnilistArtwork = heroPrefs.useAnilistArtwork,
+                    showContinue = shelvesPrefs.showContinue,
+                    showUpdated = shelvesPrefs.showUpdated,
+                    showCategoryShelves = shelvesPrefs.showCategoryShelves,
+                    showTrackingShelves = shelvesPrefs.showTrackingShelves,
+                    homeShelfOrder = shelvesPrefs.homeShelfOrder,
                     showProgressBars = preferences.showProgressBars().get(),
                     showUnreadBadges = preferences.showUnreadBadges().get(),
                 )
@@ -140,6 +163,7 @@ class ChimanewHomeScreenModel(
                 val tracksByManga = data.tracks.groupBy { it.mangaId }
 
                 fun getHighResBanner(mangaId: Long): String? {
+                    if (!prefs.useAnilistArtwork) return null
                     val mangaTracks = tracksByManga[mangaId] ?: return null
                     val aniListTrack = mangaTracks.firstOrNull { it.trackerId == TrackerManager.ANILIST }
                     return aniListTrack?.let { "https://img.anili.st/media/${it.remoteId}" }
@@ -250,7 +274,7 @@ class ChimanewHomeScreenModel(
                         } else {
                             HomeShelf(
                                 id = "cat_${cat.id}",
-                                title = cat.name,
+                                title = cat.name.ifBlank { "Library" },
                                 items = itemsForCat.map { lib ->
                                     HomeMangaItem(
                                         mangaId = lib.manga.id,
@@ -271,14 +295,14 @@ class ChimanewHomeScreenModel(
                     emptyList()
                 }
 
-                val trackingShelves = if (prefs.showTrackingShelves && data.libraryList.isNotEmpty()) {
-                    val readingList = mutableListOf<HomeMangaItem>()
-                    val planToReadList = mutableListOf<HomeMangaItem>()
-                    val onHoldList = mutableListOf<HomeMangaItem>()
-                    val completedList = mutableListOf<HomeMangaItem>()
-                    val droppedList = mutableListOf<HomeMangaItem>()
-                    val notTrackedList = mutableListOf<HomeMangaItem>()
+                val readingList = mutableListOf<HomeMangaItem>()
+                val planToReadList = mutableListOf<HomeMangaItem>()
+                val onHoldList = mutableListOf<HomeMangaItem>()
+                val completedList = mutableListOf<HomeMangaItem>()
+                val droppedList = mutableListOf<HomeMangaItem>()
+                val notTrackedList = mutableListOf<HomeMangaItem>()
 
+                if (prefs.showTrackingShelves && data.libraryList.isNotEmpty()) {
                     for (lib in data.libraryList) {
                         val mangaTracks = tracksByManga[lib.manga.id]
                         val activeTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
@@ -310,38 +334,86 @@ class ChimanewHomeScreenModel(
                             }
                         }
                     }
+                }
 
-                    buildList {
-                        if (readingList.isNotEmpty()) {
-                            add(HomeShelf(id = "track_reading", title = "Reading", items = readingList))
-                        }
-                        if (planToReadList.isNotEmpty()) {
-                            add(HomeShelf(id = "track_plan_to_read", title = "Plan to Read", items = planToReadList))
-                        }
-                        if (onHoldList.isNotEmpty()) {
-                            add(HomeShelf(id = "track_on_hold", title = "On Hold", items = onHoldList))
-                        }
-                        if (completedList.isNotEmpty()) {
-                            add(HomeShelf(id = "track_completed", title = "Completed", items = completedList))
-                        }
-                        if (droppedList.isNotEmpty()) {
-                            add(HomeShelf(id = "track_dropped", title = "Dropped", items = droppedList))
-                        }
-                        if (notTrackedList.isNotEmpty()) {
-                            add(HomeShelf(id = "track_not_tracked", title = "Not Tracked in Library", items = notTrackedList))
-                        }
+                // EaZy Nuvio+ / Chimanew: Assemble shelves strictly according to user custom order & visibility
+                val availableShelvesMap = mutableMapOf<String, List<HomeShelf>>()
+
+                // 1. Continue Reading
+                if (continueReadingItems.isNotEmpty() && prefs.showContinue) {
+                    availableShelvesMap[HomeRowsCustomizerScreen.SHELF_CONTINUE_READING] = listOf(
+                        HomeShelf(
+                            id = "shelf_continue_reading",
+                            title = "Continue Reading",
+                            items = continueReadingItems,
+                            isResumeOnTap = true,
+                        ),
+                    )
+                }
+
+                // 2. Tracking shelves
+                if (prefs.showTrackingShelves && data.libraryList.isNotEmpty()) {
+                    if (readingList.isNotEmpty()) {
+                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_READING] = listOf(
+                            HomeShelf(id = "track_reading", title = "Reading", items = readingList),
+                        )
                     }
-                } else {
-                    emptyList()
+                    if (planToReadList.isNotEmpty()) {
+                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_PLAN_TO_READ] = listOf(
+                            HomeShelf(id = "track_plan_to_read", title = "Plan to Read", items = planToReadList),
+                        )
+                    }
+                    if (onHoldList.isNotEmpty()) {
+                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_ON_HOLD] = listOf(
+                            HomeShelf(id = "track_on_hold", title = "On Hold", items = onHoldList),
+                        )
+                    }
+                    if (completedList.isNotEmpty()) {
+                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_COMPLETED] = listOf(
+                            HomeShelf(id = "track_completed", title = "Completed", items = completedList),
+                        )
+                    }
+                    if (droppedList.isNotEmpty()) {
+                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_DROPPED] = listOf(
+                            HomeShelf(id = "track_dropped", title = "Dropped", items = droppedList),
+                        )
+                    }
+                    if (notTrackedList.isNotEmpty()) {
+                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_NOT_TRACKED] = listOf(
+                            HomeShelf(id = "track_not_tracked", title = "Not Tracked in Library", items = notTrackedList),
+                        )
+                    }
+                }
+
+                // 3. Category shelves
+                if (prefs.showCategoryShelves && categoryShelves.isNotEmpty()) {
+                    availableShelvesMap[HomeRowsCustomizerScreen.SHELF_CATEGORIES] = categoryShelves
+                }
+
+                // 4. Recently added
+                if (updatedItems.isNotEmpty() && prefs.showUpdated) {
+                    availableShelvesMap[HomeRowsCustomizerScreen.SHELF_RECENTLY_ADDED] = listOf(
+                        HomeShelf(
+                            id = "shelf_recently_updated",
+                            title = "Recently Added",
+                            items = updatedItems,
+                        ),
+                    )
+                }
+
+                val orderedCustomEntries = HomeRowsCustomizerScreen.parseOrder(prefs.homeShelfOrder)
+                val finalShelves = mutableListOf<HomeShelf>()
+                for ((shelfId, isEnabled) in orderedCustomEntries) {
+                    if (isEnabled) {
+                        availableShelvesMap[shelfId]?.let { finalShelves.addAll(it) }
+                    }
                 }
 
                 State(
                     isLoading = false,
                     heroItems = heroItems,
                     heroStyle = prefs.heroStyle,
-                    continueReading = continueReadingItems,
-                    recentlyUpdated = updatedItems,
-                    shelves = categoryShelves + trackingShelves,
+                    shelves = finalShelves,
                     showProgressBars = prefs.showProgressBars,
                     showUnreadBadges = prefs.showUnreadBadges,
                 )

@@ -35,7 +35,8 @@
     <string name="nuvio_continue_reading">Continue Reading</string>
     <string name="nuvio_recently_updated">Recently Updated</string>
     <string name="nuvio_my_library">My Library</string>
-    <string name="pref_category_nuvio">Nuvio Enhanced</string>
+    <!-- EaZy Nuvio+ / Chimanew -->
+    <string name="pref_category_nuvio">Chimanew</string>
     <string name="pref_nuvio_summary">Customize Home Hero banner, shelves, and cards</string>
     <string name="pref_nuvio_hero_section">Hero Carousel</string>
     <string name="pref_nuvio_show_hero">Enable Hero carousel</string>
@@ -46,13 +47,26 @@
     <string name="pref_nuvio_hero_style">Hero banner style</string>
     <string name="pref_nuvio_hero_style_ambient">Netflix / Nuvio Ambient Backdrop</string>
     <string name="pref_nuvio_hero_style_fullbleed">Full-Bleed Stretched Crop</string>
+    <string name="pref_nuvio_use_anilist_artwork">AniList HD Artwork</string>
+    <string name="pref_nuvio_use_anilist_artwork_summary">Fetch crystal-clear 1200x630 banners and artwork for tracked titles</string>
     <string name="pref_nuvio_shelves_section">Home Shelves</string>
+    <string name="pref_nuvio_reorder_shelves">Customize Home Rows &amp; Shelves</string>
+    <string name="pref_nuvio_reorder_shelves_summary">Drag to reorder shelves and choose which rows appear on Home</string>
     <string name="pref_nuvio_show_continue_reading">Continue Reading</string>
     <string name="pref_nuvio_show_recently_updated">Recently Updated</string>
     <string name="pref_nuvio_show_category_shelves">Library Category Shelves</string>
     <string name="pref_nuvio_show_tracking_shelves">Tracker Shelves (AniList / MAL)</string>
     <string name="pref_nuvio_show_tracking_shelves_summary">Show shelves grouped by Reading, Plan to read, On hold, Completed, Dropped, Not tracked</string>
     <string name="nuvio_shelf_not_tracked">Not Tracked in Library</string>
+    <string name="pref_nuvio_shelf_continue_reading">Continue Reading</string>
+    <string name="pref_nuvio_shelf_reading">Reading (AniList / MAL)</string>
+    <string name="pref_nuvio_shelf_plan_to_read">Plan to Read</string>
+    <string name="pref_nuvio_shelf_on_hold">On Hold</string>
+    <string name="pref_nuvio_shelf_completed">Completed</string>
+    <string name="pref_nuvio_shelf_dropped">Dropped</string>
+    <string name="pref_nuvio_shelf_not_tracked">Not Tracked in Library</string>
+    <string name="pref_nuvio_shelf_categories">Library Categories</string>
+    <string name="pref_nuvio_shelf_recently_added">Recently Added</string>
     <string name="pref_nuvio_cards_section">Card Appearance</string>
     <string name="pref_nuvio_show_progress">Show reading progress bars</string>
     <string name="pref_nuvio_show_unread_badge">Show unread count badges</string>

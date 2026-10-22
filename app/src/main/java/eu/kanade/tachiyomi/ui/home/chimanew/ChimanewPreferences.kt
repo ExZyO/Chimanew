@@ -12,6 +12,13 @@ class ChimanewPreferences(
 
     fun heroStyle() = preferenceStore.getInt("pref_nuvio_hero_style", 0)
 
+    fun useAnilistArtwork() = preferenceStore.getBoolean("pref_nuvio_use_anilist_artwork", true)
+
+    fun homeShelfOrder() = preferenceStore.getString(
+        "pref_chimanew_home_shelf_order",
+        "continue_reading:true,reading:true,plan_to_read:true,on_hold:true,completed:true,dropped:false,not_tracked:true,categories:true,recently_added:true",
+    )
+
     fun showContinueReading() = preferenceStore.getBoolean("pref_nuvio_show_continue_reading", true)
 
     fun showRecentlyUpdated() = preferenceStore.getBoolean("pref_nuvio_show_recently_updated", true)

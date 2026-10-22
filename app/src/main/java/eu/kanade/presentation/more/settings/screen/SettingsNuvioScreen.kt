@@ -4,7 +4,11 @@ package eu.kanade.presentation.more.settings.screen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.Navigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
@@ -23,11 +27,12 @@ object SettingsNuvioScreen : SearchableSettings {
 
     @Composable
     override fun getPreferences(): List<Preference> {
+        val navigator = LocalNavigator.currentOrThrow
         val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
 
         return listOf(
             getHeroGroup(chimanewPreferences),
-            getShelvesGroup(chimanewPreferences),
+            getShelvesGroup(chimanewPreferences, navigator),
             getCardsGroup(chimanewPreferences),
         )
     }
@@ -58,15 +63,27 @@ object SettingsNuvioScreen : SearchableSettings {
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_style),
                 ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.useAnilistArtwork(),
+                    title = stringResource(MR.strings.pref_nuvio_use_anilist_artwork),
+                    subtitle = stringResource(MR.strings.pref_nuvio_use_anilist_artwork_summary),
+                ),
             ),
         )
     }
 
     @Composable
-    private fun getShelvesGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
+    private fun getShelvesGroup(preferences: ChimanewPreferences, navigator: Navigator): Preference.PreferenceGroup {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_nuvio_shelves_section),
             preferenceItems = persistentListOf(
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_nuvio_reorder_shelves),
+                    subtitle = stringResource(MR.strings.pref_nuvio_reorder_shelves_summary),
+                    onClick = {
+                        navigator.push(HomeRowsCustomizerScreen())
+                    },
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.showContinueReading(),
                     title = stringResource(MR.strings.pref_nuvio_show_continue_reading),

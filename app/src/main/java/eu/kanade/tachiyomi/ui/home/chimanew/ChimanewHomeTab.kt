@@ -154,35 +154,7 @@ data object ChimanewHomeTab : Tab {
                     }
                 }
 
-                // 2. Continue Reading shelf (1-tap read on tap, options on long-press)
-                if (state.continueReading.isNotEmpty()) {
-                    item(key = "shelf_continue_reading") {
-                        NuvioMangaShelf(
-                            title = stringResource(MR.strings.nuvio_continue_reading),
-                            items = state.continueReading,
-                            showProgressBar = state.showProgressBars,
-                            showUnreadBadge = state.showUnreadBadges,
-                            onItemClick = onResumeClick,
-                            onLongClick = onLongClickItem,
-                        )
-                    }
-                }
-
-                // 3. Recently Updated shelf
-                if (state.recentlyUpdated.isNotEmpty()) {
-                    item(key = "shelf_recently_updated") {
-                        NuvioMangaShelf(
-                            title = stringResource(MR.strings.nuvio_recently_updated),
-                            items = state.recentlyUpdated,
-                            showProgressBar = state.showProgressBars,
-                            showUnreadBadge = state.showUnreadBadges,
-                            onItemClick = onItemClick,
-                            onLongClick = onLongClickItem,
-                        )
-                    }
-                }
-
-                // 4. Shelves (Categories & Trackers)
+                // 2. Dynamic Shelves (ordered and filtered according to user preferences)
                 items(
                     items = state.shelves,
                     key = { it.id },
@@ -192,7 +164,7 @@ data object ChimanewHomeTab : Tab {
                         items = shelf.items,
                         showProgressBar = state.showProgressBars,
                         showUnreadBadge = state.showUnreadBadges,
-                        onItemClick = onItemClick,
+                        onItemClick = if (shelf.isResumeOnTap) onResumeClick else onItemClick,
                         onLongClick = onLongClickItem,
                     )
                 }

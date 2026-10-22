@@ -63,7 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.4.9"
+          tag="v2.5.0"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -71,11 +71,13 @@ jobs:
           else
             echo "Creating release $tag..."
             printf '%s\n' \
-              "### What's New in v2.4.9" \
-              "- **Dedicated In-App Updater for Chimanew**: Fixed updater repository target so update checks and background jobs correctly detect ExZyO/Chimanew releases instead of upstream Chimahon." \
-              "- **Persistent Release Signing Key**: Replaced ephemeral debug runner keys with a permanent release keystore shared across local and CI builds. Eliminates 'Update failed' / certificate mismatch errors permanently." \
-              "- **Robust Architecture Fallback**: Enhanced asset resolution so devices with any ABI can download release APKs seamlessly." \
-              "- **All v2.4.8 Features Included**: Netflix/Nuvio Ambient Backdrop Hero, AniList 1200x630 HD banners, unified tracker shelves (Reading, Plan to read, On hold, Completed, Dropped, Not tracked), and smooth scroll header." \
+              "### What's New in v2.5.0" \
+              "- **Home Rows & Shelves Customizer**: Native Chimahon-style drag-to-reorder and visibility toggles in Settings -> Chimanew." \
+              "- **Infinite Looping Hero Carousel**: Endless loop swiping in both directions with smooth continuous auto-advance and Netflix-style morphing pill indicators." \
+              "- **AniList HD Artwork Toggle**: Easily switch between high-resolution 1200x630 AniList artwork and source covers in Settings -> Chimanew." \
+              "- **Navigation Tab Alignment**: Restored Updates tab to bottom navigation bar, moved Dictionary into the More screen." \
+              "- **Netflix & Webtoon Modern Visuals**: Sleek bottom-edge reading progress bars on cards, spring bouncy micro-animations on press, and shelf count chips." \
+              "- **Persistent Release Signing Key**: Locked in a permanent release certificate for both local and CI builds to prevent update errors." \
               > release_notes.md
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \

@@ -2,6 +2,9 @@
 package eu.kanade.tachiyomi.ui.home.chimanew.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -31,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,16 +64,26 @@ fun NuvioHeroSection(
 ) {
     if (items.isEmpty()) return
 
-    val pagerState = rememberPagerState(pageCount = { items.size })
+    // EaZy Nuvio+ / Chimanew: Virtual infinite loop in both directions
+    val isLooping = items.size > 1
+    val virtualCount = if (isLooping) 100_000 else items.size
+    val startIndex = if (isLooping) {
+        val middle = 50_000
+        middle - (middle % items.size)
+    } else 0
 
-    // Auto-advance carousel every 6 seconds unless user is scrolling
-    LaunchedEffect(items.size) {
-        if (items.size <= 1) return@LaunchedEffect
+    val pagerState = rememberPagerState(
+        initialPage = startIndex,
+        pageCount = { virtualCount },
+    )
+
+    // Auto-advance carousel smoothly forward every 6 seconds unless user is scrolling
+    LaunchedEffect(items.size, isLooping) {
+        if (!isLooping) return@LaunchedEffect
         while (isActive) {
             delay(6000L)
             if (!pagerState.isScrollInProgress) {
-                val next = (pagerState.currentPage + 1) % items.size
-                pagerState.animateScrollToPage(next)
+                pagerState.animateScrollToPage(pagerState.currentPage + 1)
             }
         }
     }
@@ -85,7 +99,8 @@ fun NuvioHeroSection(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
-            val item = items[page]
+            val actualIndex = if (isLooping) page % items.size else page
+            val item = items[actualIndex]
             val accentColor = item.coverData.vibrantCoverColor?.let { Color(it) }
                 ?: item.coverData.dominantCoverColors?.first?.let { Color(it) }
                 ?: MaterialTheme.colorScheme.primary
@@ -492,20 +507,31 @@ fun NuvioHeroSection(
             }
         }
 
-        // Carousel Indicator Dots
+        // EaZy Nuvio+ / Chimanew: Netflix-style morphing active pill indicator
         if (items.size > 1) {
+            val activeIndex = pagerState.currentPage % items.size
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp),
+                    .padding(bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 repeat(items.size) { index ->
-                    val isSelected = pagerState.currentPage == index
+                    val isSelected = activeIndex == index
+                    val width by animateDpAsState(
+                        targetValue = if (isSelected) 22.dp else 5.dp,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow,
+                        ),
+                        label = "hero_dot_width",
+                    )
                     Box(
                         modifier = Modifier
-                            .size(if (isSelected) 8.dp else 5.dp)
-                            .clip(CircleShape)
+                            .height(5.dp)
+                            .width(width)
+                            .clip(RoundedCornerShape(99.dp))
                             .background(
                                 if (isSelected) Color.White else Color.White.copy(alpha = 0.35f),
                             ),

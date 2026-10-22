@@ -25,8 +25,8 @@ android {
         // EaZy Nuvio+ / Chimanew
         applicationId = "app.chimanew"
 
-        versionCode = releaseVersionCode ?: 20409
-        versionName = releaseVersionName ?: "2.4.9"
+        versionCode = releaseVersionCode ?: 20500
+        versionName = releaseVersionName ?: "2.5.0"
         // KMK <--
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")

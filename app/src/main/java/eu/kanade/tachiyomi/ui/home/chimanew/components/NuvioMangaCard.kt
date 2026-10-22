@@ -1,9 +1,14 @@
 // EaZy Nuvio+ / Chimanew
 package eu.kanade.tachiyomi.ui.home.chimanew.components
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,11 +23,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -50,12 +58,30 @@ fun NuvioMangaCard(
         ?: item.coverData.dominantCoverColors?.first?.let { Color(it) }
         ?: MaterialTheme.colorScheme.primary
 
+    // EaZy Nuvio+ / Chimanew: Interactive spring bouncy micro-animation on press
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow,
+        ),
+        label = "card_press_scale",
+    )
+
     Box(
         modifier = modifier
             .width(132.dp)
             .height(194.dp)
+            .graphicsLayer {
+                scaleX = cardScale
+                scaleY = cardScale
+            }
             .clip(cardShape)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = onClick,
                 onLongClick = onLongClick?.let {
                     {
@@ -65,9 +91,10 @@ fun NuvioMangaCard(
                 },
             ),
     ) {
-        // 1. Cover image
+        // 1. Cover image (high-res AniList artwork when enabled, or standard cover)
+        val imageModel: Any = item.highResBannerUrl ?: item.coverData
         SubcomposeAsyncImage(
-            model = item.coverData,
+            model = imageModel,
             contentDescription = item.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
@@ -80,7 +107,7 @@ fun NuvioMangaCard(
                     .align(Alignment.TopEnd)
                     .padding(6.dp),
                 shape = RoundedCornerShape(8.dp),
-                color = accentColor.copy(alpha = 0.90f),
+                color = accentColor.copy(alpha = 0.92f),
             ) {
                 Text(
                     text = "+${item.unreadCount}",
@@ -116,7 +143,7 @@ fun NuvioMangaCard(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
         ) {
             // Manga Title
             Text(
@@ -138,7 +165,7 @@ fun NuvioMangaCard(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                modifier = Modifier.padding(top = 2.dp),
             ) {
                 Text(
                     text = chapterText,
@@ -158,26 +185,26 @@ fun NuvioMangaCard(
                     )
                 }
             }
+        }
 
-            // 2px Progress bar at bottom
-            if (showProgressBar) {
-                val progress = if (item.totalChapters > 0) {
-                    (item.readChapters.toFloat() / item.totalChapters.toFloat()).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
+        // 5. Netflix-style bottom edge reading progress bar
+        if (showProgressBar) {
+            val progress = if (item.totalChapters > 0) {
+                (item.readChapters.toFloat() / item.totalChapters.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
 
-                if (progress > 0f) {
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(2.dp)
-                            .clip(RoundedCornerShape(1.dp)),
-                        color = accentColor,
-                        trackColor = Color.White.copy(alpha = 0.20f),
-                    )
-                }
+            if (progress > 0f) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter),
+                    color = accentColor,
+                    trackColor = Color.Black.copy(alpha = 0.40f),
+                )
             }
         }
     }
