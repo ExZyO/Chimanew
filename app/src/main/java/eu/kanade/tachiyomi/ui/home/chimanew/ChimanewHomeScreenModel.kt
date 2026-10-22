@@ -4,9 +4,11 @@ package eu.kanade.tachiyomi.ui.home.chimanew
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
+import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
+import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistMediaArtwork
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
@@ -34,6 +36,7 @@ data class HomeMangaItem(
     val title: String,
     val coverData: MangaCover,
     val highResBannerUrl: String? = null,
+    val highResCoverUrl: String? = null,
     val lastChapterNumber: Double? = null,
     val lastChapterId: Long? = null,
     val totalChapters: Long = 0,
@@ -41,6 +44,7 @@ data class HomeMangaItem(
     val unreadCount: Long = 0,
     val isChapterRead: Boolean = false,
     val lastPageRead: Long = 0,
+    val chapterTotalPages: Long = 0,
     val genres: List<String> = emptyList(),
     val description: String? = null,
 )
@@ -79,11 +83,21 @@ private data class ShelvesPrefs(
 )
 
 @Immutable
+private data class CardAndHeroPrefs(
+    val showProgressBars: Boolean,
+    val showUnreadBadges: Boolean,
+    val continueReadingTapAction: Int,
+    val shelfTapAction: Int,
+    val heroCategories: Set<String>,
+)
+
+@Immutable
 private data class NuvioHomePrefs(
     val showHero: Boolean,
     val heroSource: Int,
     val heroStyle: Int,
     val useAnilistArtwork: Boolean,
+    val heroCategories: Set<String>,
     val showContinue: Boolean,
     val showUpdated: Boolean,
     val showCategoryShelves: Boolean,
@@ -91,7 +105,8 @@ private data class NuvioHomePrefs(
     val homeShelfOrder: String,
     val showProgressBars: Boolean,
     val showUnreadBadges: Boolean,
-    val homeTapAction: Int,
+    val continueReadingTapAction: Int,
+    val shelfTapAction: Int,
 )
 
 class ChimanewHomeScreenModel(
@@ -103,6 +118,7 @@ class ChimanewHomeScreenModel(
     private val getManga: GetManga = Injekt.get(),
     private val trackRepository: TrackRepository = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
+    private val anilistCoverRepository: AnilistCoverRepository = Injekt.get(),
 ) : StateScreenModel<ChimanewHomeScreenModel.State>(State()) {
 
     @Immutable
@@ -113,7 +129,8 @@ class ChimanewHomeScreenModel(
         val shelves: List<HomeShelf> = emptyList(),
         val showProgressBars: Boolean = true,
         val showUnreadBadges: Boolean = true,
-        val homeTapAction: Int = 0,
+        val continueReadingTapAction: Int = 1,
+        val shelfTapAction: Int = 0,
     )
 
     init {
@@ -146,20 +163,32 @@ class ChimanewHomeScreenModel(
                 ShelvesPrefs(showContinue, showUpdated, showCategoryShelves, showTrackingShelves, homeShelfOrder)
             }
 
-            val prefsFlow = combine(heroPrefsFlow, shelvesPrefsFlow) { heroPrefs, shelvesPrefs ->
+            val cardPrefsFlow = combine(
+                preferences.showProgressBars().changes(),
+                preferences.showUnreadBadges().changes(),
+                preferences.continueReadingTapAction().changes(),
+                preferences.shelfTapAction().changes(),
+                preferences.heroCategories().changes(),
+            ) { showProgress: Boolean, showUnread: Boolean, continueTap: Int, shelfTap: Int, heroCats: Set<String> ->
+                CardAndHeroPrefs(showProgress, showUnread, continueTap, shelfTap, heroCats)
+            }
+
+            val prefsFlow = combine(heroPrefsFlow, shelvesPrefsFlow, cardPrefsFlow) { heroPrefs, shelvesPrefs, cardPrefs ->
                 NuvioHomePrefs(
                     showHero = heroPrefs.showHero,
                     heroSource = heroPrefs.heroSource,
                     heroStyle = heroPrefs.heroStyle,
                     useAnilistArtwork = heroPrefs.useAnilistArtwork,
+                    heroCategories = cardPrefs.heroCategories,
                     showContinue = shelvesPrefs.showContinue,
                     showUpdated = shelvesPrefs.showUpdated,
                     showCategoryShelves = shelvesPrefs.showCategoryShelves,
                     showTrackingShelves = shelvesPrefs.showTrackingShelves,
                     homeShelfOrder = shelvesPrefs.homeShelfOrder,
-                    showProgressBars = preferences.showProgressBars().get(),
-                    showUnreadBadges = preferences.showUnreadBadges().get(),
-                    homeTapAction = preferences.homeTapAction().get(),
+                    showProgressBars = cardPrefs.showProgressBars,
+                    showUnreadBadges = cardPrefs.showUnreadBadges,
+                    continueReadingTapAction = cardPrefs.continueReadingTapAction,
+                    shelfTapAction = cardPrefs.shelfTapAction,
                 )
             }
 
@@ -167,20 +196,68 @@ class ChimanewHomeScreenModel(
                 val distinctHistory = data.historyList.distinctBy { it.mangaId }
                 val tracksByManga = data.tracks.groupBy { it.mangaId }
 
-                fun getHighResBanner(mangaId: Long): String? {
+                // Gather AniList IDs for batch artwork query
+                val aniListRemoteIds = if (prefs.useAnilistArtwork) {
+                    data.tracks.filter { it.trackerId == TrackerManager.ANILIST }.map { it.remoteId }
+                } else {
+                    emptyList()
+                }
+
+                if (aniListRemoteIds.isNotEmpty()) {
+                    anilistCoverRepository.fetchBatch(aniListRemoteIds)
+                }
+
+                fun getArtwork(mangaId: Long): AnilistMediaArtwork? {
                     if (!prefs.useAnilistArtwork) return null
                     val mangaTracks = tracksByManga[mangaId] ?: return null
-                    val aniListTrack = mangaTracks.firstOrNull { it.trackerId == TrackerManager.ANILIST }
-                    return aniListTrack?.let { "https://img.anili.st/media/${it.remoteId}" }
+                    val aniListTrack = mangaTracks.firstOrNull { it.trackerId == TrackerManager.ANILIST } ?: return null
+                    return anilistCoverRepository.getCached(aniListTrack.remoteId)
                 }
+
+                fun createHomeItem(
+                    mangaId: Long,
+                    title: String,
+                    coverData: MangaCover,
+                    totalChapters: Long = 0,
+                    readChapters: Long = 0,
+                    unreadCount: Long = 0,
+                    lastChapterNumber: Double? = null,
+                    lastChapterId: Long? = null,
+                    isChapterRead: Boolean = false,
+                    lastPageRead: Long = 0,
+                    chapterTotalPages: Long = 0,
+                    genres: List<String> = emptyList(),
+                    description: String? = null,
+                ): HomeMangaItem {
+                    val artwork = getArtwork(mangaId)
+                    return HomeMangaItem(
+                        mangaId = mangaId,
+                        title = title,
+                        coverData = coverData,
+                        highResBannerUrl = artwork?.bannerUrl,
+                        highResCoverUrl = artwork?.extraLargeCoverUrl,
+                        lastChapterNumber = lastChapterNumber,
+                        lastChapterId = lastChapterId,
+                        totalChapters = totalChapters,
+                        readChapters = readChapters,
+                        unreadCount = unreadCount,
+                        isChapterRead = isChapterRead,
+                        lastPageRead = lastPageRead,
+                        chapterTotalPages = chapterTotalPages,
+                        genres = genres,
+                        description = description,
+                    )
+                }
+
+                val libraryByMangaId = data.libraryList.associateBy { it.manga.id }
 
                 val continueReadingItems = if (prefs.showContinue) {
                     distinctHistory.map { h ->
-                        HomeMangaItem(
+                        val libManga = libraryByMangaId[h.mangaId]
+                        createHomeItem(
                             mangaId = h.mangaId,
                             title = h.title,
                             coverData = h.coverData,
-                            highResBannerUrl = getHighResBanner(h.mangaId),
                             lastChapterNumber = h.chapterNumber.takeIf { it >= 0 },
                             lastChapterId = h.chapterId,
                             totalChapters = h.totalCountCalculated,
@@ -188,6 +265,8 @@ class ChimanewHomeScreenModel(
                             unreadCount = h.unreadCount,
                             isChapterRead = h.read,
                             lastPageRead = h.lastPageRead,
+                            genres = libManga?.manga?.ogGenre ?: emptyList(),
+                            description = libManga?.manga?.ogDescription,
                         )
                     }
                 } else {
@@ -197,16 +276,21 @@ class ChimanewHomeScreenModel(
                 val heroItems = if (!prefs.showHero) {
                     emptyList()
                 } else if (prefs.heroSource == 1) {
-                    // Favorites only
-                    data.libraryList
-                        .filter { it.manga.favorite }
+                    // Selected Categories
+                    val selectedCatIds = prefs.heroCategories.mapNotNull { it.toLongOrNull() }.toSet()
+                    val candidateList = if (selectedCatIds.isNotEmpty()) {
+                        data.libraryList.filter { lib -> lib.categories.any { it in selectedCatIds } }
+                    } else {
+                        data.libraryList.filter { it.manga.favorite }
+                    }
+                    candidateList
+                        .shuffled()
                         .take(7)
                         .map { lib ->
-                            HomeMangaItem(
+                            createHomeItem(
                                 mangaId = lib.manga.id,
                                 title = lib.manga.title,
                                 coverData = lib.manga.asMangaCover(),
-                                highResBannerUrl = getHighResBanner(lib.manga.id),
                                 totalChapters = lib.totalChapters,
                                 readChapters = lib.readCount,
                                 unreadCount = lib.unreadCount,
@@ -217,11 +301,11 @@ class ChimanewHomeScreenModel(
                 } else {
                     // Default: in-progress history with library fallback
                     val heroFromHistory = distinctHistory.take(7).map { h ->
-                        HomeMangaItem(
+                        val libManga = libraryByMangaId[h.mangaId]
+                        createHomeItem(
                             mangaId = h.mangaId,
                             title = h.title,
                             coverData = h.coverData,
-                            highResBannerUrl = getHighResBanner(h.mangaId),
                             lastChapterNumber = h.chapterNumber.takeIf { it >= 0 },
                             lastChapterId = h.chapterId,
                             totalChapters = h.totalCountCalculated,
@@ -229,18 +313,20 @@ class ChimanewHomeScreenModel(
                             unreadCount = h.unreadCount,
                             isChapterRead = h.read,
                             lastPageRead = h.lastPageRead,
+                            genres = libManga?.manga?.ogGenre ?: emptyList(),
+                            description = libManga?.manga?.ogDescription,
                         )
                     }
                     if (heroFromHistory.size < 5 && data.libraryList.isNotEmpty()) {
                         val additional = data.libraryList
                             .filter { it.id !in heroFromHistory.map { item -> item.mangaId } }
+                            .shuffled()
                             .take(7 - heroFromHistory.size)
                             .map { lib ->
-                                HomeMangaItem(
+                                createHomeItem(
                                     mangaId = lib.manga.id,
                                     title = lib.manga.title,
                                     coverData = lib.manga.asMangaCover(),
-                                    highResBannerUrl = getHighResBanner(lib.manga.id),
                                     totalChapters = lib.totalChapters,
                                     readChapters = lib.readCount,
                                     unreadCount = lib.unreadCount,
@@ -259,11 +345,10 @@ class ChimanewHomeScreenModel(
                         .sortedByDescending { it.latestUpload.coerceAtLeast(it.chapterFetchedAt) }
                         .take(15)
                         .map { lib ->
-                            HomeMangaItem(
+                            createHomeItem(
                                 mangaId = lib.manga.id,
                                 title = lib.manga.title,
                                 coverData = lib.manga.asMangaCover(),
-                                highResBannerUrl = getHighResBanner(lib.manga.id),
                                 totalChapters = lib.totalChapters,
                                 readChapters = lib.readCount,
                                 unreadCount = lib.unreadCount,
@@ -285,11 +370,10 @@ class ChimanewHomeScreenModel(
                                 id = "cat_${cat.id}",
                                 title = cat.name.ifBlank { "Library" },
                                 items = itemsForCat.map { lib ->
-                                    HomeMangaItem(
+                                    createHomeItem(
                                         mangaId = lib.manga.id,
                                         title = lib.manga.title,
                                         coverData = lib.manga.asMangaCover(),
-                                        highResBannerUrl = getHighResBanner(lib.manga.id),
                                         totalChapters = lib.totalChapters,
                                         readChapters = lib.readCount,
                                         unreadCount = lib.unreadCount,
@@ -318,11 +402,10 @@ class ChimanewHomeScreenModel(
                             ?: mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
                             ?: mangaTracks?.firstOrNull()
 
-                        val item = HomeMangaItem(
+                        val item = createHomeItem(
                             mangaId = lib.manga.id,
                             title = lib.manga.title,
                             coverData = lib.manga.asMangaCover(),
-                            highResBannerUrl = getHighResBanner(lib.manga.id),
                             totalChapters = lib.totalChapters,
                             readChapters = lib.readCount,
                             unreadCount = lib.unreadCount,
@@ -345,7 +428,7 @@ class ChimanewHomeScreenModel(
                     }
                 }
 
-                // EaZy Nuvio+ / Chimanew: Assemble shelves strictly according to user custom order & visibility
+                // Assemble shelves strictly according to user custom order & visibility
                 val availableShelvesMap = mutableMapOf<String, List<HomeShelf>>()
 
                 // 1. Continue Reading
@@ -355,7 +438,7 @@ class ChimanewHomeScreenModel(
                             id = "shelf_continue_reading",
                             title = "Continue Reading",
                             items = continueReadingItems,
-                            isResumeOnTap = true,
+                            isResumeOnTap = prefs.continueReadingTapAction == 1,
                         ),
                     )
                 }
@@ -425,7 +508,8 @@ class ChimanewHomeScreenModel(
                     shelves = finalShelves,
                     showProgressBars = prefs.showProgressBars,
                     showUnreadBadges = prefs.showUnreadBadges,
-                    homeTapAction = prefs.homeTapAction,
+                    continueReadingTapAction = prefs.continueReadingTapAction,
+                    shelfTapAction = prefs.shelfTapAction,
                 )
             }.collectLatest { newState ->
                 mutableState.update { newState }

@@ -122,6 +122,9 @@ class PreferenceModule(val app: Application) : InjektModule {
         addSingletonFactory {
             eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences(get())
         }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository()
+        }
         // EaZy Nuvio+ / Chimanew <--
         addSingletonFactory {
             BasePreferences(app, get())

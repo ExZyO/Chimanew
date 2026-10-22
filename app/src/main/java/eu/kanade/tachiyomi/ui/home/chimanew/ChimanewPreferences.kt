@@ -31,5 +31,9 @@ class ChimanewPreferences(
 
     fun showUnreadBadges() = preferenceStore.getBoolean("pref_nuvio_show_unread_badges", true)
 
-    fun homeTapAction() = preferenceStore.getInt("pref_chimanew_home_tap_action", 0)
+    fun continueReadingTapAction() = preferenceStore.getInt("pref_chimanew_continue_reading_tap_action", 1)
+
+    fun shelfTapAction() = preferenceStore.getInt("pref_chimanew_shelf_tap_action", 0)
+
+    fun heroCategories() = preferenceStore.getStringSet("pref_chimanew_hero_categories", emptySet())
 }

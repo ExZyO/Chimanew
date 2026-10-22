@@ -3,6 +3,8 @@ package eu.kanade.presentation.more.settings.screen
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
@@ -12,8 +14,11 @@ import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerSc
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.toPersistentMap
+import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -39,6 +44,13 @@ object SettingsNuvioScreen : SearchableSettings {
 
     @Composable
     private fun getHeroGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
+        val getCategories = remember { Injekt.get<GetCategories>() }
+        val categories by getCategories.subscribe().collectAsState(initial = emptyList())
+        val categoryEntries = remember(categories) {
+            categories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
+        }
+        val heroSource by preferences.heroSource().collectAsState()
+
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_nuvio_hero_section),
             preferenceItems = persistentListOf(
@@ -54,6 +66,13 @@ object SettingsNuvioScreen : SearchableSettings {
                         1 to stringResource(MR.strings.pref_nuvio_hero_source_favorites),
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_source),
+                ),
+                Preference.PreferenceItem.MultiSelectListPreference(
+                    preference = preferences.heroCategories(),
+                    entries = categoryEntries,
+                    title = stringResource(MR.strings.pref_chimanew_hero_categories),
+                    subtitle = stringResource(MR.strings.pref_chimanew_hero_categories_summary),
+                    enabled = heroSource == 1,
                 ),
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.heroStyle(),
@@ -111,13 +130,22 @@ object SettingsNuvioScreen : SearchableSettings {
             title = stringResource(MR.strings.pref_nuvio_cards_section),
             preferenceItems = persistentListOf(
                 Preference.PreferenceItem.ListPreference(
-                    preference = preferences.homeTapAction(),
+                    preference = preferences.continueReadingTapAction(),
+                    entries = persistentMapOf(
+                        1 to stringResource(MR.strings.pref_chimanew_tap_action_reader),
+                        0 to stringResource(MR.strings.pref_chimanew_tap_action_details),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_continue_reading_tap_action),
+                    subtitle = stringResource(MR.strings.pref_chimanew_continue_reading_tap_action_summary),
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.shelfTapAction(),
                     entries = persistentMapOf(
                         0 to stringResource(MR.strings.pref_chimanew_tap_action_details),
                         1 to stringResource(MR.strings.pref_chimanew_tap_action_reader),
                     ),
-                    title = stringResource(MR.strings.pref_chimanew_tap_action),
-                    subtitle = stringResource(MR.strings.pref_chimanew_tap_action_summary),
+                    title = stringResource(MR.strings.pref_chimanew_shelf_tap_action),
+                    subtitle = stringResource(MR.strings.pref_chimanew_shelf_tap_action_summary),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.showProgressBars(),

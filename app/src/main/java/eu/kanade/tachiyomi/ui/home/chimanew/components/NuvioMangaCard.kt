@@ -91,8 +91,8 @@ fun NuvioMangaCard(
                 },
             ),
     ) {
-        // 1. Cover image: Always use portrait coverData for 2:3 manga cards
-        val imageModel: Any = item.coverData
+        // 1. Cover image: Use high-res AniList cover when available, falling back to local coverData
+        val imageModel: Any = item.highResCoverUrl ?: item.coverData
         SubcomposeAsyncImage(
             model = imageModel,
             contentDescription = item.title,
@@ -195,16 +195,25 @@ fun NuvioMangaCard(
 
         // 5. Netflix-style bottom edge reading progress bar
         if (showProgressBar) {
-            val rawProgress = if (item.totalChapters > 0) {
-                val inProgressBonus = if (!item.isChapterRead && item.lastPageRead > 0) 0.5f else 0f
-                ((item.readChapters + inProgressBonus) / item.totalChapters.toFloat()).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            val progress = if (rawProgress == 0f && !item.isChapterRead && item.lastPageRead > 0) {
-                0.04f // Minimum visible progress indicator so user sees active reading progress
-            } else {
-                rawProgress
+            val progress = when {
+                item.isChapterRead -> 1f
+                item.totalChapters > 0 && item.readChapters > 0 -> {
+                    val inProgressBonus = if (!item.isChapterRead && item.lastPageRead > 0) 0.5f else 0f
+                    ((item.readChapters + inProgressBonus) / item.totalChapters.toFloat()).coerceIn(0.05f, 1f)
+                }
+                !item.isChapterRead && item.lastPageRead > 0 -> {
+                    // Active reading in progress on current chapter
+                    if (item.chapterTotalPages > 0) {
+                        ((item.lastPageRead + 1).toFloat() / item.chapterTotalPages.toFloat()).coerceIn(0.08f, 1f)
+                    } else {
+                        // Noticeable active reading indicator when page count is not yet loaded
+                        0.18f
+                    }
+                }
+                item.readChapters > 0 && item.totalChapters > 0 -> {
+                    (item.readChapters.toFloat() / item.totalChapters.toFloat()).coerceIn(0.05f, 1f)
+                }
+                else -> 0f
             }
 
             if (progress > 0f) {

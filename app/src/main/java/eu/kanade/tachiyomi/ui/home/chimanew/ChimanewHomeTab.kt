@@ -126,7 +126,7 @@ data object ChimanewHomeTab : Tab {
 
         // EaZy Nuvio+ / Chimanew: Card tap action setting toggle (0 = Details page, 1 = Reader)
         val onCardClick: (HomeMangaItem) -> Unit = { item ->
-            if (state.homeTapAction == 1) {
+            if (state.shelfTapAction == 1) {
                 onResumeClick(item)
             } else {
                 onDetailsClick(item)
@@ -179,7 +179,7 @@ data object ChimanewHomeTab : Tab {
                         items = shelf.items,
                         showProgressBar = state.showProgressBars,
                         showUnreadBadge = state.showUnreadBadges,
-                        onItemClick = onCardClick,
+                        onItemClick = if (shelf.isResumeOnTap) onResumeClick else onCardClick,
                         onLongClick = onLongClickItem,
                     )
                 }

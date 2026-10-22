@@ -63,7 +63,7 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.5.2"
+          tag="v2.5.3"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -71,15 +71,15 @@ jobs:
           else
             echo "Creating release $tag..."
             printf '%s\n' \
-              "### What's New in v2.5.2" \
-              "- **Google Drive Sync Secrets**: Compiled with updated Google OAuth client secrets for seamless Google Drive sync." \
-              "- **Lens OCR Security Fix**: Runtime decoding of public Google Lens client key to resolve secret-scanning alerts." \
-              "- **AniList Artwork Aspect Ratio Fix**: Portrait 2:3 manga cards strictly retain native book covers, while high-resolution 1200x630 AniList banners are reserved for Hero backdrops." \
-              "- **Real-Time Reading Progress**: Continue Reading cards now accurately display current page numbers (e.g. Ch. 5: p. 13) and non-zero progress bars for chapters in progress." \
-              "- **Card Tap Action Setting**: Added setting in Settings -> Chimanew -> Card Tap Action (Open details page vs Open reader)." \
-              "- **Instant Card Tap Speed**: Eliminated async database lookups when launching in-progress chapters." \
-              "- **Recently Updated Shelf**: Renamed 'Recently Added' to 'Recently Updated'." \
-              "- **Backup Tracker Logins**: Defaulted Private Settings to enabled so tracker sessions (AniList, MAL, Drive) are preserved during backup and restore." \
+              "### What's New in v2.5.3" \
+              "- **Upstream Merge (Chimahon v2.4.9)**: Fully synchronized with latest Chimahon: OPDS novel catalog support, MPV player updates, reader re-OCR controls, dictionary copy deduplication, and audio link fixes." \
+              "- **Hero Banner Redesign (1:1 Option 1)**: Authentic widescreen banner artwork from publisher via AniList GraphQL, format/genre pill badge (e.g. MANHWA • ACTION), drop-shadow typography, 2-line clean synopsis, and white Netflix capsule resume button." \
+              "- **AniList High-Res GraphQL Engine**: Replaced legacy social-card preview with native GraphQL query fetching genuine widescreen banners and extra-large portrait covers." \
+              "- **Dual Tap Action Settings**: Independent tap behaviors for Continue Reading (default: Open reader) vs Library & Shelves (default: Open details page)." \
+              "- **Dynamic Live Reactivity**: All preferences subscribe to flow updates—toggling settings takes effect immediately across Home without restarting the app." \
+              "- **Active Chapter Reading Progress**: Real-time progress bar tracking the current chapter in progress, ensuring non-zero visual progress while reading." \
+              "- **Hero Category Picker**: Multi-select dialog allowing you to choose which specific library categories appear in the Hero carousel." \
+              "- **Cross-Fork Backup Compatibility**: 100% clean protobuf serialization compatible across Mihon, Komikku, and Chimahon." \
               > release_notes.md
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \

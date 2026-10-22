@@ -1,10 +1,10 @@
 // EaZy Nuvio+ / Chimanew
 package eu.kanade.tachiyomi.ui.home.chimanew.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -41,8 +40,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,7 +89,7 @@ fun NuvioHeroSection(
         }
     }
 
-    val bannerHeight = if (heroStyle == 0) 380.dp else 430.dp
+    val bannerHeight = if (heroStyle == 0) 380.dp else 400.dp
 
     Box(
         modifier = modifier
@@ -106,7 +107,8 @@ fun NuvioHeroSection(
                 ?: MaterialTheme.colorScheme.primary
             val surfaceColor = MaterialTheme.colorScheme.background
 
-            val bannerImageModel: Any = item.highResBannerUrl ?: item.coverData
+            val bannerImageModel: Any = item.highResBannerUrl ?: item.highResCoverUrl ?: item.coverData
+            val posterImageModel: Any = item.highResCoverUrl ?: item.coverData
 
             Box(
                 modifier = Modifier
@@ -197,7 +199,7 @@ fun NuvioHeroSection(
                             color = Color.Black.copy(alpha = 0.40f),
                         ) {
                             SubcomposeAsyncImage(
-                                model = item.coverData,
+                                model = posterImageModel,
                                 contentDescription = item.title,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
@@ -327,10 +329,10 @@ fun NuvioHeroSection(
 
                 } else {
                     // -------------------------------------------------------------
-                    // Style 1: Full-Bleed Stretched Crop (with HD Banner Support)
+                    // Style 1: Option 1 1:1 Match (Official Wide Banner / High-Res)
                     // -------------------------------------------------------------
 
-                    // 1. Cover Artwork
+                    // 1. Cover / Wide Artwork
                     SubcomposeAsyncImage(
                         model = bannerImageModel,
                         contentDescription = item.title,
@@ -338,14 +340,14 @@ fun NuvioHeroSection(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                    // 2. Ambient Accent Glow
+                    // 2. Ambient Radial Accent Glow
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        accentColor.copy(alpha = 0.40f),
+                                        accentColor.copy(alpha = 0.35f),
                                         Color.Transparent,
                                     ),
                                     radius = 900f,
@@ -353,15 +355,15 @@ fun NuvioHeroSection(
                             ),
                     )
 
-                    // 3. Top scrim for status bar readability
+                    // 3. Top Scrim for Status Bar
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(110.dp)
+                            .height(100.dp)
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.Black.copy(alpha = 0.65f),
+                                        Color.Black.copy(alpha = 0.75f),
                                         Color.Transparent,
                                     ),
                                 ),
@@ -375,132 +377,168 @@ fun NuvioHeroSection(
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to Color.Transparent,
-                                    0.40f to Color.Transparent,
-                                    0.72f to surfaceColor.copy(alpha = 0.75f),
+                                    0.35f to Color.Transparent,
+                                    0.70f to surfaceColor.copy(alpha = 0.85f),
                                     1.0f to surfaceColor,
                                 ),
                             ),
                     )
 
-                    // 5. Hero Content (Anchored at Bottom)
+                    // 5. Hero Content (Anchored at Bottom) - 1:1 Match with Option 1
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 22.dp),
+                            .padding(horizontal = 16.dp, vertical = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        // Genres chips
-                        if (item.genres.isNotEmpty()) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.padding(bottom = 6.dp),
-                            ) {
-                                item.genres.take(3).forEach { genre ->
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = Color.Black.copy(alpha = 0.50f),
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                                    ) {
-                                        Text(
-                                            text = genre,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Color.White.copy(alpha = 0.90f),
-                                            ),
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        )
-                                    }
-                                }
-                            }
+                        // Format / Genre Pill (e.g. MANHWA • ACTION)
+                        val genreText = if (item.genres.isNotEmpty()) {
+                            item.genres.take(2).joinToString(" • ") { it.uppercase() }
+                        } else {
+                            "FEATURED"
                         }
 
-                        // Manga Title
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = accentColor.copy(alpha = 0.22f),
+                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.50f)),
+                        ) {
+                            Text(
+                                text = genreText,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.6.sp,
+                                    color = accentColor,
+                                ),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+
+                        // Manga Title with Drop Shadow
                         Text(
                             text = item.title,
-                            style = MaterialTheme.typography.headlineSmall.copy(
+                            style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
+                                fontSize = 21.sp,
                                 color = Color.White,
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.90f),
+                                    blurRadius = 8f,
+                                    offset = Offset(0f, 2f),
+                                ),
                             ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        // 2-Line Synopsis Description
+                        if (!item.description.isNullOrBlank()) {
+                            val cleanDesc = remember(item.description) {
+                                item.description.replace(Regex("<[^>]*>"), "").trim()
+                            }
+                            if (cleanDesc.isNotBlank()) {
+                                Text(
+                                    text = cleanDesc,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = Color.White.copy(alpha = 0.82f),
+                                        fontSize = 12.sp,
+                                        lineHeight = 16.sp,
+                                        shadow = Shadow(
+                                            color = Color.Black.copy(alpha = 0.85f),
+                                            blurRadius = 6f,
+                                            offset = Offset(0f, 1f),
+                                        ),
+                                    ),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
 
-                        // Progress info
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        // Action Row: Resume Button + Ch. X / Y Progress
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
+                            val buttonText = if (item.lastChapterNumber != null) {
+                                "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
+                            } else {
+                                "Start Reading"
+                            }
+
+                            Button(
+                                onClick = { onResumeClick(item) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = Color.Black,
+                                ),
+                                shape = RoundedCornerShape(20.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                modifier = Modifier.height(34.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color.Black,
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = buttonText,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Black,
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+
                             val progressText = buildString {
                                 if (item.lastChapterNumber != null) {
                                     append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
                                 }
                                 if (item.totalChapters > 0) {
-                                    append(" / ${item.totalChapters}")
+                                    if (isNotEmpty()) append(" / ")
+                                    append("${item.totalChapters}")
                                 }
                             }
                             if (progressText.isNotBlank()) {
                                 Text(
                                     text = progressText,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                    style = MaterialTheme.typography.bodySmall.copy(
                                         fontWeight = FontWeight.Medium,
                                         color = Color.White.copy(alpha = 0.75f),
+                                        fontSize = 12.sp,
+                                        shadow = Shadow(
+                                            color = Color.Black.copy(alpha = 0.80f),
+                                            blurRadius = 4f,
+                                        ),
                                     ),
                                 )
                             }
 
                             if (item.unreadCount > 0) {
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(10.dp),
                                     color = accentColor.copy(alpha = 0.25f),
                                     border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f)),
                                 ) {
                                     Text(
-                                        text = "+${item.unreadCount} new",
+                                        text = "+${item.unreadCount}",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
                                             color = accentColor,
                                         ),
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     )
                                 }
                             }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // 1-Tap Resume Button
-                        val buttonText = if (item.lastChapterNumber != null) {
-                            "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
-                        } else {
-                            "Start Reading"
-                        }
-
-                        Button(
-                            onClick = { onResumeClick(item) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White,
-                                contentColor = Color.Black,
-                            ),
-                            shape = RoundedCornerShape(24.dp),
-                            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 11.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = Color.Black,
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = buttonText,
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black,
-                                ),
-                            )
                         }
                     }
                 }
@@ -513,7 +551,7 @@ fun NuvioHeroSection(
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 10.dp),
+                    .padding(bottom = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -529,7 +567,7 @@ fun NuvioHeroSection(
                     )
                     Box(
                         modifier = Modifier
-                            .height(5.dp)
+                            .height(4.dp)
                             .width(width)
                             .clip(RoundedCornerShape(99.dp))
                             .background(
