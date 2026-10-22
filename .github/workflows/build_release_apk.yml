@@ -70,15 +70,15 @@ jobs:
             gh release upload "$tag" app/build/outputs/apk/release/*.apk --clobber
           else
             echo "Creating release $tag..."
-            cat << 'EOF' > release_notes.md
-            ### What's New in v2.4.7
-            - **Nuvio Netflix-Style Home Tab**: Brand new landing experience with dynamic top Hero carousel and horizontal manga shelves.
-            - **Dynamic Hero Carousel**: Auto-advancing banner with Palette ambient color glow, 1-tap chapter resume pill, and manga details on cover tap.
-            - **Horizontal Manga Shelves**: Continue Reading (with 1-tap direct resume and long-press options), Recently Updated, and Library Categories.
-            - **Sleek Cards**: Ambient bottom gradient fade, floating chapter progress, 2px progress bar, and unread badges.
-            - **Nuvio Enhanced Settings**: Dedicated top-level settings section to toggle and configure Hero source, shelves, and card appearance.
-            - **Google Drive Sync**: Pre-configured with client secrets.
-            EOF
+            printf '%s\n' \
+              "### What's New in v2.4.7" \
+              "- **Nuvio Netflix-Style Home Tab**: Brand new landing experience with dynamic top Hero carousel and horizontal manga shelves." \
+              "- **Dynamic Hero Carousel**: Auto-advancing banner with Palette ambient color glow, 1-tap chapter resume pill, and manga details on cover tap." \
+              "- **Horizontal Manga Shelves**: Continue Reading (with 1-tap direct resume and long-press options), Recently Updated, and Library Categories." \
+              "- **Sleek Cards**: Ambient bottom gradient fade, floating chapter progress, 2px progress bar, and unread badges." \
+              "- **Nuvio Enhanced Settings**: Dedicated top-level settings section to toggle and configure Hero source, shelves, and card appearance." \
+              "- **Google Drive Sync**: Pre-configured with client secrets." \
+              > release_notes.md
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \
               --title "Chimanew ($tag)" \

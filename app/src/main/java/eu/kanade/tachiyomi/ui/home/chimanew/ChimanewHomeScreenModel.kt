@@ -10,9 +10,12 @@ import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.interactor.GetNextChapters
+import tachiyomi.domain.history.model.HistoryWithRelations
+import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.MangaCover
@@ -41,6 +44,17 @@ data class HomeShelf(
     val items: List<HomeMangaItem>,
 )
 
+@Immutable
+private data class NuvioHomePrefs(
+    val showHero: Boolean,
+    val heroSource: Int,
+    val showContinue: Boolean,
+    val showUpdated: Boolean,
+    val showCategoryShelves: Boolean,
+    val showProgressBars: Boolean,
+    val showUnreadBadges: Boolean,
+)
+
 class ChimanewHomeScreenModel(
     private val preferences: ChimanewPreferences = Injekt.get(),
     private val getHistory: GetHistory = Injekt.get(),
@@ -63,19 +77,36 @@ class ChimanewHomeScreenModel(
 
     init {
         screenModelScope.launchIO {
-            combine(
+            val dataFlow = combine(
                 getHistory.subscribe("", unfinishedManga = null, unfinishedChapter = null, nonLibraryEntries = null),
                 getLibraryManga.subscribe(),
                 getCategories.subscribe(),
+            ) { historyList: List<HistoryWithRelations>, libraryList: List<LibraryManga>, categories: List<Category> ->
+                Triple(historyList, libraryList, categories)
+            }
+
+            val prefsFlow = combine(
                 preferences.showHeroCarousel().changes(),
                 preferences.heroSource().changes(),
                 preferences.showContinueReading().changes(),
                 preferences.showRecentlyUpdated().changes(),
                 preferences.showCategoryShelves().changes(),
-            ) { historyList, libraryList, categories, showHero, heroSource, showContinue, showUpdated, showCategoryShelves ->
+            ) { showHero, heroSource, showContinue, showUpdated, showCategoryShelves ->
+                NuvioHomePrefs(
+                    showHero = showHero,
+                    heroSource = heroSource,
+                    showContinue = showContinue,
+                    showUpdated = showUpdated,
+                    showCategoryShelves = showCategoryShelves,
+                    showProgressBars = preferences.showProgressBars().get(),
+                    showUnreadBadges = preferences.showUnreadBadges().get(),
+                )
+            }
+
+            combine(dataFlow, prefsFlow) { (historyList, libraryList, categories), prefs ->
                 val distinctHistory = historyList.distinctBy { it.mangaId }
 
-                val continueReadingItems = if (showContinue) {
+                val continueReadingItems = if (prefs.showContinue) {
                     distinctHistory.map { h ->
                         HomeMangaItem(
                             mangaId = h.mangaId,
@@ -92,9 +123,9 @@ class ChimanewHomeScreenModel(
                     emptyList()
                 }
 
-                val heroItems = if (!showHero) {
+                val heroItems = if (!prefs.showHero) {
                     emptyList()
-                } else if (heroSource == 1) {
+                } else if (prefs.heroSource == 1) {
                     // Favorites only
                     libraryList
                         .filter { it.manga.favorite }
@@ -147,7 +178,7 @@ class ChimanewHomeScreenModel(
                     }
                 }
 
-                val updatedItems = if (showUpdated) {
+                val updatedItems = if (prefs.showUpdated) {
                     libraryList
                         .sortedByDescending { it.latestUpload.coerceAtLeast(it.chapterFetchedAt) }
                         .take(15)
@@ -167,7 +198,7 @@ class ChimanewHomeScreenModel(
                     emptyList()
                 }
 
-                val categoryShelves = if (showCategoryShelves) {
+                val categoryShelves = if (prefs.showCategoryShelves) {
                     categories.mapNotNull { cat ->
                         val itemsForCat = libraryList.filter { cat.id in it.categories }
                         if (itemsForCat.isEmpty()) {
@@ -177,38 +208,38 @@ class ChimanewHomeScreenModel(
                                 id = "cat_${cat.id}",
                                 title = cat.name,
                                 items = itemsForCat.map { lib ->
-                                HomeMangaItem(
-                                    mangaId = lib.manga.id,
-                                    title = lib.manga.title,
-                                    coverData = lib.manga.asMangaCover(),
-                                    totalChapters = lib.totalChapters,
-                                    readChapters = lib.readCount,
-                                    unreadCount = lib.unreadCount,
-                                    genres = lib.manga.ogGenre ?: emptyList(),
-                                    description = lib.manga.ogDescription,
-                                )
-                            },
-                        )
+                                    HomeMangaItem(
+                                        mangaId = lib.manga.id,
+                                        title = lib.manga.title,
+                                        coverData = lib.manga.asMangaCover(),
+                                        totalChapters = lib.totalChapters,
+                                        readChapters = lib.readCount,
+                                        unreadCount = lib.unreadCount,
+                                        genres = lib.manga.ogGenre ?: emptyList(),
+                                        description = lib.manga.ogDescription,
+                                    )
+                                },
+                            )
+                        }
                     }
+                } else {
+                    emptyList()
                 }
-            } else {
-                emptyList()
-            }
 
-            State(
-                isLoading = false,
-                heroItems = heroItems,
-                continueReading = continueReadingItems,
-                recentlyUpdated = updatedItems,
-                shelves = categoryShelves,
-                showProgressBars = preferences.showProgressBars().get(),
-                showUnreadBadges = preferences.showUnreadBadges().get(),
-            )
-        }.collectLatest { newState ->
-            mutableState.update { newState }
+                State(
+                    isLoading = false,
+                    heroItems = heroItems,
+                    continueReading = continueReadingItems,
+                    recentlyUpdated = updatedItems,
+                    shelves = categoryShelves,
+                    showProgressBars = prefs.showProgressBars,
+                    showUnreadBadges = prefs.showUnreadBadges,
+                )
+            }.collectLatest { newState ->
+                mutableState.update { newState }
+            }
         }
     }
-}
 
     suspend fun getResumeChapter(mangaId: Long, lastChapterId: Long?): Chapter? {
         return withIOContext {

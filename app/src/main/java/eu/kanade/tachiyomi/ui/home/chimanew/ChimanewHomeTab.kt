@@ -189,7 +189,7 @@ data object ChimanewHomeTab : Tab {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 32.dp, vertical = 80.dp),
-                            horizontalAlignment = Alignment.CenterVertically,
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Text(
