@@ -14,4 +14,5 @@ target_link_libraries(lens_asset_init
     ${log-lib}
     ${android-lib}
     dl
+    c++_shared
 )
