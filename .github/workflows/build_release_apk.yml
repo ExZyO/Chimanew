@@ -63,7 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.4.8"
+          tag="v2.4.9"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -71,13 +71,11 @@ jobs:
           else
             echo "Creating release $tag..."
             printf '%s\n' \
-              "### What's New in v2.4.8" \
-              "- **Netflix / Nuvio Ambient Backdrop Hero**: Sharp, uncropped 2:3 portrait cover bathed in atmospheric ambient glow." \
-              "- **Hero Style Settings**: Toggle between Netflix Ambient Backdrop and Full-Bleed Stretched Crop in Nuvio Enhanced settings." \
-              "- **Official AniList HD Banners**: Automatically fetches crystal-clear 1200x630 HD artwork from AniList for tracked manga." \
-              "- **Unified Tracker Shelves**: New dynamic shelves for Reading, Plan to read, On hold, Completed, Dropped, and Not tracked in Library (AniList / MAL)." \
-              "- **Header Scroll Polish**: Removed static overlay text so covers and headers glide smoothly underneath the top bar." \
-              "- **Google Drive OAuth Diagnosis**: Friendly, clear validation error when client secrets require full JSON credentials." \
+              "### What's New in v2.4.9" \
+              "- **Dedicated In-App Updater for Chimanew**: Fixed updater repository target so update checks and background jobs correctly detect ExZyO/Chimanew releases instead of upstream Chimahon." \
+              "- **Persistent Release Signing Key**: Replaced ephemeral debug runner keys with a permanent release keystore shared across local and CI builds. Eliminates 'Update failed' / certificate mismatch errors permanently." \
+              "- **Robust Architecture Fallback**: Enhanced asset resolution so devices with any ABI can download release APKs seamlessly." \
+              "- **All v2.4.8 Features Included**: Netflix/Nuvio Ambient Backdrop Hero, AniList 1200x630 HD banners, unified tracker shelves (Reading, Plan to read, On hold, Completed, Dropped, Not tracked), and smooth scroll header." \
               > release_notes.md
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \

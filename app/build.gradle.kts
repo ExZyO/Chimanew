@@ -25,8 +25,8 @@ android {
         // EaZy Nuvio+ / Chimanew
         applicationId = "app.chimanew"
 
-        versionCode = releaseVersionCode ?: 20408
-        versionName = releaseVersionName ?: "2.4.8"
+        versionCode = releaseVersionCode ?: 20409
+        versionName = releaseVersionName ?: "2.4.9"
         // KMK <--
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
@@ -36,6 +36,21 @@ android {
         buildConfigField("boolean", "HAS_LOCAL_OCR", hasLocalOcr.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // EaZy Nuvio+ / Chimanew
+    signingConfigs {
+        create("release") {
+            val keystoreFile = rootProject.file("signing/release.keystore")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "chimanew"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "chimanew"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "chimanew"
+            } else {
+                initWith(getByName("debug"))
+            }
+        }
     }
 
     buildTypes {
@@ -51,10 +66,9 @@ android {
 
             proguardFiles("proguard-android-optimize.txt", "proguard-rules.pro")
 
-            // KMK -->
-            // In this custom fork, signing release variant with debug key allows building installable release APKs
-            // in local and GitHub Actions environments without requiring private keystore secrets.
-            signingConfig = debug.signingConfig
+            // EaZy Nuvio+ / Chimanew
+            // Persistent release keystore ensuring identical signature across all local & CI builds
+            signingConfig = signingConfigs.getByName("release")
             // KMK <--
 
             buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLastCommitTime = true)}\"")

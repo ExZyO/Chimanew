@@ -43,6 +43,7 @@ import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
 import kotlinx.coroutines.launch
 import logcat.LogPriority
+import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
@@ -282,10 +283,11 @@ class AboutScreen : Screen() {
                         //     icon = CustomIcons.Reddit,
                         //     url = "https://www.reddit.com/r/mihonapp",
                         // )
+                        // EaZy Nuvio+ / Chimanew
                         LinkIcon(
                             label = "GitHub",
                             icon = CustomIcons.Github,
-                            url = "https://github.com/Chimahon/chimahon",
+                            url = Constants.GITHUB_PROJECT,
                         )
                     }
                 }

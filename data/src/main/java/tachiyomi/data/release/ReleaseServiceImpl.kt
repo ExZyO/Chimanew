@@ -79,10 +79,11 @@ class ReleaseServiceImpl(
             BUILD_TYPES.find { "-$it" in asset.name } to asset.downloadLink
         }
 
+        // EaZy Nuvio+ / Chimanew
         return if (!isFoss) {
-            map[Build.SUPPORTED_ABIS[0]] ?: map[null]
+            map[Build.SUPPORTED_ABIS[0]] ?: map[null] ?: assets.firstOrNull()?.downloadLink
         } else {
-            map[FOSS]
+            map[FOSS] ?: assets.firstOrNull()?.downloadLink
         }
     }
 
