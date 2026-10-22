@@ -4,6 +4,73 @@ All notable changes to Chimahon are documented here.
 
 The format follows a Keep a Changelog style and uses Semantic Versioning.
 
+## [v2.4.9]
+
+### Changed
+
+- Single stored copy of each dictionary, including mixed term and kanji dictionaries
+
+### Fixed
+
+- Kanji lookup in dictionaries that contain both terms and kanji
+
+## [v2.4.8]
+
+### Added
+
+- Crop and re-OCR of a selected area in the manga reader (two-finger tap, bottom bar button, or page actions)
+- Toggle to hide the blue OCR boxes in screen lookup
+- Retry actions for failed novel pages and global novel search
+
+### Changed
+
+- Removed the blue OCR overlay from novel images
+- Novel browse now shares its display mode with manga and anime
+- Page layout toolbar controls are optional and disabled by default
+- Updated mpv/libass builds with native system-font discovery
+
+### Fixed
+
+- ScreenLookup multi-line lookup
+- ScreenLookup selection on rotated or scaled text
+- Novel browse pagination
+- Cover-only novel layouts showing titles
+- Novel global search duplicates, filtering, and source navigation
+- Downloaded novels not showing the Open action
+- OPDS covers in browse and downloaded books
+- Jellyfin authentication
+- Native subtitle font loading
+
+## [v2.4.7]
+
+### Added
+- Local PDF support for manga
+- Bulk OCR in chapter selection
+- OCR queue notifications
+- OPDS for novels
+- Novel browse layouts and default category setting
+- Local subtitle autoloading
+- Private extension installer
+
+### Changed
+- Switched to native MPV for subtitle rendering and dictionary lookup
+- Moved model management to OCR settings with storage usage
+- Chimahon icons and export filenames
+
+### Fixed
+- Anime playback and sentence audio failing on some streams
+- Anime extension updates getting stuck
+- Anime OCR screenshot timing
+- Forvo audio links
+- Novel WebView user agent and language filters
+- Novel categories, selection, statistics, and duplicate entries
+- Final novel chapter not being marked read
+- History double-tap ignoring novels
+- First-dictionary Anki glossaries missing additional senses
+- Jellyfin detection and tracking
+- Deleted anime categories in update filters
+- Subtitle position and sentence audio timing
+
 ## [v2.4.6]
 
 ### Added

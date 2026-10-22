@@ -101,6 +101,7 @@ import eu.kanade.tachiyomi.ui.manga.ChapterList
 import eu.kanade.tachiyomi.ui.manga.MangaScreenModel
 import eu.kanade.tachiyomi.ui.manga.MergedMangaData
 import eu.kanade.tachiyomi.ui.manga.PagePreviewState
+import eu.kanade.tachiyomi.ui.manga.pendingDownloadedOcrChapters
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import exh.metadata.MetadataUtil
 import exh.source.MERGED_SOURCE_ID
@@ -213,6 +214,7 @@ fun MangaScreen(
     hazeState: HazeState,
     onClickDictionaryProfile: (() -> Unit)?,
     onClickPreOcr: (() -> Unit)?,
+    onOcrChapters: ((List<ChapterList.Item>) -> Unit)? = null,
     onClickMangaStats: (() -> Unit)?,
     // KMK <--
 ) {
@@ -286,6 +288,7 @@ fun MangaScreen(
             hazeState = hazeState,
             onClickDictionaryProfile = onClickDictionaryProfile,
             onClickPreOcr = onClickPreOcr,
+            onOcrChapters = onOcrChapters,
             onClickMangaStats = onClickMangaStats,
             // KMK <--
         )
@@ -352,6 +355,7 @@ fun MangaScreen(
             hazeState = hazeState,
             onClickDictionaryProfile = onClickDictionaryProfile,
             onClickPreOcr = onClickPreOcr,
+            onOcrChapters = onOcrChapters,
             onClickMangaStats = onClickMangaStats,
             // KMK <--
         )
@@ -435,6 +439,7 @@ private fun MangaScreenSmallImpl(
     hazeState: HazeState,
     onClickDictionaryProfile: (() -> Unit)?,
     onClickPreOcr: (() -> Unit)?,
+    onOcrChapters: ((List<ChapterList.Item>) -> Unit)? = null,
     onClickMangaStats: (() -> Unit)?,
     // KMK <--
 ) {
@@ -551,6 +556,7 @@ private fun MangaScreenSmallImpl(
                 onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
                 onDownloadChapter = onDownloadChapter,
                 onMultiDeleteClicked = onMultiDeleteClicked,
+                onOcrChapters = onOcrChapters,
                 fillFraction = 1f,
             )
         },
@@ -912,6 +918,7 @@ private fun MangaScreenLargeImpl(
     hazeState: HazeState,
     onClickDictionaryProfile: (() -> Unit)?,
     onClickPreOcr: (() -> Unit)?,
+    onOcrChapters: ((List<ChapterList.Item>) -> Unit)? = null,
     onClickMangaStats: (() -> Unit)?,
     // KMK <--
 ) {
@@ -1023,6 +1030,7 @@ private fun MangaScreenLargeImpl(
                     onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
                     onDownloadChapter = onDownloadChapter,
                     onMultiDeleteClicked = onMultiDeleteClicked,
+                    onOcrChapters = onOcrChapters,
                     fillFraction = 0.5f,
                 )
             }
@@ -1297,6 +1305,7 @@ private fun SharedMangaBottomActionMenu(
     onMarkPreviousAsReadClicked: (Chapter) -> Unit,
     onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
     onMultiDeleteClicked: (List<Chapter>) -> Unit,
+    onOcrChapters: ((List<ChapterList.Item>) -> Unit)?,
     fillFraction: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -1318,6 +1327,9 @@ private fun SharedMangaBottomActionMenu(
         onMarkPreviousAsReadClicked = {
             onMarkPreviousAsReadClicked(selected[0].chapter)
         }.takeIf { selected.size == 1 },
+        onRunOcrClicked = {
+            onOcrChapters!!(selected.pendingDownloadedOcrChapters())
+        }.takeIf { onOcrChapters != null && selected.pendingDownloadedOcrChapters().isNotEmpty() },
         onDownloadClicked = {
             onDownloadChapter!!(selected.toList(), ChapterDownloadAction.START)
         }.takeIf {

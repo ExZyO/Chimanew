@@ -15,6 +15,11 @@ import android.window.OnBackInvokedDispatcher
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -48,14 +53,14 @@ import chimahon.ocr.OcrLanguage
 import eu.kanade.tachiyomi.data.ocr.recognizePage
 import eu.kanade.tachiyomi.ui.reader.viewer.OcrLookupPopup
 import eu.kanade.tachiyomi.ui.reader.viewer.OcrTextBlock
-import eu.kanade.tachiyomi.ui.reader.viewer.displayText
 import eu.kanade.tachiyomi.ui.reader.viewer.extractOcrLookupString
-import eu.kanade.tachiyomi.ui.reader.viewer.fullText
 import eu.kanade.tachiyomi.ui.reader.viewer.isLookupStartChar
+import eu.kanade.tachiyomi.ui.reader.viewer.orderedFullText
+import eu.kanade.tachiyomi.ui.reader.viewer.toOrderedOffset
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -64,6 +69,7 @@ import kotlinx.coroutines.withContext
 import tachiyomi.core.common.i18n.stringResource as contextStringResource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -260,6 +266,8 @@ internal fun ScreenLookupOverlay(
     val localDensity = LocalDensity.current
     val repository = remember { Injekt.get<DictionaryRepository>() }
     val dictionaryPreferences = remember { Injekt.get<DictionaryPreferences>() }
+    val overlayPreference = remember { dictionaryPreferences.showScreenLookupOverlay() }
+    val showOverlay by overlayPreference.collectAsState()
     val boxScaleX = dictionaryPreferences.ocrBoxScaleX().get()
     val boxScaleY = dictionaryPreferences.ocrBoxScaleY().get()
 
@@ -324,6 +332,7 @@ internal fun ScreenLookupOverlay(
 
         OcrBlockCanvas(
             blocks = blocks,
+            showBoxes = showOverlay,
             boxScaleX = boxScaleX,
             boxScaleY = boxScaleY,
             activeBlock = selection?.block,
@@ -331,8 +340,8 @@ internal fun ScreenLookupOverlay(
             activeMatchOffset = matchOffset,
             selection = selection,
             onBlockTapped = { tapped, tapX, tapY ->
-                val charOffset = tapped.screenLookupCharOffset(tapX, tapY)
-                val text = tapped.fullText
+                val charOffset = tapped.toOrderedOffset(tapped.screenLookupCharOffset(tapX, tapY, widthPx, heightPx))
+                val text = tapped.orderedFullText
                 if (selection?.block == tapped && selection?.sentenceOffset == charOffset) {
                     selection = null
                     showTapHint = false
@@ -348,7 +357,7 @@ internal fun ScreenLookupOverlay(
                         selection = OcrSelection(
                             block = tapped,
                             lookupString = lookupString,
-                            sentence = tapped.displayText,
+                            sentence = text,
                             sentenceOffset = charOffset,
                             anchorX = tapped.xmin * widthPx,
                             anchorY = tapped.ymin * heightPx,
@@ -384,6 +393,16 @@ internal fun ScreenLookupOverlay(
                 .align(Alignment.TopCenter)
                 .padding(top = 84.dp),
         )
+
+        FilledTonalIconButton(
+            onClick = { overlayPreference.set(!showOverlay) },
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 16.dp),
+        ) {
+            Icon(
+                imageVector = if (showOverlay) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                contentDescription = if (showOverlay) "Hide OCR overlay" else "Show OCR overlay",
+            )
+        }
 
         val selected = selection
         val cropMode = activeProfile.ankiCropMode

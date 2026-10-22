@@ -21,6 +21,16 @@ android {
             version = "3.22.1"
         }
     }
+
+    buildTypes {
+        getByName("debug") {
+            externalNativeBuild {
+                cmake {
+                    abiFilters("arm64-v8a")
+                }
+            }
+        }
+    }
 }
 
 dependencies {

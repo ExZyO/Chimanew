@@ -60,6 +60,7 @@ import eu.kanade.tachiyomi.data.coil.PagePreviewFetcher
 import eu.kanade.tachiyomi.data.coil.PagePreviewKeyer
 import eu.kanade.tachiyomi.data.coil.TachiyomiImageDecoder
 import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
+import eu.kanade.tachiyomi.data.model.ModelUpdateJob
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.sync.SyncDataJob
 import eu.kanade.tachiyomi.di.AppModule
@@ -84,6 +85,7 @@ import exh.log.xLogD
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import logcat.AndroidLogcatLogger
 import logcat.LogPriority
 import logcat.LogcatLogger
@@ -228,7 +230,13 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         chimahon.novel.data.NovelMigration.migrateOldBooks(this)
         // Public local-novels root (manga <base>/local/ mirror); readers resolve it.
         BookStorage.localBooksRoot = LocalNovelFiles.publicRoot(this)
-        chimahon.DictionaryRepository.migrateFlatDictionaries(File(getExternalFilesDir(null), "dictionaries"))
+        val dictionariesDir = File(getExternalFilesDir(null), "dictionaries")
+        chimahon.DictionaryRepository.migrateFlatDictionaries(dictionariesDir)
+        // One-time, off the main thread: record the kinds of entries each dictionary serves and drop
+        // the duplicate folder copies older builds made. It writes a marker and never runs again.
+        scope.launch(Dispatchers.IO) {
+            chimahon.DictionaryRepository.ensureDictionaryTypes(dictionariesDir)
+        }
         // Chimahon <--
     }
 
@@ -302,6 +310,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
     override fun onStart(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStart()
+        ModelUpdateJob.checkOnAppOpen(this)
 
         if (!ScreenLookupServiceState.isEntryInProgress) {
             val isFirstStart = !everStarted
