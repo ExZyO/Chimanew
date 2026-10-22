@@ -43,10 +43,16 @@
     <string name="pref_nuvio_hero_source">Hero content source</string>
     <string name="pref_nuvio_hero_source_history">In-Progress Reading (Recent)</string>
     <string name="pref_nuvio_hero_source_favorites">Library Favorites</string>
+    <string name="pref_nuvio_hero_style">Hero banner style</string>
+    <string name="pref_nuvio_hero_style_ambient">Netflix / Nuvio Ambient Backdrop</string>
+    <string name="pref_nuvio_hero_style_fullbleed">Full-Bleed Stretched Crop</string>
     <string name="pref_nuvio_shelves_section">Home Shelves</string>
     <string name="pref_nuvio_show_continue_reading">Continue Reading</string>
     <string name="pref_nuvio_show_recently_updated">Recently Updated</string>
     <string name="pref_nuvio_show_category_shelves">Library Category Shelves</string>
+    <string name="pref_nuvio_show_tracking_shelves">Tracker Shelves (AniList / MAL)</string>
+    <string name="pref_nuvio_show_tracking_shelves_summary">Show shelves grouped by Reading, Plan to read, On hold, Completed, Dropped, Not tracked</string>
+    <string name="nuvio_shelf_not_tracked">Not Tracked in Library</string>
     <string name="pref_nuvio_cards_section">Card Appearance</string>
     <string name="pref_nuvio_show_progress">Show reading progress bars</string>
     <string name="pref_nuvio_show_unread_badge">Show unread count badges</string>

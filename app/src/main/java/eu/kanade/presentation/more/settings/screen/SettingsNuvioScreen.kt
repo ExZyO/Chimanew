@@ -50,6 +50,14 @@ object SettingsNuvioScreen : SearchableSettings {
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_source),
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.heroStyle(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_nuvio_hero_style_ambient),
+                        1 to stringResource(MR.strings.pref_nuvio_hero_style_fullbleed),
+                    ),
+                    title = stringResource(MR.strings.pref_nuvio_hero_style),
+                ),
             ),
         )
     }
@@ -70,6 +78,11 @@ object SettingsNuvioScreen : SearchableSettings {
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.showCategoryShelves(),
                     title = stringResource(MR.strings.pref_nuvio_show_category_shelves),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.showTrackingShelves(),
+                    title = stringResource(MR.strings.pref_nuvio_show_tracking_shelves),
+                    subtitle = stringResource(MR.strings.pref_nuvio_show_tracking_shelves_summary),
                 ),
             ),
         )

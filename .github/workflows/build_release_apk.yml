@@ -63,7 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.4.7"
+          tag="v2.4.8"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -71,13 +71,13 @@ jobs:
           else
             echo "Creating release $tag..."
             printf '%s\n' \
-              "### What's New in v2.4.7" \
-              "- **Nuvio Netflix-Style Home Tab**: Brand new landing experience with dynamic top Hero carousel and horizontal manga shelves." \
-              "- **Dynamic Hero Carousel**: Auto-advancing banner with Palette ambient color glow, 1-tap chapter resume pill, and manga details on cover tap." \
-              "- **Horizontal Manga Shelves**: Continue Reading (with 1-tap direct resume and long-press options), Recently Updated, and Library Categories." \
-              "- **Sleek Cards**: Ambient bottom gradient fade, floating chapter progress, 2px progress bar, and unread badges." \
-              "- **Nuvio Enhanced Settings**: Dedicated top-level settings section to toggle and configure Hero source, shelves, and card appearance." \
-              "- **Google Drive Sync**: Pre-configured with client secrets." \
+              "### What's New in v2.4.8" \
+              "- **Netflix / Nuvio Ambient Backdrop Hero**: Sharp, uncropped 2:3 portrait cover bathed in atmospheric ambient glow." \
+              "- **Hero Style Settings**: Toggle between Netflix Ambient Backdrop and Full-Bleed Stretched Crop in Nuvio Enhanced settings." \
+              "- **Official AniList HD Banners**: Automatically fetches crystal-clear 1200x630 HD artwork from AniList for tracked manga." \
+              "- **Unified Tracker Shelves**: New dynamic shelves for Reading, Plan to read, On hold, Completed, Dropped, and Not tracked in Library (AniList / MAL)." \
+              "- **Header Scroll Polish**: Removed static overlay text so covers and headers glide smoothly underneath the top bar." \
+              "- **Google Drive OAuth Diagnosis**: Friendly, clear validation error when client secrets require full JSON credentials." \
               > release_notes.md
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \

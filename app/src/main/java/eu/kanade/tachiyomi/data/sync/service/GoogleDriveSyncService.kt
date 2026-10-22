@@ -459,10 +459,8 @@ class GoogleDriveService(private val context: Context) {
     }
 
     private fun loadClientSecrets(jsonFactory: GsonFactory): GoogleClientSecrets {
-        val secrets = try {
-            context.assets.open(CLIENT_SECRETS_FILE).reader().use {
-                GoogleClientSecrets.load(jsonFactory, it)
-            }
+        val rawContent = try {
+            context.assets.open(CLIENT_SECRETS_FILE).reader().use { it.readText() }
         } catch (e: IOException) {
             throw GoogleDriveConfigurationException(
                 "Google Drive client secrets file is missing",
@@ -470,9 +468,26 @@ class GoogleDriveService(private val context: Context) {
             )
         }
 
+        if (rawContent.trim().startsWith("GOCSPX-")) {
+            throw GoogleDriveConfigurationException(
+                "Google Drive secrets contains only client_secret. Please provide the full client_secrets.json file containing both client_id and client_secret.",
+            )
+        }
+
+        val secrets = try {
+            rawContent.reader().use {
+                GoogleClientSecrets.load(jsonFactory, it)
+            }
+        } catch (e: Exception) {
+            throw GoogleDriveConfigurationException(
+                "Google Drive client secrets file is invalid: ${e.localizedMessage}",
+                e,
+            )
+        }
+
         if (secrets.details == null) {
             throw GoogleDriveConfigurationException(
-                "Google Drive client secrets file is invalid",
+                "Google Drive client secrets file is invalid (missing 'installed' or 'web' section)",
             )
         }
 

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -41,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -120,12 +122,24 @@ data object ChimanewHomeTab : Tab {
             selectedLongPressItem = item
         }
 
+        val listState = rememberLazyListState()
+        val scrollAlpha by remember {
+            derivedStateOf {
+                if (listState.firstVisibleItemIndex > 0) {
+                    1f
+                } else {
+                    (listState.firstVisibleItemScrollOffset / 200f).coerceIn(0f, 1f)
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 // 1. Top Hero Section
@@ -133,6 +147,7 @@ data object ChimanewHomeTab : Tab {
                     item(key = "hero_carousel") {
                         NuvioHeroSection(
                             items = state.heroItems,
+                            heroStyle = state.heroStyle,
                             onItemClick = onItemClick,
                             onResumeClick = onResumeClick,
                         )
@@ -167,7 +182,7 @@ data object ChimanewHomeTab : Tab {
                     }
                 }
 
-                // 4. Category Shelves
+                // 4. Shelves (Categories & Trackers)
                 items(
                     items = state.shelves,
                     key = { it.id },
@@ -232,46 +247,34 @@ data object ChimanewHomeTab : Tab {
                 }
             }
 
-            // Sleek Floating App Bar Header
+            // Sleek Ambient App Bar Header (Smoothly darkens on scroll; no blocking text)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = scrollAlpha * 0.95f))
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
             ) {
-                Text(
-                    text = "Chimanew",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp,
-                    ),
-                    color = Color.White,
-                )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                IconButton(
+                    onClick = { navigator.push(GlobalSearchScreen()) },
                 ) {
-                    IconButton(
-                        onClick = { navigator.push(GlobalSearchScreen()) },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Search,
-                            contentDescription = "Search",
-                            tint = Color.White,
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = "Search",
+                        tint = Color.White,
+                    )
+                }
 
-                    IconButton(
-                        onClick = { navigator.push(SettingsNuvioScreen) },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Settings,
-                            contentDescription = "Nuvio Settings",
-                            tint = Color.White,
-                        )
-                    }
+                IconButton(
+                    onClick = { navigator.push(SettingsNuvioScreen) },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Nuvio Settings",
+                        tint = Color.White,
+                    )
                 }
             }
 
