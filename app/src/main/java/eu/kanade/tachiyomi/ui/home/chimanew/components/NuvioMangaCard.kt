@@ -58,14 +58,14 @@ fun NuvioMangaCard(
         ?: item.coverData.dominantCoverColors?.first?.let { Color(it) }
         ?: MaterialTheme.colorScheme.primary
 
-    // EaZy Nuvio+ / Chimanew: Interactive spring bouncy micro-animation on press
+    // EaZy Nuvio+ / Chimanew: Interactive snappy spring micro-animation on press
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val cardScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1f,
+        targetValue = if (isPressed) 0.96f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow,
+            stiffness = Spring.StiffnessMedium,
         ),
         label = "card_press_scale",
     )
@@ -91,8 +91,8 @@ fun NuvioMangaCard(
                 },
             ),
     ) {
-        // 1. Cover image (high-res AniList artwork when enabled, or standard cover)
-        val imageModel: Any = item.highResBannerUrl ?: item.coverData
+        // 1. Cover image: Always use portrait coverData for 2:3 manga cards
+        val imageModel: Any = item.coverData
         SubcomposeAsyncImage(
             model = imageModel,
             contentDescription = item.title,
@@ -156,11 +156,17 @@ fun NuvioMangaCard(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            // Chapter Info
-            val chapterText = if (item.lastChapterNumber != null) {
-                "Ch. ${formatChapterNumber(item.lastChapterNumber)}"
-            } else {
-                "${item.totalChapters} ch"
+            // Chapter / In-Progress Info
+            val chapterText = when {
+                item.lastChapterNumber != null && !item.isChapterRead && item.lastPageRead > 0 -> {
+                    "Ch. ${formatChapterNumber(item.lastChapterNumber)}: p. ${item.lastPageRead + 1}"
+                }
+                item.lastChapterNumber != null -> {
+                    "Ch. ${formatChapterNumber(item.lastChapterNumber)}"
+                }
+                else -> {
+                    "${item.totalChapters} ch"
+                }
             }
 
             Row(
@@ -189,10 +195,16 @@ fun NuvioMangaCard(
 
         // 5. Netflix-style bottom edge reading progress bar
         if (showProgressBar) {
-            val progress = if (item.totalChapters > 0) {
-                (item.readChapters.toFloat() / item.totalChapters.toFloat()).coerceIn(0f, 1f)
+            val rawProgress = if (item.totalChapters > 0) {
+                val inProgressBonus = if (!item.isChapterRead && item.lastPageRead > 0) 0.5f else 0f
+                ((item.readChapters + inProgressBonus) / item.totalChapters.toFloat()).coerceIn(0f, 1f)
             } else {
                 0f
+            }
+            val progress = if (rawProgress == 0f && !item.isChapterRead && item.lastPageRead > 0) {
+                0.04f // Minimum visible progress indicator so user sees active reading progress
+            } else {
+                rawProgress
             }
 
             if (progress > 0f) {

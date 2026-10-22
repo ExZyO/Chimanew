@@ -61,9 +61,9 @@ jobs:
 
       - name: Publish or Update GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.5.0"
+          tag="v2.5.1"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -71,13 +71,13 @@ jobs:
           else
             echo "Creating release $tag..."
             printf '%s\n' \
-              "### What's New in v2.5.0" \
-              "- **Home Rows & Shelves Customizer**: Native Chimahon-style drag-to-reorder and visibility toggles in Settings -> Chimanew." \
-              "- **Infinite Looping Hero Carousel**: Endless loop swiping in both directions with smooth continuous auto-advance and Netflix-style morphing pill indicators." \
-              "- **AniList HD Artwork Toggle**: Easily switch between high-resolution 1200x630 AniList artwork and source covers in Settings -> Chimanew." \
-              "- **Navigation Tab Alignment**: Restored Updates tab to bottom navigation bar, moved Dictionary into the More screen." \
-              "- **Netflix & Webtoon Modern Visuals**: Sleek bottom-edge reading progress bars on cards, spring bouncy micro-animations on press, and shelf count chips." \
-              "- **Persistent Release Signing Key**: Locked in a permanent release certificate for both local and CI builds to prevent update errors." \
+              "### What's New in v2.5.1" \
+              "- **AniList Artwork Aspect Ratio Fix**: Portrait 2:3 manga cards strictly retain native book covers, while high-resolution 1200x630 AniList banners are reserved for Hero backdrops." \
+              "- **Real-Time Reading Progress**: Continue Reading cards now accurately display current page numbers (e.g. Ch. 5: p. 13) and non-zero progress bars for chapters in progress." \
+              "- **Card Tap Action Setting**: Added setting in Settings -> Chimanew -> Card Tap Action (Open details page vs Open reader)." \
+              "- **Instant Card Tap Speed**: Eliminated async database lookups when launching in-progress chapters." \
+              "- **Recently Updated Shelf**: Renamed 'Recently Added' to 'Recently Updated'." \
+              "- **Backup Tracker Logins**: Defaulted Private Settings to enabled so tracker sessions (AniList, MAL, Drive) are preserved during backup and restore." \
               > release_notes.md
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \

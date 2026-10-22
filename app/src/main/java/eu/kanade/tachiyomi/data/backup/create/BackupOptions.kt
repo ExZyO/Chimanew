@@ -16,7 +16,8 @@ data class BackupOptions(
     val appSettings: Boolean = true,
     val extensionStores: Boolean = true,
     val sourceSettings: Boolean = true,
-    val privateSettings: Boolean = false,
+    // EaZy Nuvio+ / Chimanew: Default privateSettings to true so tracker logins/tokens are preserved in backups
+    val privateSettings: Boolean = true,
     // SY -->
     val customInfo: Boolean = true,
     val savedSearchesFeeds: Boolean = true,

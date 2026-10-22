@@ -110,6 +110,15 @@ object SettingsNuvioScreen : SearchableSettings {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_nuvio_cards_section),
             preferenceItems = persistentListOf(
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.homeTapAction(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_tap_action_details),
+                        1 to stringResource(MR.strings.pref_chimanew_tap_action_reader),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_tap_action),
+                    subtitle = stringResource(MR.strings.pref_chimanew_tap_action_summary),
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.showProgressBars(),
                     title = stringResource(MR.strings.pref_nuvio_show_progress),

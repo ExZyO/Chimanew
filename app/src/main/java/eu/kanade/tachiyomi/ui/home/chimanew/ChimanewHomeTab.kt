@@ -103,19 +103,34 @@ data object ChimanewHomeTab : Tab {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         val onResumeClick: (HomeMangaItem) -> Unit = { item ->
-            scope.launch {
-                val chapter = screenModel.getResumeChapter(item.mangaId, item.lastChapterId)
-                if (chapter != null) {
-                    val intent = ReaderActivity.newIntent(context, item.mangaId, chapter.id)
-                    context.startActivity(intent)
-                } else {
-                    navigator.push(MangaScreen(item.mangaId))
+            // EaZy Nuvio+ / Chimanew: Instant launch if chapter ID is in progress; zero DB query delay
+            if (item.lastChapterId != null && !item.isChapterRead) {
+                val intent = ReaderActivity.newIntent(context, item.mangaId, item.lastChapterId)
+                context.startActivity(intent)
+            } else {
+                scope.launch {
+                    val chapter = screenModel.getResumeChapter(item.mangaId, item.lastChapterId)
+                    if (chapter != null) {
+                        val intent = ReaderActivity.newIntent(context, item.mangaId, chapter.id)
+                        context.startActivity(intent)
+                    } else {
+                        navigator.push(MangaScreen(item.mangaId))
+                    }
                 }
             }
         }
 
-        val onItemClick: (HomeMangaItem) -> Unit = { item ->
+        val onDetailsClick: (HomeMangaItem) -> Unit = { item ->
             navigator.push(MangaScreen(item.mangaId))
+        }
+
+        // EaZy Nuvio+ / Chimanew: Card tap action setting toggle (0 = Details page, 1 = Reader)
+        val onCardClick: (HomeMangaItem) -> Unit = { item ->
+            if (state.homeTapAction == 1) {
+                onResumeClick(item)
+            } else {
+                onDetailsClick(item)
+            }
         }
 
         val onLongClickItem: (HomeMangaItem) -> Unit = { item ->
@@ -148,7 +163,7 @@ data object ChimanewHomeTab : Tab {
                         NuvioHeroSection(
                             items = state.heroItems,
                             heroStyle = state.heroStyle,
-                            onItemClick = onItemClick,
+                            onItemClick = onCardClick,
                             onResumeClick = onResumeClick,
                         )
                     }
@@ -164,7 +179,7 @@ data object ChimanewHomeTab : Tab {
                         items = shelf.items,
                         showProgressBar = state.showProgressBars,
                         showUnreadBadge = state.showUnreadBadges,
-                        onItemClick = if (shelf.isResumeOnTap) onResumeClick else onItemClick,
+                        onItemClick = onCardClick,
                         onLongClick = onLongClickItem,
                     )
                 }

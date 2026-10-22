@@ -30,4 +30,6 @@ class ChimanewPreferences(
     fun showProgressBars() = preferenceStore.getBoolean("pref_nuvio_show_progress", true)
 
     fun showUnreadBadges() = preferenceStore.getBoolean("pref_nuvio_show_unread_badges", true)
+
+    fun homeTapAction() = preferenceStore.getInt("pref_chimanew_home_tap_action", 0)
 }

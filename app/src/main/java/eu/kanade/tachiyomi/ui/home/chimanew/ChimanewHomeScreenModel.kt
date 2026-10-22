@@ -39,6 +39,8 @@ data class HomeMangaItem(
     val totalChapters: Long = 0,
     val readChapters: Long = 0,
     val unreadCount: Long = 0,
+    val isChapterRead: Boolean = false,
+    val lastPageRead: Long = 0,
     val genres: List<String> = emptyList(),
     val description: String? = null,
 )
@@ -89,6 +91,7 @@ private data class NuvioHomePrefs(
     val homeShelfOrder: String,
     val showProgressBars: Boolean,
     val showUnreadBadges: Boolean,
+    val homeTapAction: Int,
 )
 
 class ChimanewHomeScreenModel(
@@ -110,6 +113,7 @@ class ChimanewHomeScreenModel(
         val shelves: List<HomeShelf> = emptyList(),
         val showProgressBars: Boolean = true,
         val showUnreadBadges: Boolean = true,
+        val homeTapAction: Int = 0,
     )
 
     init {
@@ -155,6 +159,7 @@ class ChimanewHomeScreenModel(
                     homeShelfOrder = shelvesPrefs.homeShelfOrder,
                     showProgressBars = preferences.showProgressBars().get(),
                     showUnreadBadges = preferences.showUnreadBadges().get(),
+                    homeTapAction = preferences.homeTapAction().get(),
                 )
             }
 
@@ -181,6 +186,8 @@ class ChimanewHomeScreenModel(
                             totalChapters = h.totalCountCalculated,
                             readChapters = h.readCountCalculated,
                             unreadCount = h.unreadCount,
+                            isChapterRead = h.read,
+                            lastPageRead = h.lastPageRead,
                         )
                     }
                 } else {
@@ -220,6 +227,8 @@ class ChimanewHomeScreenModel(
                             totalChapters = h.totalCountCalculated,
                             readChapters = h.readCountCalculated,
                             unreadCount = h.unreadCount,
+                            isChapterRead = h.read,
+                            lastPageRead = h.lastPageRead,
                         )
                     }
                     if (heroFromHistory.size < 5 && data.libraryList.isNotEmpty()) {
@@ -390,12 +399,12 @@ class ChimanewHomeScreenModel(
                     availableShelvesMap[HomeRowsCustomizerScreen.SHELF_CATEGORIES] = categoryShelves
                 }
 
-                // 4. Recently added
+                // 4. Recently updated
                 if (updatedItems.isNotEmpty() && prefs.showUpdated) {
                     availableShelvesMap[HomeRowsCustomizerScreen.SHELF_RECENTLY_ADDED] = listOf(
                         HomeShelf(
                             id = "shelf_recently_updated",
-                            title = "Recently Added",
+                            title = "Recently Updated",
                             items = updatedItems,
                         ),
                     )
@@ -416,6 +425,7 @@ class ChimanewHomeScreenModel(
                     shelves = finalShelves,
                     showProgressBars = prefs.showProgressBars,
                     showUnreadBadges = prefs.showUnreadBadges,
+                    homeTapAction = prefs.homeTapAction,
                 )
             }.collectLatest { newState ->
                 mutableState.update { newState }
