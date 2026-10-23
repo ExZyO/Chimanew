@@ -37,7 +37,7 @@ class AnilistCoverRepository(
     fun getCached(remoteId: Long): AnilistMediaArtwork? = cache[remoteId]
 
     suspend fun fetchBatch(remoteIds: List<Long>): Map<Long, AnilistMediaArtwork> {
-        val uncached = remoteIds.distinct().filter { it !in cache }
+        val uncached = remoteIds.distinct().filter { !cache.containsKey(it) }
         if (uncached.isNotEmpty()) {
             withContext(Dispatchers.IO) {
                 try {

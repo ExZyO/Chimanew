@@ -63,7 +63,7 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.5.4"
+          tag="v2.5.5"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -71,10 +71,10 @@ jobs:
           else
             echo "Creating release $tag..."
             printf '%s\n' \
-              "### What's New in v2.5.4" \
+              "### What's New in v2.5.5" \
+              "- **Fix Kotlin 2.0 ConcurrentHashMap Compilation**: Resolved KT-18053 compilation error in AniList cover cache by replacing ambiguous in-operator with containsKey." \
               "- **Hero Artwork Sources (Dartotsu Multi-Select)**: Choose and mix which artwork types appear in the Hero carousel: Official Wide Banners, High-Res Manga Covers (portrait), and Default Library Covers." \
               "- **Google Drive OAuth & Sync Fix**: Dynamic OAuth callback scheme injection supporting Google Cloud Desktop Application credentials and custom scheme redirects without Error 400." \
-              "- **CI Build Stabilization**: Fixed OkHttp nullable response body and Compose collectAsState import resolution." \
               "- **1:1 Option 1 Hero Banner**: Official widescreen artwork from publisher via AniList GraphQL, format/genre pill badge, drop-shadow typography, 2-line clean synopsis, and white Netflix capsule resume button." \
               "- **Dual Tap Action Settings**: Independent tap behaviors for Continue Reading (default: Open reader) vs Library & Shelves (default: Open details page)." \
               "- **Dynamic Live Reactivity**: All preferences subscribe to flow updates—toggling settings takes effect immediately across Home without restarting the app." \
