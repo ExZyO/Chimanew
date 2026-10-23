@@ -51,6 +51,11 @@
     <string name="pref_nuvio_hero_style_fullbleed">Official Widescreen Banner (Option 1)</string>
     <string name="pref_nuvio_use_anilist_artwork">AniList HD Artwork &amp; Banners</string>
     <string name="pref_nuvio_use_anilist_artwork_summary">Fetch official widescreen banners and HD covers from AniList for tracked titles</string>
+    <string name="pref_chimanew_hero_artwork_sources">Hero Artwork Sources</string>
+    <string name="pref_chimanew_hero_artwork_sources_summary">Choose which artwork types appear in the Hero carousel</string>
+    <string name="pref_chimanew_hero_artwork_banner">Official Wide Banners (Landscape)</string>
+    <string name="pref_chimanew_hero_artwork_cover">High-Res Manga Covers (Portrait)</string>
+    <string name="pref_chimanew_hero_artwork_default">Default Library Covers</string>
     <string name="pref_nuvio_shelves_section">Home Shelves</string>
     <string name="pref_nuvio_reorder_shelves">Customize Home Rows &amp; Shelves</string>
     <string name="pref_nuvio_reorder_shelves_summary">Drag to reorder shelves and choose which rows appear on Home</string>

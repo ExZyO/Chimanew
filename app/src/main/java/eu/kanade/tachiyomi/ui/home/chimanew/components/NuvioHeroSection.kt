@@ -60,6 +60,7 @@ fun NuvioHeroSection(
     items: List<HomeMangaItem>,
     modifier: Modifier = Modifier,
     heroStyle: Int = 0,
+    heroArtworkSources: Set<String> = setOf("banner", "cover", "default"),
     onItemClick: (HomeMangaItem) -> Unit,
     onResumeClick: (HomeMangaItem) -> Unit,
 ) {
@@ -107,8 +108,18 @@ fun NuvioHeroSection(
                 ?: MaterialTheme.colorScheme.primary
             val surfaceColor = MaterialTheme.colorScheme.background
 
-            val bannerImageModel: Any = item.highResBannerUrl ?: item.highResCoverUrl ?: item.coverData
-            val posterImageModel: Any = item.highResCoverUrl ?: item.coverData
+            val bannerImageModel: Any = when {
+                "banner" in heroArtworkSources && !item.highResBannerUrl.isNullOrBlank() -> item.highResBannerUrl
+                "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
+                "default" in heroArtworkSources -> item.coverData
+                else -> item.highResBannerUrl ?: item.highResCoverUrl ?: item.coverData
+            }
+
+            val posterImageModel: Any = when {
+                "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
+                "default" in heroArtworkSources -> item.coverData
+                else -> item.highResCoverUrl ?: item.coverData
+            }
 
             Box(
                 modifier = Modifier

@@ -163,6 +163,7 @@ data object ChimanewHomeTab : Tab {
                         NuvioHeroSection(
                             items = state.heroItems,
                             heroStyle = state.heroStyle,
+                            heroArtworkSources = state.heroArtworkSources,
                             onItemClick = onCardClick,
                             onResumeClick = onResumeClick,
                         )

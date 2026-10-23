@@ -36,4 +36,9 @@ class ChimanewPreferences(
     fun shelfTapAction() = preferenceStore.getInt("pref_chimanew_shelf_tap_action", 0)
 
     fun heroCategories() = preferenceStore.getStringSet("pref_chimanew_hero_categories", emptySet())
+
+    fun heroArtworkSources() = preferenceStore.getStringSet(
+        "pref_chimanew_hero_artwork_sources",
+        setOf("banner", "cover", "default"),
+    )
 }

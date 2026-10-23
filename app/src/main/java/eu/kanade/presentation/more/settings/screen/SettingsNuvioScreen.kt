@@ -18,7 +18,7 @@ import kotlinx.collections.immutable.toPersistentMap
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -49,7 +49,8 @@ object SettingsNuvioScreen : SearchableSettings {
         val categoryEntries = remember(categories) {
             categories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
         }
-        val heroSource by preferences.heroSource().collectAsState()
+        val heroSource by preferences.heroSource().collectPrefAsState()
+        val useAnilistArtwork by preferences.useAnilistArtwork().collectPrefAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_nuvio_hero_section),
@@ -86,6 +87,17 @@ object SettingsNuvioScreen : SearchableSettings {
                     preference = preferences.useAnilistArtwork(),
                     title = stringResource(MR.strings.pref_nuvio_use_anilist_artwork),
                     subtitle = stringResource(MR.strings.pref_nuvio_use_anilist_artwork_summary),
+                ),
+                Preference.PreferenceItem.MultiSelectListPreference(
+                    preference = preferences.heroArtworkSources(),
+                    entries = persistentMapOf(
+                        "banner" to stringResource(MR.strings.pref_chimanew_hero_artwork_banner),
+                        "cover" to stringResource(MR.strings.pref_chimanew_hero_artwork_cover),
+                        "default" to stringResource(MR.strings.pref_chimanew_hero_artwork_default),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_hero_artwork_sources),
+                    subtitle = stringResource(MR.strings.pref_chimanew_hero_artwork_sources_summary),
+                    enabled = useAnilistArtwork,
                 ),
             ),
         )

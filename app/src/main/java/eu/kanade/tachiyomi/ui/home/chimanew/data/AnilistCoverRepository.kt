@@ -71,7 +71,7 @@ class AnilistCoverRepository(
                     )
 
                     val response = client.newCall(request).awaitSuccess()
-                    val bodyString = response.body.string()
+                    val bodyString = response.body?.string() ?: return@withContext
                     val root = json.parseToJsonElement(bodyString).jsonObject
                     val mediaList = root["data"]?.jsonObject?.get("Page")?.jsonObject?.get("media")?.jsonArray
 

@@ -63,7 +63,7 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.5.3"
+          tag="v2.5.4"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -71,15 +71,16 @@ jobs:
           else
             echo "Creating release $tag..."
             printf '%s\n' \
-              "### What's New in v2.5.3" \
-              "- **Upstream Merge (Chimahon v2.4.9)**: Fully synchronized with latest Chimahon: OPDS novel catalog support, MPV player updates, reader re-OCR controls, dictionary copy deduplication, and audio link fixes." \
-              "- **Hero Banner Redesign (1:1 Option 1)**: Authentic widescreen banner artwork from publisher via AniList GraphQL, format/genre pill badge (e.g. MANHWA • ACTION), drop-shadow typography, 2-line clean synopsis, and white Netflix capsule resume button." \
-              "- **AniList High-Res GraphQL Engine**: Replaced legacy social-card preview with native GraphQL query fetching genuine widescreen banners and extra-large portrait covers." \
+              "### What's New in v2.5.4" \
+              "- **Hero Artwork Sources (Dartotsu Multi-Select)**: Choose and mix which artwork types appear in the Hero carousel: Official Wide Banners, High-Res Manga Covers (portrait), and Default Library Covers." \
+              "- **Google Drive OAuth & Sync Fix**: Dynamic OAuth callback scheme injection supporting Google Cloud Desktop Application credentials and custom scheme redirects without Error 400." \
+              "- **CI Build Stabilization**: Fixed OkHttp nullable response body and Compose collectAsState import resolution." \
+              "- **1:1 Option 1 Hero Banner**: Official widescreen artwork from publisher via AniList GraphQL, format/genre pill badge, drop-shadow typography, 2-line clean synopsis, and white Netflix capsule resume button." \
               "- **Dual Tap Action Settings**: Independent tap behaviors for Continue Reading (default: Open reader) vs Library & Shelves (default: Open details page)." \
               "- **Dynamic Live Reactivity**: All preferences subscribe to flow updates—toggling settings takes effect immediately across Home without restarting the app." \
               "- **Active Chapter Reading Progress**: Real-time progress bar tracking the current chapter in progress, ensuring non-zero visual progress while reading." \
               "- **Hero Category Picker**: Multi-select dialog allowing you to choose which specific library categories appear in the Hero carousel." \
-              "- **Cross-Fork Backup Compatibility**: 100% clean protobuf serialization compatible across Mihon, Komikku, and Chimahon." \
+              "- **Upstream Merge (Chimahon v2.4.9)**: Fully synchronized with latest Chimahon (OPDS novels, MPV player updates, reader re-OCR, dictionary deduplication)." \
               > release_notes.md
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \

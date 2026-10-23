@@ -71,6 +71,7 @@ private data class HeroPrefs(
     val heroSource: Int,
     val heroStyle: Int,
     val useAnilistArtwork: Boolean,
+    val heroArtworkSources: Set<String>,
 )
 
 @Immutable
@@ -97,6 +98,7 @@ private data class NuvioHomePrefs(
     val heroSource: Int,
     val heroStyle: Int,
     val useAnilistArtwork: Boolean,
+    val heroArtworkSources: Set<String>,
     val heroCategories: Set<String>,
     val showContinue: Boolean,
     val showUpdated: Boolean,
@@ -126,6 +128,7 @@ class ChimanewHomeScreenModel(
         val isLoading: Boolean = true,
         val heroItems: List<HomeMangaItem> = emptyList(),
         val heroStyle: Int = 0,
+        val heroArtworkSources: Set<String> = setOf("banner", "cover", "default"),
         val shelves: List<HomeShelf> = emptyList(),
         val showProgressBars: Boolean = true,
         val showUnreadBadges: Boolean = true,
@@ -149,8 +152,9 @@ class ChimanewHomeScreenModel(
                 preferences.heroSource().changes(),
                 preferences.heroStyle().changes(),
                 preferences.useAnilistArtwork().changes(),
-            ) { showHero: Boolean, heroSource: Int, heroStyle: Int, useAnilist: Boolean ->
-                HeroPrefs(showHero, heroSource, heroStyle, useAnilist)
+                preferences.heroArtworkSources().changes(),
+            ) { showHero: Boolean, heroSource: Int, heroStyle: Int, useAnilist: Boolean, artworkSources: Set<String> ->
+                HeroPrefs(showHero, heroSource, heroStyle, useAnilist, artworkSources)
             }
 
             val shelvesPrefsFlow = combine(
@@ -179,6 +183,7 @@ class ChimanewHomeScreenModel(
                     heroSource = heroPrefs.heroSource,
                     heroStyle = heroPrefs.heroStyle,
                     useAnilistArtwork = heroPrefs.useAnilistArtwork,
+                    heroArtworkSources = heroPrefs.heroArtworkSources,
                     heroCategories = cardPrefs.heroCategories,
                     showContinue = shelvesPrefs.showContinue,
                     showUpdated = shelvesPrefs.showUpdated,
@@ -505,6 +510,7 @@ class ChimanewHomeScreenModel(
                     isLoading = false,
                     heroItems = heroItems,
                     heroStyle = prefs.heroStyle,
+                    heroArtworkSources = prefs.heroArtworkSources,
                     shelves = finalShelves,
                     showProgressBars = prefs.showProgressBars,
                     showUnreadBadges = prefs.showUnreadBadges,

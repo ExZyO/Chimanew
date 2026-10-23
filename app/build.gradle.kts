@@ -26,9 +26,30 @@ android {
         // EaZy Nuvio+ / Chimanew
         applicationId = "app.chimanew"
 
-        versionCode = releaseVersionCode ?: 20503
-        versionName = releaseVersionName ?: "2.5.3"
+        versionCode = releaseVersionCode ?: 20504
+        versionName = releaseVersionName ?: "2.5.4"
         // KMK <--
+
+        // EaZy Nuvio+ / Chimanew: Dynamically extract client ID prefix for Google OAuth callback
+        val secretsFile = file("src/main/assets/client_secrets.json")
+        val googleOAuthScheme = if (secretsFile.exists()) {
+            try {
+                val content = secretsFile.readText()
+                val regex = "\"client_id\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                val match = regex.find(content)?.groupValues?.get(1)
+                val prefix = match?.substringBefore(".apps.googleusercontent.com")
+                if (!prefix.isNullOrBlank() && prefix != match) {
+                    "com.googleusercontent.apps.$prefix"
+                } else {
+                    "com.googleusercontent.apps.200996152039-eknno6cfcpgk1tgqpmunkhkshfv9mk3f"
+                }
+            } catch (_: Exception) {
+                "com.googleusercontent.apps.200996152039-eknno6cfcpgk1tgqpmunkhkshfv9mk3f"
+            }
+        } else {
+            "com.googleusercontent.apps.200996152039-eknno6cfcpgk1tgqpmunkhkshfv9mk3f"
+        }
+        manifestPlaceholders["googleOAuthScheme"] = googleOAuthScheme
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getGitSha()}\"")
