@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -203,16 +204,24 @@ class ArtworkWaterfallRepository(
         return getEffectiveArtwork(raw)
     }
 
+    fun putCached(title: String, artwork: UnifiedArtwork) {
+        val clean = cleanTitle(title)
+        if (clean.isNotBlank()) {
+            cache[clean] = artwork
+            scheduleSaveToDisk()
+        }
+    }
+
     suspend fun resolveArtwork(
         rawTitle: String,
         anilistRemoteId: Long? = null,
         kitsuRemoteId: Long? = null,
         malRemoteId: Long? = null,
         mangaId: Long? = null,
-    ): UnifiedArtwork {
+    ): UnifiedArtwork = withContext(Dispatchers.IO) {
         val title = cleanTitle(rawTitle)
-        if (title.isBlank()) return UnifiedArtwork()
-        cache[title]?.let { return getEffectiveArtwork(it) }
+        if (title.isBlank()) return@withContext UnifiedArtwork()
+        cache[title]?.let { return@withContext getEffectiveArtwork(it) }
 
         var effectiveAniListId = anilistRemoteId
         var effectiveKitsuId = kitsuRemoteId
@@ -311,9 +320,11 @@ class ArtworkWaterfallRepository(
             bannerOptions = bannerOptions.distinctBy { it.url },
             ratings = ratings.distinctBy { it.source },
         )
-        cache[title] = rawResult
-        scheduleSaveToDisk()
-        return getEffectiveArtwork(rawResult)
+        if (banners.isNotEmpty() || covers.isNotEmpty() || ratings.isNotEmpty()) {
+            cache[title] = rawResult
+            scheduleSaveToDisk()
+        }
+        return@withContext getEffectiveArtwork(rawResult)
     }
 
     companion object {

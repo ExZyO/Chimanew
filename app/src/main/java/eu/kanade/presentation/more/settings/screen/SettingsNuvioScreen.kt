@@ -55,6 +55,7 @@ object SettingsNuvioScreen : SearchableSettings {
             categories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
         }
         val heroSource by preferences.heroSource().collectPrefAsState()
+        val heroStyle by preferences.heroStyle().collectPrefAsState()
         val useAnilistArtwork by preferences.useAnilistArtwork().collectPrefAsState()
 
         return Preference.PreferenceGroup(
@@ -102,6 +103,17 @@ object SettingsNuvioScreen : SearchableSettings {
                         2 to stringResource(MR.strings.pref_nuvio_hero_style_crisp_ambient),
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_style),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.heroDimBanner(),
+                    title = stringResource(MR.strings.pref_nuvio_hero_dim_banner),
+                    subtitle = stringResource(MR.strings.pref_nuvio_hero_dim_banner_summary),
+                    enabled = heroStyle != 1,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.heroAllowCroppedFallback(),
+                    title = stringResource(MR.strings.pref_nuvio_hero_allow_cropped_fallback),
+                    subtitle = stringResource(MR.strings.pref_nuvio_hero_allow_cropped_fallback_summary),
                 ),
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.heroArtworkPairing(),

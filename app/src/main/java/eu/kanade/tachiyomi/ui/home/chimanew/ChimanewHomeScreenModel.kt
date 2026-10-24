@@ -283,7 +283,9 @@ class ChimanewHomeScreenModel(
                                 },
                             ),
                         )
-                        return artworkWaterfallRepository.getEffectiveArtwork(alArtwork)
+                        val effective = artworkWaterfallRepository.getEffectiveArtwork(alArtwork)
+                        artworkWaterfallRepository.putCached(title, alArtwork)
+                        return effective
                     }
                     return null
                 }
@@ -693,6 +695,16 @@ class ChimanewHomeScreenModel(
                 )
             }.collectLatest { newState ->
                 mutableState.update { newState }
+
+                // EaZy Nuvio+ / Chimanew: Pre-resolve waterfall for hero items to ensure 100% visual continuity with Details
+                if (newState.heroItems.isNotEmpty()) {
+                    newState.heroItems.take(7).forEach { item ->
+                        artworkWaterfallRepository.resolveArtwork(
+                            rawTitle = item.title,
+                            mangaId = item.mangaId,
+                        )
+                    }
+                }
             }
         }
     }

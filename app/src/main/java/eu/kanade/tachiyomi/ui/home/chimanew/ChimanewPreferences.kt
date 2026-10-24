@@ -12,6 +12,10 @@ class ChimanewPreferences(
 
     fun heroStyle() = preferenceStore.getInt("pref_nuvio_hero_style", 0)
 
+    fun heroDimBanner() = preferenceStore.getBoolean("pref_nuvio_hero_dim_banner", true)
+
+    fun heroAllowCroppedFallback() = preferenceStore.getBoolean("pref_nuvio_hero_allow_cropped_fallback", true)
+
     fun useAnilistArtwork() = preferenceStore.getBoolean("pref_nuvio_use_anilist_artwork", true)
 
     fun homeShelfOrder() = preferenceStore.getString(

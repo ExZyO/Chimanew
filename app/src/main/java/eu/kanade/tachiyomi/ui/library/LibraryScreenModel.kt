@@ -127,6 +127,9 @@ import tachiyomi.source.local.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.random.Random
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import tachiyomi.domain.source.model.Source as DomainSource
 
 class LibraryScreenModel(
@@ -162,6 +165,10 @@ class LibraryScreenModel(
     // KMK -->
     private val smartSearchMerge: SmartSearchMerge = Injekt.get(),
     // KMK <--
+    // EaZy Nuvio+ / Chimanew
+    private val chimanewPreferences: ChimanewPreferences = Injekt.get(),
+    private val anilistCoverRepository: AnilistCoverRepository = Injekt.get(),
+    private val waterfallRepo: ArtworkWaterfallRepository = Injekt.get(),
 ) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
     // SY -->
@@ -170,6 +177,8 @@ class LibraryScreenModel(
 
     private var recommendationSearchJob: Job? = null
     // SY <--
+    // EaZy Nuvio+ / Chimanew
+    private var libraryArtworkPrefetchJob: Job? = null
 
     init {
         mutableState.update { state ->
@@ -229,6 +238,50 @@ class LibraryScreenModel(
                 .collectLatest { libraryData ->
                     mutableState.update { state ->
                         state.copy(libraryData = libraryData)
+                    }
+
+                    // EaZy Nuvio+ / Chimanew: Batch pre-fetch high-res covers for library manga in background
+                    if (chimanewPreferences.useAnilistArtworkInLibrary().get()) {
+                        libraryArtworkPrefetchJob?.cancel()
+                        libraryArtworkPrefetchJob = screenModelScope.launchIO {
+                            try {
+                                val tracksList = libraryData.tracksMap.values.flatten()
+                                val alIds = tracksList
+                                    .filter { it.trackerId == TrackerManager.ANILIST && it.remoteId > 0 }
+                                    .map { it.remoteId }
+                                    .distinct()
+                                val malIds = tracksList
+                                    .filter { it.trackerId == 1L && it.remoteId > 0 }
+                                    .map { it.remoteId }
+                                    .distinct()
+
+                                if (alIds.isNotEmpty()) {
+                                    anilistCoverRepository.fetchBatch(alIds)
+                                }
+                                if (malIds.isNotEmpty()) {
+                                    anilistCoverRepository.fetchBatchByMalIds(malIds)
+                                }
+
+                                // Populate waterfall cache in background
+                                libraryData.favorites.forEach { libManga ->
+                                    val m = libManga.manga
+                                    val mTitle = m.ogTitle ?: m.title
+                                    if (waterfallRepo.getCached(mTitle) == null) {
+                                        val mTracks = libraryData.tracksMap[m.id]
+                                        val alId = mTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }?.remoteId?.takeIf { it > 0 }
+                                        val malId = mTracks?.firstOrNull { it.trackerId == 1L }?.remoteId?.takeIf { it > 0 }
+                                        val kitsuId = mTracks?.firstOrNull { it.trackerId == TrackerManager.KITSU }?.remoteId?.takeIf { it > 0 }
+                                        waterfallRepo.resolveArtwork(
+                                            rawTitle = mTitle,
+                                            anilistRemoteId = alId,
+                                            malRemoteId = malId,
+                                            kitsuRemoteId = kitsuId,
+                                            mangaId = m.id,
+                                        )
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
                     }
                 }
         }

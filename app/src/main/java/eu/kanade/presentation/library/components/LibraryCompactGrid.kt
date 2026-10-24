@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.library.LibraryItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
@@ -64,7 +66,9 @@ internal fun LibraryCompactGrid(
                     if (cached != null) {
                         value = cached
                     } else {
-                        val resolved = waterfallRepo.resolveArtwork(mTitle, mangaId = manga.id)
+                        val resolved = withContext(Dispatchers.IO) {
+                            waterfallRepo.resolveArtwork(mTitle, mangaId = manga.id)
+                        }
                         value = resolved.posterUrl
                     }
                 } else {

@@ -58,6 +58,10 @@
     <string name="pref_nuvio_hero_style_ambient">Ambient Glow</string>
     <string name="pref_nuvio_hero_style_fullbleed">Widescreen Banner</string>
     <string name="pref_nuvio_hero_style_crisp_ambient">Banner with Ambient Glow (Recommended)</string>
+    <string name="pref_nuvio_hero_dim_banner">Dim background banner</string>
+    <string name="pref_nuvio_hero_dim_banner_summary">Softens background banner brightness to make cover artwork and text stand out</string>
+    <string name="pref_nuvio_hero_allow_cropped_fallback">Allow artwork aspect fallback</string>
+    <string name="pref_nuvio_hero_allow_cropped_fallback_summary">Zoom vertical covers to fill widescreen banner when no official banner is available</string>
     <string name="pref_nuvio_use_anilist_artwork">HD Artwork &amp; Banners</string>
     <string name="pref_nuvio_use_anilist_artwork_summary">Fetch high-resolution landscape banners and covers from your artwork sources</string>
     <string name="pref_chimanew_hero_artwork_sources">Hero Artwork Sources</string>

@@ -7,10 +7,12 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
 import androidx.compose.foundation.layout.Arrangement
@@ -178,6 +180,7 @@ fun MangaInfoBox(
     val showCommunityRatings by chimanewPreferences.showCommunityRatings().collectAsState()
     val showRatingsInDetails by chimanewPreferences.showRatingsInDetails().collectAsState()
     val communityRatingFormat by chimanewPreferences.communityRatingFormat().collectAsState()
+    val heroAllowCroppedFallback by chimanewPreferences.heroAllowCroppedFallback().collectAsState()
 
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val mangaTitle = remember(manga) { manga.ogTitle ?: manga.title }
@@ -215,15 +218,15 @@ fun MangaInfoBox(
         }
     }
 
-    val chosenArtworkModel: Any = when {
+    val chosenArtworkModel: Any? = when {
         !customBannerUrl.isNullOrBlank() -> customBannerUrl
-        !useAnilistArtwork || unifiedArtwork == null -> manga
+        !useAnilistArtwork || unifiedArtwork == null -> if (heroAllowCroppedFallback) manga else null
         detailsBackdropArtwork == 0 && !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
         detailsBackdropArtwork == 1 && !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
         detailsBackdropArtwork == 2 -> manga
         !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
-        !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
-        else -> manga
+        !unifiedArtwork?.posterUrl.isNullOrBlank() -> if (heroAllowCroppedFallback) unifiedArtwork!!.posterUrl!! else null
+        else -> if (heroAllowCroppedFallback) manga else null
     }
 
     // Determine if rendering an official wide landscape banner or falling back to ambient canvas
@@ -261,7 +264,11 @@ fun MangaInfoBox(
         )
         // EaZy Nuvio+ / Chimanew: resilient fallback to local manga cover if remote banner/artwork fails to load
         var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
-        val effectiveArtworkModel = if (artworkLoadFailed) manga else chosenArtworkModel
+        val effectiveArtworkModel = if (artworkLoadFailed) {
+            if (heroAllowCroppedFallback) manga else null
+        } else {
+            chosenArtworkModel
+        }
         var bannerAspectRatio by remember(effectiveArtworkModel) { mutableFloatStateOf(0f) }
 
         key(effectiveArtworkModel, detailsBackdropStyle, detailsBackdropScale, detailsBackdropArtwork, activeStyle) {
@@ -269,20 +276,22 @@ fun MangaInfoBox(
                 0 -> {
                     // MODE 0: Cinema Showcase Card (Widescreen Card + Ambient Aura)
                     // Layer 1: Ambient Glow Underlay behind everything (including status bar)
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(effectiveArtworkModel)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.Center,
-                        modifier = Modifier
-                            .matchParentSize()
-                            .blur(32.dp)
-                            .alpha(0.40f)
-                            .background(surfaceTintColor.copy(alpha = 0.15f)),
-                    )
+                    if (effectiveArtworkModel != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(effectiveArtworkModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            modifier = Modifier
+                                .matchParentSize()
+                                .blur(32.dp)
+                                .alpha(0.40f)
+                                .background(surfaceTintColor.copy(alpha = 0.15f)),
+                        )
+                    }
 
                     // Scrims for status bar and background dissolve
                     Canvas(modifier = Modifier.matchParentSize()) {
@@ -310,30 +319,65 @@ fun MangaInfoBox(
                     }
 
                     // Layer 2: Floating Cinema Card
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                start = 14.dp,
-                                end = 14.dp,
-                                top = appBarPadding + 6.dp,
+                    if (effectiveArtworkModel != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = 14.dp,
+                                    end = 14.dp,
+                                    top = appBarPadding + 6.dp,
+                                )
+                                .height(136.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.Black.copy(alpha = 0.40f))
+                                .border(
+                                    BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                                    RoundedCornerShape(16.dp),
+                                ),
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(effectiveArtworkModel)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.Center,
+                                onError = {
+                                    if (chosenArtworkModel != manga) artworkLoadFailed = true
+                                },
+                                onSuccess = { result ->
+                                    val image = result.result.image
+                                    if (image.width > 0 && image.height > 0) {
+                                        bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                                    }
+                                    if (effectiveArtworkModel == manga) {
+                                        coverRatio.floatValue = image.height.toFloat() / image.width
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                                    .alpha(backdropAlpha),
                             )
-                            .height(136.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.Black.copy(alpha = 0.40f))
-                            .border(
-                                BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                                RoundedCornerShape(16.dp),
-                            ),
-                    ) {
+                        }
+                    }
+                }
+
+                1 -> {
+                    // MODE 1: Feathered Cinema Vignette (Soft top and bottom fade below status bar)
+                    val topVignetteStart = (appBarPadding * 0.55f).coerceAtLeast(16.dp)
+
+                    if (effectiveArtworkModel != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(effectiveArtworkModel)
                                 .crossfade(true)
                                 .build(),
                             contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.Center,
+                            contentScale = ContentScale.FillWidth,
+                            alignment = Alignment.TopCenter,
                             onError = {
                                 if (chosenArtworkModel != manga) artworkLoadFailed = true
                             },
@@ -347,43 +391,12 @@ fun MangaInfoBox(
                                 }
                             },
                             modifier = Modifier
-                                .fillMaxSize()
+                                .matchParentSize()
+                                .padding(top = topVignetteStart)
                                 .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
                                 .alpha(backdropAlpha),
                         )
                     }
-                }
-
-                1 -> {
-                    // MODE 1: Feathered Cinema Vignette (Soft top and bottom fade below status bar)
-                    val topVignetteStart = (appBarPadding * 0.55f).coerceAtLeast(16.dp)
-
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(effectiveArtworkModel)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth,
-                        alignment = Alignment.TopCenter,
-                        onError = {
-                            if (chosenArtworkModel != manga) artworkLoadFailed = true
-                        },
-                        onSuccess = { result ->
-                            val image = result.result.image
-                            if (image.width > 0 && image.height > 0) {
-                                bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
-                            }
-                            if (effectiveArtworkModel == manga) {
-                                coverRatio.floatValue = image.height.toFloat() / image.width
-                            }
-                        },
-                        modifier = Modifier
-                            .matchParentSize()
-                            .padding(top = topVignetteStart)
-                            .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                            .alpha(backdropAlpha),
-                    )
 
                     Canvas(modifier = Modifier.matchParentSize()) {
                         val topFadeEnd = (appBarPadding.toPx() + 28.dp.toPx()).coerceAtLeast(150f)
@@ -435,31 +448,33 @@ fun MangaInfoBox(
 
                 2 -> {
                     // MODE 2: Deep Scrim Bleed (Fill Screen with Deep Top Shadow)
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(effectiveArtworkModel)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.Center,
-                        onError = {
-                            if (chosenArtworkModel != manga) artworkLoadFailed = true
-                        },
-                        onSuccess = { result ->
-                            val image = result.result.image
-                            if (image.width > 0 && image.height > 0) {
-                                bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
-                            }
-                            if (effectiveArtworkModel == manga) {
-                                coverRatio.floatValue = image.height.toFloat() / image.width
-                            }
-                        },
-                        modifier = Modifier
-                            .matchParentSize()
-                            .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                            .alpha(backdropAlpha),
-                    )
+                    if (effectiveArtworkModel != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(effectiveArtworkModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            onError = {
+                                if (chosenArtworkModel != manga) artworkLoadFailed = true
+                            },
+                            onSuccess = { result ->
+                                val image = result.result.image
+                                if (image.width > 0 && image.height > 0) {
+                                    bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                                }
+                                if (effectiveArtworkModel == manga) {
+                                    coverRatio.floatValue = image.height.toFloat() / image.width
+                                }
+                            },
+                            modifier = Modifier
+                                .matchParentSize()
+                                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                                .alpha(backdropAlpha),
+                        )
+                    }
 
                     Canvas(modifier = Modifier.matchParentSize()) {
                         // Deep top shadow for phone UI legibility
@@ -501,31 +516,33 @@ fun MangaInfoBox(
 
                 else -> {
                     // MODE 3: Natural Fit (Full width edge-to-edge)
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(effectiveArtworkModel)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth,
-                        alignment = Alignment.TopCenter,
-                        onError = {
-                            if (chosenArtworkModel != manga) artworkLoadFailed = true
-                        },
-                        onSuccess = { result ->
-                            val image = result.result.image
-                            if (image.width > 0 && image.height > 0) {
-                                bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
-                            }
-                            if (effectiveArtworkModel == manga) {
-                                coverRatio.floatValue = image.height.toFloat() / image.width
-                            }
-                        },
-                        modifier = Modifier
-                            .matchParentSize()
-                            .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                            .alpha(backdropAlpha),
-                    )
+                    if (effectiveArtworkModel != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(effectiveArtworkModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            alignment = Alignment.TopCenter,
+                            onError = {
+                                if (chosenArtworkModel != manga) artworkLoadFailed = true
+                            },
+                            onSuccess = { result ->
+                                val image = result.result.image
+                                if (image.width > 0 && image.height > 0) {
+                                    bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                                }
+                                if (effectiveArtworkModel == manga) {
+                                    coverRatio.floatValue = image.height.toFloat() / image.width
+                                }
+                            },
+                            modifier = Modifier
+                                .matchParentSize()
+                                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                                .alpha(backdropAlpha),
+                        )
+                    }
 
                     Canvas(modifier = Modifier.matchParentSize()) {
                         val topScrimEnd = (appBarPadding.toPx() + 32.dp.toPx()).coerceAtLeast(180f)
@@ -622,12 +639,19 @@ fun MangaInfoBox(
             emptyList()
         }
 
+        val effectiveCoverModel: Any = if (useAnilistArtwork && !unifiedArtwork?.posterUrl.isNullOrBlank()) {
+            unifiedArtwork!!.posterUrl!!
+        } else {
+            manga
+        }
+
         // Manga & source info
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             if (!isTabletUi) {
                 MangaAndSourceTitlesSmall(
                     appBarPadding = appBarPadding,
                     manga = manga,
+                    coverModel = effectiveCoverModel,
                     sourceName = sourceName,
                     isStubSource = isStubSource,
                     readingTime = readingTime,
@@ -651,6 +675,7 @@ fun MangaInfoBox(
                 MangaAndSourceTitlesLarge(
                     appBarPadding = appBarPadding,
                     manga = manga,
+                    coverModel = effectiveCoverModel,
                     sourceName = sourceName,
                     isStubSource = isStubSource,
                     readingTime = readingTime,
@@ -949,6 +974,7 @@ private fun MangaAndSourceTitlesLarge(
     // KMK <--
     communityRatings: List<CommunityRating> = emptyList(),
     communityRatingFormat: Int = 0,
+    coverModel: Any = manga,
 ) {
     Column(
         modifier = Modifier
@@ -961,7 +987,7 @@ private fun MangaAndSourceTitlesLarge(
             MangaCover.Panorama(
                 modifier = Modifier.fillMaxWidth(0.65f),
                 data = ImageRequest.Builder(LocalContext.current)
-                    .data(manga)
+                    .data(coverModel)
                     .crossfade(true)
                     .build(),
                 contentDescription = stringResource(MR.strings.manga_cover),
@@ -979,7 +1005,7 @@ private fun MangaAndSourceTitlesLarge(
             MangaCover.Book(
                 modifier = Modifier.fillMaxWidth(0.65f),
                 data = ImageRequest.Builder(LocalContext.current)
-                    .data(manga)
+                    .data(coverModel)
                     .crossfade(true)
                     .build(),
                 contentDescription = stringResource(MR.strings.manga_cover),
@@ -1039,6 +1065,7 @@ private fun MangaAndSourceTitlesSmall(
     // KMK <--
     communityRatings: List<CommunityRating> = emptyList(),
     communityRatingFormat: Int = 0,
+    coverModel: Any = manga,
 ) {
     Row(
         modifier = Modifier
@@ -1056,7 +1083,7 @@ private fun MangaAndSourceTitlesSmall(
                     .align(if (topAlignCover) Alignment.Top else Alignment.CenterVertically),
                 // KMK <--
                 data = ImageRequest.Builder(LocalContext.current)
-                    .data(manga)
+                    .data(coverModel)
                     .crossfade(true)
                     .build(),
                 contentDescription = stringResource(MR.strings.manga_cover),
@@ -1078,7 +1105,7 @@ private fun MangaAndSourceTitlesSmall(
                     .align(if (topAlignCover) Alignment.Top else Alignment.CenterVertically),
                 // KMK <--
                 data = ImageRequest.Builder(LocalContext.current)
-                    .data(manga)
+                    .data(coverModel)
                     .crossfade(true)
                     .build(),
                 contentDescription = stringResource(MR.strings.manga_cover),

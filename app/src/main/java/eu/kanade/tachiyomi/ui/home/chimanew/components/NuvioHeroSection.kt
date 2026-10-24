@@ -120,6 +120,8 @@ fun NuvioHeroSection(
             val showCommunityRatings by preferences.showCommunityRatings().collectPrefAsState()
             val communityRatingFormat by preferences.communityRatingFormat().collectPrefAsState()
             val showRatingsOnHero by preferences.showRatingsOnHero().collectPrefAsState()
+            val heroDimBanner by preferences.heroDimBanner().collectPrefAsState()
+            val heroAllowCroppedFallback by preferences.heroAllowCroppedFallback().collectPrefAsState()
 
             val posterImageModel: Any = when {
                 "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
@@ -127,11 +129,12 @@ fun NuvioHeroSection(
                 else -> item.highResCoverUrl ?: item.coverData
             }
 
-            val bannerImageModel: Any = when {
+            val bannerImageModel: Any? = when {
                 heroArtworkPairing == 1 -> posterImageModel // Unified: same cover for both
-                // Separate: wide banner for backdrop with automatic fallback to posterImageModel if no banner
+                // Separate: wide banner for backdrop with automatic fallback to posterImageModel if allowed
                 !item.highResBannerUrl.isNullOrBlank() && "banner" in heroArtworkSources -> item.highResBannerUrl
-                else -> posterImageModel
+                heroAllowCroppedFallback -> posterImageModel
+                else -> null
             }
 
             Box(
@@ -150,33 +153,36 @@ fun NuvioHeroSection(
                         // -------------------------------------------------------------
 
                         // 1. Atmospheric Heavily Blurred Cover Backdrop
-                        SubcomposeAsyncImage(
-                            model = bannerImageModel,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.TopCenter,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .blur(22.dp)
-                                .alpha(0.35f),
-                            loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
-                            error = {
-                                if (bannerImageModel != item.coverData) {
-                                    SubcomposeAsyncImage(
-                                        model = item.coverData,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        alignment = Alignment.TopCenter,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .blur(22.dp)
-                                            .alpha(0.35f),
-                                    )
-                                } else {
-                                    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)))
-                                }
-                            },
-                        )
+                        if (bannerImageModel != null) {
+                            val heroBannerAlpha = if (heroDimBanner) 0.35f else 0.85f
+                            SubcomposeAsyncImage(
+                                model = bannerImageModel,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.TopCenter,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .blur(22.dp)
+                                    .alpha(heroBannerAlpha),
+                                loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
+                                error = {
+                                    if (heroAllowCroppedFallback && bannerImageModel != item.coverData) {
+                                        SubcomposeAsyncImage(
+                                            model = item.coverData,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            alignment = Alignment.TopCenter,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .blur(22.dp)
+                                                .alpha(heroBannerAlpha),
+                                        )
+                                    } else {
+                                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)))
+                                    }
+                                },
+                            )
+                        }
 
                         // 2. Radial Accent Ambient Glow
                         Box(
@@ -246,31 +252,34 @@ fun NuvioHeroSection(
                         // -------------------------------------------------------------------------
 
                         // 1. Crisp Unblurred Widescreen Banner Backdrop
-                        SubcomposeAsyncImage(
-                            model = bannerImageModel,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.TopCenter,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .alpha(0.55f),
-                            loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
-                            error = {
-                                if (bannerImageModel != item.coverData) {
-                                    SubcomposeAsyncImage(
-                                        model = item.coverData,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        alignment = Alignment.TopCenter,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .alpha(0.55f),
-                                    )
-                                } else {
-                                    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)))
-                                }
-                            },
-                        )
+                        if (bannerImageModel != null) {
+                            val heroBannerAlpha = if (heroDimBanner) 0.55f else 1.0f
+                            SubcomposeAsyncImage(
+                                model = bannerImageModel,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.TopCenter,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .alpha(heroBannerAlpha),
+                                loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
+                                error = {
+                                    if (heroAllowCroppedFallback && bannerImageModel != item.coverData) {
+                                        SubcomposeAsyncImage(
+                                            model = item.coverData,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            alignment = Alignment.TopCenter,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .alpha(heroBannerAlpha),
+                                        )
+                                    } else {
+                                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)))
+                                    }
+                                },
+                            )
+                        }
 
                         // 2. Radial Accent Ambient Glow
                         Box(
@@ -340,37 +349,39 @@ fun NuvioHeroSection(
                         // -------------------------------------------------------------
 
                         // 1. Cover / Wide Artwork
-                        SubcomposeAsyncImage(
-                            model = bannerImageModel,
-                            contentDescription = item.title,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.TopCenter,
-                            modifier = Modifier.fillMaxSize(),
-                            loading = {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0xFF1E1E1E)),
-                                )
-                            },
-                            error = {
-                                if (bannerImageModel != item.coverData) {
-                                    SubcomposeAsyncImage(
-                                        model = item.coverData,
-                                        contentDescription = item.title,
-                                        contentScale = ContentScale.Crop,
-                                        alignment = Alignment.TopCenter,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                } else {
+                        if (bannerImageModel != null) {
+                            SubcomposeAsyncImage(
+                                model = bannerImageModel,
+                                contentDescription = item.title,
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.TopCenter,
+                                modifier = Modifier.fillMaxSize(),
+                                loading = {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .background(Color(0xFF1E1E1E)),
                                     )
-                                }
-                            },
-                        )
+                                },
+                                error = {
+                                    if (heroAllowCroppedFallback && bannerImageModel != item.coverData) {
+                                        SubcomposeAsyncImage(
+                                            model = item.coverData,
+                                            contentDescription = item.title,
+                                            contentScale = ContentScale.Crop,
+                                            alignment = Alignment.TopCenter,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color(0xFF1E1E1E)),
+                                        )
+                                    }
+                                },
+                            )
+                        }
 
                     // 2. Ambient Radial Accent Glow
                     Box(
