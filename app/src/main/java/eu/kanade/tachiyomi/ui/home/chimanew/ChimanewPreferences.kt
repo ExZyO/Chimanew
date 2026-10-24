@@ -54,4 +54,16 @@ class ChimanewPreferences(
     fun detailsBackdropStyle() = preferenceStore.getInt("pref_chimanew_details_backdrop_style", 0)
 
     fun detailsBackdropArtwork() = preferenceStore.getInt("pref_chimanew_details_backdrop_artwork", 0)
+
+    fun artworkWaterfallOrder() = preferenceStore.getString(
+        "pref_chimanew_artwork_waterfall_order",
+        "ANILIST,KITSU,MANGADEX",
+    )
+
+    fun ambientCanvasStyle() = preferenceStore.getInt(
+        "pref_chimanew_ambient_canvas_style",
+        0, // 0 = Cinematic Blur, 1 = Palette Mesh, 2 = Hybrid Texture
+    )
+
+    fun mangaCustomBannerUrl(mangaId: Long) = preferenceStore.getString("pref_chimanew_manga_banner_$mangaId", "")
 }

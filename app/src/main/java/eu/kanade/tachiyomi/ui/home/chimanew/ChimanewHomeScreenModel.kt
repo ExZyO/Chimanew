@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistMediaArtwork
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
+import eu.kanade.tachiyomi.ui.home.chimanew.data.UnifiedArtwork
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -124,6 +126,7 @@ class ChimanewHomeScreenModel(
     private val trackRepository: TrackRepository = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
     private val anilistCoverRepository: AnilistCoverRepository = Injekt.get(),
+    private val artworkWaterfallRepository: ArtworkWaterfallRepository = Injekt.get(),
 ) : StateScreenModel<ChimanewHomeScreenModel.State>(State()) {
 
     private val artworkRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
@@ -222,15 +225,25 @@ class ChimanewHomeScreenModel(
                     anilistCoverRepository.fetchBatch(aniListRemoteIds)
                 }
 
-                fun getArtwork(mangaId: Long, title: String): AnilistMediaArtwork? {
+                fun getArtwork(mangaId: Long, title: String): UnifiedArtwork? {
                     if (!prefs.useAnilistArtwork) return null
+                    val cachedUnified = artworkWaterfallRepository.getCached(title)
+                    if (cachedUnified != null) return cachedUnified
+
                     val mangaTracks = tracksByManga[mangaId]
                     val aniListTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
-                    if (aniListTrack != null && aniListTrack.remoteId > 0) {
-                        val cached = anilistCoverRepository.getCached(aniListTrack.remoteId)
-                        if (cached != null) return cached
+                    val cachedAniList = if (aniListTrack != null && aniListTrack.remoteId > 0) {
+                        anilistCoverRepository.getCached(aniListTrack.remoteId)
+                    } else {
+                        anilistCoverRepository.getCachedByTitle(title)
                     }
-                    return anilistCoverRepository.getCachedByTitle(title)
+                    if (cachedAniList != null) {
+                        return UnifiedArtwork(
+                            bannerUrl = cachedAniList.bannerUrl,
+                            posterUrl = cachedAniList.extraLargeCoverUrl,
+                        )
+                    }
+                    return null
                 }
 
                 fun createHomeItem(
@@ -254,7 +267,7 @@ class ChimanewHomeScreenModel(
                         title = title,
                         coverData = coverData,
                         highResBannerUrl = artwork?.bannerUrl,
-                        highResCoverUrl = artwork?.extraLargeCoverUrl,
+                        highResCoverUrl = artwork?.posterUrl,
                         lastChapterNumber = lastChapterNumber,
                         lastChapterId = lastChapterId,
                         totalChapters = totalChapters,
@@ -431,14 +444,21 @@ class ChimanewHomeScreenModel(
 
                 if (prefs.useAnilistArtwork) {
                     val missingHeroArt = heroItems.filter { item ->
-                        item.highResBannerUrl == null && anilistCoverRepository.getCachedByTitle(item.title) == null
+                        item.highResBannerUrl == null && artworkWaterfallRepository.getCached(item.title) == null
                     }
                     if (missingHeroArt.isNotEmpty()) {
                         screenModelScope.launchIO {
                             var anyUpdated = false
                             for (item in missingHeroArt) {
-                                val art = anilistCoverRepository.fetchByTitle(item.title)
-                                if (art != null && (!art.bannerUrl.isNullOrBlank() || !art.extraLargeCoverUrl.isNullOrBlank())) {
+                                val mangaTracks = tracksByManga[item.mangaId]
+                                val aniListTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                                val kitsuTrack = mangaTracks?.firstOrNull { it.trackerId == trackerManager.kitsu.id }
+                                val art = artworkWaterfallRepository.resolveArtwork(
+                                    rawTitle = item.title,
+                                    anilistRemoteId = aniListTrack?.remoteId?.takeIf { it > 0 },
+                                    kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
+                                )
+                                if (!art.bannerUrl.isNullOrBlank() || !art.posterUrl.isNullOrBlank()) {
                                     anyUpdated = true
                                 }
                                 delay(120L)

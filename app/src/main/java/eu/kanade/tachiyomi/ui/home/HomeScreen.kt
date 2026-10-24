@@ -20,6 +20,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -70,9 +73,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -236,46 +243,14 @@ object HomeScreen : Screen() {
                             }
                         }
                     },
-                    bottomBar = {
-                        if (!isTabletUi()) {
-                            val bottomNavVisible by produceState(initialValue = true) {
-                                showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
-                            }
-                            AnimatedVisibility(
-                                visible = bottomNavVisible,
-                                enter = slideInVertically(
-                                    initialOffsetY = { it },
-                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                ) + fadeIn(),
-                                exit = slideOutVertically(
-                                    targetOffsetY = { it },
-                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                ) + fadeOut(),
-                            ) {
-                                // EaZy Nuvio+ / Chimanew: Nuvio Dynamic Island & iOS Liquid Sliding Glass Dock
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(76.dp)
-                                        .navigationBarsPadding()
-                                        .padding(bottom = 12.dp, start = 16.dp, end = 16.dp),
-                                    contentAlignment = Alignment.BottomCenter,
-                                ) {
-                                    NuvioLiquidGlassDock(
-                                        tabs = navbarTabs,
-                                        isCollapsed = isDockCollapsed,
-                                        useConsolidatedLibrary = useConsolidatedLibrary,
-                                    )
-                                }
-                            }
-                        }
-                    },
+                    // EaZy Nuvio+ / Chimanew: Floating dock overlay eliminates the black cutout
+                    bottomBar = {},
                     contentWindowInsets = WindowInsets(0),
                 ) { contentPadding ->
                     Box(
                         modifier = Modifier
-                            .padding(contentPadding)
-                            .consumeWindowInsets(contentPadding),
+                            .fillMaxSize()
+                            .padding(top = contentPadding.calculateTopPadding()),
                     ) {
                         AnimatedContent(
                             targetState = tabNavigator.current,
@@ -291,6 +266,34 @@ object HomeScreen : Screen() {
                         ) {
                             tabNavigator.saveableState(key = "currentTab", it) {
                                 it.Content()
+                            }
+                        }
+
+                        // EaZy Nuvio+ / Chimanew: Nuvio Dynamic Island & iOS Liquid Sliding Glass Dock Overlay
+                        if (!isTabletUi()) {
+                            val bottomNavVisible by produceState(initialValue = true) {
+                                showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
+                            }
+                            AnimatedVisibility(
+                                visible = bottomNavVisible,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .navigationBarsPadding()
+                                    .padding(bottom = 12.dp, start = 16.dp, end = 16.dp),
+                                enter = slideInVertically(
+                                    initialOffsetY = { it },
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                ) + fadeIn(),
+                                exit = slideOutVertically(
+                                    targetOffsetY = { it },
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                ) + fadeOut(),
+                            ) {
+                                NuvioLiquidGlassDock(
+                                    tabs = navbarTabs,
+                                    isCollapsed = isDockCollapsed,
+                                    useConsolidatedLibrary = useConsolidatedLibrary,
+                                )
                             }
                         }
                     }
@@ -420,23 +423,74 @@ object HomeScreen : Screen() {
                         ),
                 )
 
+                var glideIndex by remember { mutableStateOf<Float?>(null) }
+                var glideStretch by remember { mutableFloatStateOf(1.0f) }
+
+                val tabCount = tabs.size.coerceAtLeast(1)
+                val activeIdx = tabs.indexOfFirst { it::class == tabNavigator.current::class }.coerceAtLeast(0)
+                val targetIndex = glideIndex ?: activeIdx.toFloat()
+
+                val animatedIndex by animateFloatAsState(
+                    targetValue = targetIndex,
+                    animationSpec = if (glideIndex != null) {
+                        // 1:1 Instant finger tracking with no lag
+                        spring(dampingRatio = 0.95f, stiffness = Spring.StiffnessHigh)
+                    } else {
+                        // Critically-damped spring settle when finger is released
+                        spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
+                    },
+                    label = "sliding_pill_index",
+                )
+
+                val animatedStretch by animateFloatAsState(
+                    targetValue = if (glideIndex != null) glideStretch else 1.0f,
+                    animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMedium),
+                    label = "sliding_pill_stretch",
+                )
+
                 BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                        .pointerInput(tabCount, activeIdx) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val dockPixelWidth = size.width.toFloat()
+                                val tabWidthPx = dockPixelWidth / tabCount
+
+                                var lastX = down.position.x
+                                val initialIdx = ((lastX - (tabWidthPx / 2f)) / tabWidthPx).coerceIn(0f, (tabCount - 1).toFloat())
+                                glideIndex = initialIdx
+                                glideStretch = 1.04f
+
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (!change.pressed) {
+                                        // Released! Snap to closest index
+                                        val finalIdx = (glideIndex ?: activeIdx.toFloat()).roundToInt().coerceIn(0, tabCount - 1)
+                                        glideIndex = null
+                                        glideStretch = 1.0f
+                                        if (finalIdx != activeIdx) {
+                                            tabNavigator.current = tabs[finalIdx]
+                                        } else {
+                                            scope.launch { tabs[finalIdx].onReselect(navigator) }
+                                        }
+                                        change.consume()
+                                        break
+                                    }
+                                    val currentX = change.position.x
+                                    val deltaX = abs(currentX - lastX)
+                                    lastX = currentX
+
+                                    val continuousIdx = ((currentX - (tabWidthPx / 2f)) / tabWidthPx).coerceIn(0f, (tabCount - 1).toFloat())
+                                    glideIndex = continuousIdx
+                                    glideStretch = (1.02f + deltaX * 0.005f).coerceIn(1.02f, 1.14f)
+                                    change.consume()
+                                }
+                            }
+                        },
                 ) {
-                    val tabCount = tabs.size.coerceAtLeast(1)
-                    val activeIdx = tabs.indexOfFirst { it::class == tabNavigator.current::class }.coerceAtLeast(0)
-
-                    val animatedIndex by animateFloatAsState(
-                        targetValue = activeIdx.toFloat(),
-                        animationSpec = spring(
-                            dampingRatio = 0.85f,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                        label = "sliding_pill_index",
-                    )
-
                     val tabWidth = maxWidth / tabCount
 
                     // Sliding Liquid Glass Pill Indicator
@@ -456,6 +510,9 @@ object HomeScreen : Screen() {
                             .fillMaxHeight()
                             .width(tabWidth)
                             .offset(x = tabWidth * animatedIndex)
+                            .graphicsLayer {
+                                scaleX = animatedStretch
+                            }
                             .clip(RoundedCornerShape(999.dp))
                             .background(pillBgColor)
                             .border(
@@ -488,9 +545,12 @@ object HomeScreen : Screen() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         tabs.fastForEach { tab ->
-                            val selected = tabNavigator.current::class == tab::class
+                            val isCurrentTab = tabNavigator.current::class == tab::class
+                            val currentHoveredIdx = glideIndex?.roundToInt() ?: activeIdx
+                            val isTabActive = currentHoveredIdx == tabs.indexOf(tab)
+
                             val onClickTab: () -> Unit = {
-                                if (!selected) {
+                                if (currentHoveredIdx != tabs.indexOf(tab)) {
                                     tabNavigator.current = tab
                                 } else {
                                     scope.launch { tab.onReselect(navigator) }
@@ -498,7 +558,7 @@ object HomeScreen : Screen() {
                             }
 
                             val itemTint by animateColorAsState(
-                                targetValue = if (selected) {
+                                targetValue = if (isTabActive) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
                                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.60f)
@@ -529,7 +589,7 @@ object HomeScreen : Screen() {
                                             LibraryNavigationIcon(
                                                 onClick = onClickTab,
                                                 onModeSelected = { mode ->
-                                                    if (!selected) tabNavigator.current = LibraryTab
+                                                    if (!isCurrentTab) tabNavigator.current = LibraryTab
                                                     scope.launch { LibraryTab.selectLibraryMode(mode) }
                                                 },
                                             )
@@ -537,7 +597,7 @@ object HomeScreen : Screen() {
                                             BrowseNavigationIcon(
                                                 onClick = onClickTab,
                                                 onModeSelected = { mode ->
-                                                    if (!selected) tabNavigator.current = BrowseTab
+                                                    if (!isCurrentTab) tabNavigator.current = BrowseTab
                                                     scope.launch { BrowseTab.selectBrowseMode(mode) }
                                                 },
                                             )
@@ -559,7 +619,7 @@ object HomeScreen : Screen() {
                                                 text = tab.options.title,
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     fontSize = 10.sp,
-                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                                    fontWeight = if (isTabActive) FontWeight.Bold else FontWeight.Medium,
                                                     color = itemTint,
                                                 ),
                                                 maxLines = 1,

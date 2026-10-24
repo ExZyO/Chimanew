@@ -51,6 +51,7 @@ import eu.kanade.presentation.manga.ChapterSettingsDialog
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.manga.EditCoverAction
 import eu.kanade.presentation.manga.MangaScreen
+import eu.kanade.presentation.manga.components.ArtworkPickerBottomSheet
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.manga.components.ClearMangaDialog
 import eu.kanade.presentation.manga.components.ClearOcrCacheDialog
@@ -599,6 +600,10 @@ class MangaScreen(
                             }
                         },
                         onDismissRequest = onDismissRequest,
+                        onArtworkPickerClick = {
+                            onDismissRequest()
+                            screenModel.showArtworkPickerDialog()
+                        },
                         // KMK -->
                         modifier = Modifier
                             .hazeEffect(
@@ -614,6 +619,21 @@ class MangaScreen(
                 } else {
                     LoadingScreen(Modifier.systemBarsPadding())
                 }
+            }
+            MangaScreenModel.Dialog.ArtworkPickerSheet -> {
+                val sm = rememberScreenModel { MangaCoverScreenModel(successState.manga.id) }
+                val getContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                    if (uri == null) return@rememberLauncherForActivityResult
+                    sm.editCover(context, uri)
+                }
+                ArtworkPickerBottomSheet(
+                    manga = successState.manga,
+                    onDismissRequest = onDismissRequest,
+                    onCustomCoverFilePick = { getContent.launch("image/*") },
+                    onCoverUpdated = {
+                        screenModel.fetchAllFromSource(manual = false)
+                    },
+                )
             }
             is MangaScreenModel.Dialog.SetFetchInterval -> {
                 SetIntervalDialog(

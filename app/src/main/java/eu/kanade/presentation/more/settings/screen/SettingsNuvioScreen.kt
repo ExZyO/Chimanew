@@ -39,6 +39,7 @@ object SettingsNuvioScreen : SearchableSettings {
             getHeroGroup(chimanewPreferences),
             getShelvesGroup(chimanewPreferences, navigator),
             getCardsGroup(chimanewPreferences),
+            getArtworkGroup(chimanewPreferences),
             getDetailsPageGroup(chimanewPreferences),
             getNavbarGroup(chimanewPreferences),
         )
@@ -234,6 +235,38 @@ object SettingsNuvioScreen : SearchableSettings {
                     preference = preferences.navbarAutoHideOnScroll(),
                     title = stringResource(MR.strings.pref_chimanew_navbar_autohide),
                     subtitle = stringResource(MR.strings.pref_chimanew_navbar_autohide_summary),
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getArtworkGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_chimanew_artwork_category),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.artworkWaterfallOrder(),
+                    entries = persistentMapOf(
+                        "ANILIST,KITSU,MANGADEX" to stringResource(MR.strings.pref_chimanew_artwork_priority_anilist_kitsu_mangadex),
+                        "KITSU,ANILIST,MANGADEX" to stringResource(MR.strings.pref_chimanew_artwork_priority_kitsu_anilist_mangadex),
+                        "MANGADEX,ANILIST,KITSU" to stringResource(MR.strings.pref_chimanew_artwork_priority_mangadex_anilist_kitsu),
+                        "ANILIST" to "AniList Only",
+                        "KITSU" to "Kitsu Only",
+                        "MANGADEX" to "MangaDex Only",
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_artwork_waterfall),
+                    subtitle = stringResource(MR.strings.pref_chimanew_artwork_waterfall_summary),
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.ambientCanvasStyle(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_artwork_ambient_cinematic_blur),
+                        1 to stringResource(MR.strings.pref_chimanew_artwork_ambient_palette_mesh),
+                        2 to stringResource(MR.strings.pref_chimanew_artwork_ambient_hybrid_texture),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_artwork_ambient_style),
+                    subtitle = stringResource(MR.strings.pref_chimanew_artwork_ambient_style_summary),
                 ),
             ),
         )

@@ -2051,6 +2051,7 @@ class MangaScreenModel(
         data object SettingsSheet : Dialog
         data object TrackSheet : Dialog
         data object FullCover : Dialog
+        data object ArtworkPickerSheet : Dialog
     }
 
     fun dismissDialog() {
@@ -2071,6 +2072,10 @@ class MangaScreenModel(
 
     fun showCoverDialog() {
         updateSuccessState { it.copy(dialog = Dialog.FullCover) }
+    }
+
+    fun showArtworkPickerDialog() {
+        updateSuccessState { it.copy(dialog = Dialog.ArtworkPickerSheet) }
     }
 
     fun showMigrateDialog(duplicate: Manga) {

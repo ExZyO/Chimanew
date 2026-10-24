@@ -63,8 +63,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
-import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
-import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistMediaArtwork
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
+import eu.kanade.tachiyomi.ui.home.chimanew.data.UnifiedArtwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.track.interactor.GetTracks
@@ -74,6 +74,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -159,8 +160,10 @@ fun MangaInfoBox(
     val useAnilistArtwork by chimanewPreferences.useAnilistArtworkInDetails().collectAsState()
     val detailsBackdropStyle by chimanewPreferences.detailsBackdropStyle().collectAsState()
     val detailsBackdropArtwork by chimanewPreferences.detailsBackdropArtwork().collectAsState()
+    val ambientCanvasStyle by chimanewPreferences.ambientCanvasStyle().collectAsState()
+    val customBannerUrl by chimanewPreferences.mangaCustomBannerUrl(manga.id).collectAsState()
 
-    val anilistArtwork by produceState<AnilistMediaArtwork?>(initialValue = null, manga.id, useAnilistArtwork) {
+    val unifiedArtwork by produceState<UnifiedArtwork?>(initialValue = null, manga.id, useAnilistArtwork) {
         if (!useAnilistArtwork) {
             value = null
             return@produceState
@@ -168,51 +171,66 @@ fun MangaInfoBox(
         withContext(Dispatchers.IO) {
             val trackerManager = Injekt.get<TrackerManager>()
             val getTracks = Injekt.get<GetTracks>()
-            val anilistCoverRepo = Injekt.get<AnilistCoverRepository>()
+            val waterfallRepo = Injekt.get<ArtworkWaterfallRepository>()
             val tracks = getTracks.await(manga.id)
             val anilistTrack = tracks.firstOrNull { it.trackerId == trackerManager.aniList.id }
-            if (anilistTrack != null && anilistTrack.remoteId > 0) {
-                val cached = anilistCoverRepo.getCached(anilistTrack.remoteId)
-                if (cached != null) {
-                    value = cached
-                } else {
-                    val fetched = anilistCoverRepo.fetchBatch(listOf(anilistTrack.remoteId))
-                    value = fetched[anilistTrack.remoteId]
-                }
-            } else {
-                val title = manga.ogTitle ?: manga.title
-                val cachedTitle = anilistCoverRepo.getCachedByTitle(title)
-                if (cachedTitle != null) {
-                    value = cachedTitle
-                } else {
-                    value = anilistCoverRepo.fetchByTitle(title)
-                }
-            }
+            val kitsuTrack = tracks.firstOrNull { it.trackerId == trackerManager.kitsu.id }
+            val title = manga.ogTitle ?: manga.title
+            val art = waterfallRepo.resolveArtwork(
+                rawTitle = title,
+                anilistRemoteId = anilistTrack?.remoteId?.takeIf { it > 0 },
+                kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
+            )
+            value = art
         }
     }
 
     val chosenArtworkModel: Any = when {
-        !useAnilistArtwork || anilistArtwork == null -> manga
-        detailsBackdropArtwork == 0 && !anilistArtwork?.bannerUrl.isNullOrBlank() -> anilistArtwork!!.bannerUrl!!
-        detailsBackdropArtwork == 1 && !anilistArtwork?.extraLargeCoverUrl.isNullOrBlank() -> anilistArtwork!!.extraLargeCoverUrl!!
+        !customBannerUrl.isNullOrBlank() -> customBannerUrl
+        !useAnilistArtwork || unifiedArtwork == null -> manga
+        detailsBackdropArtwork == 0 && !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
+        detailsBackdropArtwork == 1 && !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
         detailsBackdropArtwork == 2 -> manga
-        !anilistArtwork?.bannerUrl.isNullOrBlank() -> anilistArtwork!!.bannerUrl!!
-        !anilistArtwork?.extraLargeCoverUrl.isNullOrBlank() -> anilistArtwork!!.extraLargeCoverUrl!!
+        !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
+        !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
         else -> manga
     }
 
-    val activeStyle = if (useAnilistArtwork && anilistArtwork != null) detailsBackdropStyle else 3
-    val backdropAlpha = when (activeStyle) {
-        0 -> 0.55f // Cinematic Fade
-        1 -> 0.35f // Soft Blur
-        2 -> 0.85f // Full Opacity + Scrims
-        else -> 0.20f // Standard Local Cover
+    // Determine if rendering an official wide landscape banner or falling back to ambient canvas
+    val isWideBanner = (chosenArtworkModel != manga) && (chosenArtworkModel is String) && (
+        chosenArtworkModel == customBannerUrl ||
+        (unifiedArtwork != null && chosenArtworkModel == unifiedArtwork?.bannerUrl)
+    )
+
+    val activeStyle = if (useAnilistArtwork && isWideBanner) detailsBackdropStyle else 3
+    val backdropAlpha = when {
+        isWideBanner -> when (activeStyle) {
+            0 -> 0.55f // Cinematic Fade
+            1 -> 0.35f // Soft Blur
+            2 -> 0.85f // Full Opacity + Scrims
+            else -> 0.20f
+        }
+        else -> when (ambientCanvasStyle) {
+            0 -> 0.50f // Cinematic Ambient Blur
+            1 -> 0.35f // Dynamic Palette Mesh
+            2 -> 0.45f // Hybrid Ambient Texture
+            else -> 0.50f
+        }
     }
-    val backdropBlur = when (activeStyle) {
-        0 -> 0.dp // Cinematic Fade - Crisp
-        1 -> 18.dp // Soft Atmospheric Blur
-        2 -> 0.dp // Full Opacity - Crisp
-        else -> 7.dp // Standard Local Cover
+
+    val backdropBlur = when {
+        isWideBanner -> when (activeStyle) {
+            0 -> 0.dp // Cinematic Fade - Crisp
+            1 -> 18.dp // Soft Atmospheric Blur
+            2 -> 0.dp // Full Opacity - Crisp
+            else -> 7.dp
+        }
+        else -> when (ambientCanvasStyle) {
+            0 -> 28.dp // Option A: Cinematic Ambient Blur
+            1 -> 20.dp // Option B: Dynamic Palette Mesh
+            2 -> 24.dp // Option C: Hybrid Ambient Texture
+            else -> 28.dp
+        }
     }
 
     Box(modifier = modifier) {
@@ -221,7 +239,7 @@ fun MangaInfoBox(
             Color.Transparent,
             MaterialTheme.colorScheme.background,
         )
-        // EaZy Nuvio+ / Chimanew: resilient fallback to local manga cover if AniList banner/artwork fails to load
+        // EaZy Nuvio+ / Chimanew: resilient fallback to local manga cover if remote banner/artwork fails to load
         var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
         val effectiveArtworkModel = if (artworkLoadFailed) manga else chosenArtworkModel
 
@@ -250,25 +268,85 @@ fun MangaInfoBox(
                 .matchParentSize()
                 .drawWithContent {
                     drawContent()
-                    if (activeStyle == 2) {
+                    if (isWideBanner) {
+                        if (activeStyle == 2) {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.70f),
+                                        Color.Transparent,
+                                    ),
+                                    endY = size.height * 0.35f,
+                                ),
+                            )
+                        }
                         drawRect(
                             brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.70f),
-                                    Color.Transparent,
-                                ),
-                                endY = size.height * 0.35f,
+                                colors = backdropGradientColors,
+                                startY = if (activeStyle == 0 || activeStyle == 2) size.height * 0.30f else size.height / 2,
+                            ),
+                        )
+                    } else {
+                        // Tier 4 Ambient Canvas Fallback Styles
+                        when (ambientCanvasStyle) {
+                            1 -> {
+                                // Option B: Dynamic Palette Mesh
+                                drawRect(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.30f),
+                                            Color.Transparent,
+                                        ),
+                                        center = Offset(size.width * 0.85f, size.height * 0.15f),
+                                        radius = size.width * 0.85f,
+                                    ),
+                                )
+                                drawRect(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f),
+                                            Color.Transparent,
+                                        ),
+                                        center = Offset(size.width * 0.10f, size.height * 0.65f),
+                                        radius = size.width * 0.75f,
+                                    ),
+                                )
+                            }
+                            2 -> {
+                                // Option C: Hybrid Ambient Texture - Specular Top Sheen
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.White.copy(alpha = 0.18f),
+                                            Color.Transparent,
+                                        ),
+                                        endY = 48f,
+                                    ),
+                                )
+                            }
+                            else -> {
+                                // Option A: Cinematic Ambient Blur - Deep Top Scrim
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.65f),
+                                            Color.Transparent,
+                                        ),
+                                        endY = size.height * 0.35f,
+                                    ),
+                                )
+                            }
+                        }
+                        // Bottom fade to background
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = backdropGradientColors,
+                                startY = size.height * 0.25f,
                             ),
                         )
                     }
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = backdropGradientColors,
-                            startY = if (activeStyle == 0 || activeStyle == 2) size.height * 0.30f else size.height / 2,
-                        ),
-                    )
                 }
-                .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = if (activeStyle == 1) 0.35f else 0.15f))
+                .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = if (isWideBanner && activeStyle == 1) 0.35f else 0.15f))
                 .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
                 .alpha(backdropAlpha),
         )

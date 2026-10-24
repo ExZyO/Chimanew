@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.DropdownMenuItem
@@ -66,6 +67,7 @@ fun MangaCoverDialog(
     onSaveClick: () -> Unit,
     onEditClick: ((EditCoverAction) -> Unit)?,
     onDismissRequest: () -> Unit,
+    onArtworkPickerClick: (() -> Unit)? = null,
     // KMK -->
     modifier: Modifier = Modifier,
     // KMK <--
@@ -109,6 +111,14 @@ fun MangaCoverDialog(
                     ActionsPill {
                         AppBarActions(
                             actions = persistentListOf(
+                                AppBar.Action(
+                                    title = stringResource(MR.strings.pref_chimanew_artwork_picker_title),
+                                    icon = Icons.Outlined.Photo,
+                                    onClick = { onArtworkPickerClick?.invoke() },
+                                    // KMK -->
+                                    iconTint = iconColor,
+                                    // KMK <--
+                                ),
                                 AppBar.Action(
                                     title = stringResource(MR.strings.action_share),
                                     icon = Icons.Outlined.Share,
@@ -179,6 +189,18 @@ fun MangaCoverDialog(
                                         ),
                                         // KMK <--
                                     )
+                                    if (onArtworkPickerClick != null) {
+                                        DropdownMenuItem(
+                                            text = { Text(text = stringResource(MR.strings.pref_chimanew_artwork_picker_title)) },
+                                            onClick = {
+                                                expanded = false
+                                                onArtworkPickerClick()
+                                            },
+                                            colors = MenuDefaults.itemColors().copy(
+                                                textColor = contentColorFor(dropdownBgColor),
+                                            ),
+                                        )
+                                    }
                                 }
                             }
                         }
