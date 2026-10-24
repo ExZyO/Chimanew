@@ -63,6 +63,11 @@ class ChimanewPreferences(
 
     fun detailsBackdropArtwork() = preferenceStore.getInt("pref_chimanew_details_backdrop_artwork", 0)
 
+    fun detailsPageLayout() = preferenceStore.getInt(
+        "pref_chimanew_details_page_layout",
+        0, // 0 = Nuvio Hero (Unblocked banner, centered title & genres), 1 = Canvas Stack (Full banner top, cover below), 2 = Feathered Vignette (Full edge-to-edge overlay)
+    )
+
     fun heroArtworkPairing() = preferenceStore.getInt("pref_nuvio_hero_artwork_pairing", 0) // 0 = Separate with fallback, 1 = Unified
 
     fun heroShowUnreadBadges() = preferenceStore.getBoolean("pref_nuvio_hero_show_unread_badges", true)

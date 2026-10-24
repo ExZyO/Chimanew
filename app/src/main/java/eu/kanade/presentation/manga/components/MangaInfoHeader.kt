@@ -173,6 +173,7 @@ fun MangaInfoBox(
     // EaZy Nuvio+ / Chimanew: Settings-controlled AniList artwork & backdrop styling
     val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
     val useAnilistArtwork by chimanewPreferences.useAnilistArtworkInDetails().collectAsState()
+    val detailsPageLayout by chimanewPreferences.detailsPageLayout().collectAsState()
     val detailsBackdropStyle by chimanewPreferences.detailsBackdropStyle().collectAsState()
     val detailsBackdropArtwork by chimanewPreferences.detailsBackdropArtwork().collectAsState()
     val ambientCanvasStyle by chimanewPreferences.ambientCanvasStyle().collectAsState()
@@ -326,19 +327,12 @@ fun MangaInfoBox(
                         )
                     }
 
-                    // Layer 2: Floating Cinema Card
+                    // Layer 2: 100% Full-Bleed Edge-to-Edge Widescreen Showcase
                     if (effectiveArtworkModel != null) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(
-                                    start = 14.dp,
-                                    end = 14.dp,
-                                    top = appBarPadding + 6.dp,
-                                )
-                                .height(136.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.Black.copy(alpha = 0.35f)),
+                                .matchParentSize(),
                         ) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
@@ -749,29 +743,69 @@ fun MangaInfoBox(
         // Manga & source info
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             if (!isTabletUi) {
-                MangaAndSourceTitlesSmall(
-                    appBarPadding = appBarPadding,
-                    manga = manga,
-                    coverModel = effectiveCoverModel,
-                    sourceName = sourceName,
-                    isStubSource = isStubSource,
-                    readingTime = readingTime,
-                    // KMK -->
-                    isSourceIncognito = isSourceIncognito,
-                    // KMK <--
-                    onCoverClick = onCoverClick,
-                    doSearch = doSearch,
-                    // KMK -->
-                    librarySearch = librarySearch,
-                    onSourceClick = onSourceClick,
-                    onCoverLoaded = onCoverLoaded,
-                    coverRatio = coverRatio,
-                    usePanoramaCover = usePanoramaCover,
-                    topAlignCover = topAlignCover,
-                    // KMK <--
-                    communityRatings = effectiveRatings,
-                    communityRatingFormat = communityRatingFormat,
-                )
+                when (detailsPageLayout) {
+                    0 -> {
+                        // Mode 0: Nuvio Hero (Official Nuvio Mobile Architecture - Unblocked banner with centered title)
+                        MangaAndSourceTitlesNuvioHero(
+                            appBarPadding = appBarPadding,
+                            manga = manga,
+                            sourceName = sourceName,
+                            isStubSource = isStubSource,
+                            readingTime = readingTime,
+                            isSourceIncognito = isSourceIncognito,
+                            doSearch = doSearch,
+                            librarySearch = librarySearch,
+                            onSourceClick = onSourceClick,
+                            onCoverClick = onCoverClick,
+                            communityRatings = effectiveRatings,
+                            communityRatingFormat = communityRatingFormat,
+                        )
+                    }
+                    1 -> {
+                        // Mode 1: Canvas Stack (Banner top, cover neatly below)
+                        MangaAndSourceTitlesCanvasStack(
+                            appBarPadding = appBarPadding,
+                            manga = manga,
+                            coverModel = effectiveCoverModel,
+                            sourceName = sourceName,
+                            isStubSource = isStubSource,
+                            readingTime = readingTime,
+                            isSourceIncognito = isSourceIncognito,
+                            onCoverClick = onCoverClick,
+                            doSearch = doSearch,
+                            librarySearch = librarySearch,
+                            onSourceClick = onSourceClick,
+                            onCoverLoaded = onCoverLoaded,
+                            coverRatio = coverRatio,
+                            usePanoramaCover = usePanoramaCover,
+                            topAlignCover = topAlignCover,
+                            communityRatings = effectiveRatings,
+                            communityRatingFormat = communityRatingFormat,
+                        )
+                    }
+                    else -> {
+                        // Mode 2: Feathered Vignette (Full edge-to-edge overlay)
+                        MangaAndSourceTitlesSmall(
+                            appBarPadding = appBarPadding,
+                            manga = manga,
+                            coverModel = effectiveCoverModel,
+                            sourceName = sourceName,
+                            isStubSource = isStubSource,
+                            readingTime = readingTime,
+                            isSourceIncognito = isSourceIncognito,
+                            onCoverClick = onCoverClick,
+                            doSearch = doSearch,
+                            librarySearch = librarySearch,
+                            onSourceClick = onSourceClick,
+                            onCoverLoaded = onCoverLoaded,
+                            coverRatio = coverRatio,
+                            usePanoramaCover = usePanoramaCover,
+                            topAlignCover = topAlignCover,
+                            communityRatings = effectiveRatings,
+                            communityRatingFormat = communityRatingFormat,
+                        )
+                    }
+                }
             } else {
                 MangaAndSourceTitlesLarge(
                     appBarPadding = appBarPadding,
@@ -1141,6 +1175,267 @@ private fun MangaAndSourceTitlesLarge(
             communityRatings = communityRatings,
             communityRatingFormat = communityRatingFormat,
         )
+    }
+}
+
+// EaZy Nuvio+ / Chimanew: Official Nuvio Mobile presentation (unblocked banner, centered titles)
+@Composable
+private fun MangaAndSourceTitlesNuvioHero(
+    appBarPadding: Dp,
+    manga: Manga,
+    sourceName: String,
+    isStubSource: Boolean,
+    readingTime: String?,
+    isSourceIncognito: Boolean,
+    doSearch: (query: String, global: Boolean) -> Unit,
+    librarySearch: (query: String) -> Unit,
+    onSourceClick: () -> Unit,
+    onCoverClick: () -> Unit,
+    communityRatings: List<CommunityRating> = emptyList(),
+    communityRatingFormat: Int = 0,
+) {
+    val context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+    var tagSelected by remember { mutableStateOf("") }
+    val title = manga.title
+
+    DropdownMenu(
+        expanded = showMenu,
+        onDismissRequest = { showMenu = false },
+    ) {
+        DropdownMenuItem(
+            text = { Text(text = stringResource(KMR.strings.action_library_search)) },
+            onClick = {
+                librarySearch(tagSelected)
+                showMenu = false
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(text = stringResource(MR.strings.action_global_search)) },
+            onClick = {
+                doSearch(tagSelected, true)
+                showMenu = false
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(text = stringResource(MR.strings.action_copy_to_clipboard)) },
+            onClick = {
+                context.copyToClipboard(tagSelected, tagSelected)
+                showMenu = false
+            },
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, top = appBarPadding + 110.dp, end = 20.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        // Centered Title typography
+        Text(
+            text = title.ifBlank { stringResource(MR.strings.unknown_title) },
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.clickableNoIndication(
+                onLongClick = {
+                    if (title.isNotBlank()) {
+                        tagSelected = title
+                        showMenu = true
+                    }
+                },
+                onClick = { if (title.isNotBlank()) doSearch(title, true) },
+            ),
+            textAlign = TextAlign.Center,
+        )
+
+        // Centered Authors / Artists
+        val authorText = manga.author?.takeIf { it.isNotBlank() }
+        val artistText = manga.artist?.takeIf { it.isNotBlank() && it != manga.author }
+        val creatorText = listOfNotNull(authorText, artistText).joinToString(" • ")
+        if (creatorText.isNotBlank()) {
+            Text(
+                text = creatorText,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.clickableNoIndication(
+                    onLongClick = {
+                        tagSelected = authorText ?: ""
+                        if (tagSelected.isNotBlank()) showMenu = true
+                    },
+                    onClick = {
+                        val q = authorText ?: ""
+                        if (q.isNotBlank()) doSearch(q, true)
+                    },
+                ),
+            )
+        }
+
+        // Centered Genre Summary (first 3 genres, just like Nuvio DetailHero.kt)
+        val genreSummary = remember(manga.genre) {
+            manga.genre?.take(3)?.joinToString(" • ")
+        }
+        if (!genreSummary.isNullOrBlank()) {
+            Text(
+                text = genreSummary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        // Community ratings badge centered
+        if (communityRatings.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            CommunityRatingBadge(
+                ratings = communityRatings,
+                format = communityRatingFormat,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+        }
+
+        // Status & Source Row centered
+        Row(
+            modifier = Modifier.secondaryItemAlpha(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = when (manga.status) {
+                    SManga.ONGOING.toLong() -> Icons.Outlined.Schedule
+                    SManga.COMPLETED.toLong() -> Icons.Outlined.DoneAll
+                    SManga.LICENSED.toLong() -> Icons.Outlined.AttachMoney
+                    SManga.PUBLISHING_FINISHED.toLong() -> Icons.Outlined.Done
+                    SManga.CANCELLED.toLong() -> Icons.Outlined.Close
+                    SManga.ON_HIATUS.toLong() -> Icons.Outlined.Pause
+                    else -> Icons.Outlined.Block
+                },
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .size(16.dp),
+            )
+            ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
+                Text(
+                    text = when (manga.status) {
+                        SManga.ONGOING.toLong() -> stringResource(MR.strings.ongoing)
+                        SManga.COMPLETED.toLong() -> stringResource(MR.strings.completed)
+                        SManga.LICENSED.toLong() -> stringResource(MR.strings.licensed)
+                        SManga.PUBLISHING_FINISHED.toLong() -> stringResource(MR.strings.publishing_finished)
+                        SManga.CANCELLED.toLong() -> stringResource(MR.strings.cancelled)
+                        SManga.ON_HIATUS.toLong() -> stringResource(MR.strings.on_hiatus)
+                        else -> stringResource(MR.strings.unknown)
+                    },
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
+                )
+                if (isSourceIncognito) {
+                    DotSeparatorText()
+                    Icon(
+                        painter = rememberVectorPainter(ImageVector.vectorResource(eu.kanade.tachiyomi.R.drawable.ic_glasses_with_hat_24dp)),
+                        contentDescription = stringResource(MR.strings.pref_incognito_mode),
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                DotSeparatorText()
+                Text(
+                    text = sourceName,
+                    modifier = Modifier.clickableNoIndication(onClick = onSourceClick),
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+// EaZy Nuvio+ / Chimanew: Canvas Stack presentation (Full banner top, cover neatly below)
+@Composable
+private fun MangaAndSourceTitlesCanvasStack(
+    appBarPadding: Dp,
+    manga: Manga,
+    sourceName: String,
+    isStubSource: Boolean,
+    readingTime: String?,
+    isSourceIncognito: Boolean,
+    onCoverClick: () -> Unit,
+    doSearch: (query: String, global: Boolean) -> Unit,
+    librarySearch: (query: String) -> Unit,
+    onSourceClick: () -> Unit,
+    onCoverLoaded: (DomainMangaCover) -> Unit,
+    coverRatio: MutableFloatState,
+    usePanoramaCover: Boolean = false,
+    topAlignCover: Boolean = false,
+    communityRatings: List<CommunityRating> = emptyList(),
+    communityRatingFormat: Int = 0,
+    coverModel: Any = manga,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = appBarPadding + 145.dp, end = 16.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = if (topAlignCover) Alignment.Top else Alignment.CenterVertically,
+    ) {
+        if (usePanoramaCover && coverRatio.floatValue <= RatioSwitchToPanorama) {
+            MangaCover.Panorama(
+                modifier = Modifier
+                    .sizeIn(maxHeight = 100.dp)
+                    .align(if (topAlignCover) Alignment.Top else Alignment.CenterVertically),
+                data = ImageRequest.Builder(LocalContext.current)
+                    .data(coverModel)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = stringResource(MR.strings.manga_cover),
+                onClick = onCoverClick,
+                onCoverLoaded = { mangaCover, result ->
+                    val image = result.result.image
+                    coverRatio.floatValue = image.height.toFloat() / image.width
+                    onCoverLoaded(mangaCover)
+                },
+            )
+        } else {
+            MangaCover.Book(
+                modifier = Modifier
+                    .sizeIn(maxWidth = 100.dp)
+                    .align(if (topAlignCover) Alignment.Top else Alignment.CenterVertically),
+                data = ImageRequest.Builder(LocalContext.current)
+                    .data(coverModel)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = stringResource(MR.strings.manga_cover),
+                onClick = onCoverClick,
+                onCoverLoaded = { mangaCover, result ->
+                    val image = result.result.image
+                    coverRatio.floatValue = image.height.toFloat() / image.width
+                    onCoverLoaded(mangaCover)
+                },
+            )
+        }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            MangaContentInfo(
+                title = manga.title,
+                author = manga.author,
+                artist = manga.artist,
+                status = manga.status,
+                sourceName = sourceName,
+                isStubSource = isStubSource,
+                readingTime = readingTime,
+                isSourceIncognito = isSourceIncognito,
+                doSearch = doSearch,
+                librarySearch = librarySearch,
+                onSourceClick = onSourceClick,
+                communityRatings = communityRatings,
+                communityRatingFormat = communityRatingFormat,
+            )
+        }
     }
 }
 

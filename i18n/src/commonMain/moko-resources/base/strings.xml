@@ -101,6 +101,11 @@
     <string name="pref_chimanew_details_category">Manga Details Page</string>
     <string name="pref_chimanew_details_use_anilist">Show HD Banners on Details Page</string>
     <string name="pref_chimanew_details_use_anilist_summary">Display high-definition banners on manga and manhwa info pages</string>
+    <string name="pref_chimanew_details_page_layout">Details Page Presentation</string>
+    <string name="pref_chimanew_details_page_layout_summary">Choose how the header banner and cover artwork are showcased on series pages</string>
+    <string name="pref_chimanew_details_page_layout_nuvio">Nuvio Hero (Unblocked Banner, Centered Titles)</string>
+    <string name="pref_chimanew_details_page_layout_stack">Canvas Stack (Full Banner Top, Cover Neatly Below)</string>
+    <string name="pref_chimanew_details_page_layout_vignette">Feathered Vignette (Full Edge-to-Edge Overlay)</string>
     <string name="pref_chimanew_details_backdrop_style">Details Backdrop Style</string>
     <string name="pref_chimanew_details_backdrop_style_fade">Cinematic Fade (Recommended)</string>
     <string name="pref_chimanew_details_backdrop_style_blur">Soft Blur</string>

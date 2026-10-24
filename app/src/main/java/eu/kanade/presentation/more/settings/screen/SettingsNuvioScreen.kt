@@ -248,6 +248,17 @@ object SettingsNuvioScreen : SearchableSettings {
                     subtitle = stringResource(MR.strings.pref_chimanew_details_use_anilist_summary),
                 ),
                 Preference.PreferenceItem.ListPreference(
+                    preference = preferences.detailsPageLayout(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_details_page_layout_nuvio),
+                        1 to stringResource(MR.strings.pref_chimanew_details_page_layout_stack),
+                        2 to stringResource(MR.strings.pref_chimanew_details_page_layout_vignette),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_details_page_layout),
+                    subtitle = stringResource(MR.strings.pref_chimanew_details_page_layout_summary),
+                    enabled = useAnilistInDetails,
+                ),
+                Preference.PreferenceItem.ListPreference(
                     preference = preferences.detailsBackdropStyle(),
                     entries = persistentMapOf(
                         0 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_fade),
