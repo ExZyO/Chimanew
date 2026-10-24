@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -122,6 +123,7 @@ fun NuvioHeroSection(
             val showRatingsOnHero by preferences.showRatingsOnHero().collectPrefAsState()
             val heroDimBanner by preferences.heroDimBanner().collectPrefAsState()
             val heroAllowCroppedFallback by preferences.heroAllowCroppedFallback().collectPrefAsState()
+            val ambientCanvasStyle by preferences.ambientCanvasStyle().collectPrefAsState()
 
             val posterImageModel: Any = when {
                 "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
@@ -152,7 +154,7 @@ fun NuvioHeroSection(
                         // Style 0: Netflix / Nuvio Ambient Backdrop (Sharp 2:3 Poster)
                         // -------------------------------------------------------------
 
-                        // 1. Atmospheric Heavily Blurred Cover Backdrop
+                        // 1. Atmospheric Heavily Blurred Cover Backdrop or Fallback Background
                         if (bannerImageModel != null) {
                             val heroBannerAlpha = if (heroDimBanner) 0.35f else 0.85f
                             SubcomposeAsyncImage(
@@ -178,9 +180,21 @@ fun NuvioHeroSection(
                                                 .alpha(heroBannerAlpha),
                                         )
                                     } else {
-                                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)))
+                                        HeroFallbackBackgroundCanvas(
+                                            posterModel = posterImageModel,
+                                            ambientStyle = ambientCanvasStyle,
+                                            accentColor = accentColor,
+                                            dimBanner = heroDimBanner,
+                                        )
                                     }
                                 },
+                            )
+                        } else {
+                            HeroFallbackBackgroundCanvas(
+                                posterModel = posterImageModel,
+                                ambientStyle = ambientCanvasStyle,
+                                accentColor = accentColor,
+                                dimBanner = heroDimBanner,
                             )
                         }
 
@@ -251,7 +265,7 @@ fun NuvioHeroSection(
                         // Style 2: Option 3 - Netflix Ambient with Crisp Widescreen Banner Backdrop
                         // -------------------------------------------------------------------------
 
-                        // 1. Crisp Unblurred Widescreen Banner Backdrop
+                        // 1. Crisp Unblurred Widescreen Banner Backdrop or Fallback Background
                         if (bannerImageModel != null) {
                             val heroBannerAlpha = if (heroDimBanner) 0.55f else 1.0f
                             SubcomposeAsyncImage(
@@ -275,9 +289,21 @@ fun NuvioHeroSection(
                                                 .alpha(heroBannerAlpha),
                                         )
                                     } else {
-                                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)))
+                                        HeroFallbackBackgroundCanvas(
+                                            posterModel = posterImageModel,
+                                            ambientStyle = ambientCanvasStyle,
+                                            accentColor = accentColor,
+                                            dimBanner = heroDimBanner,
+                                        )
                                     }
                                 },
+                            )
+                        } else {
+                            HeroFallbackBackgroundCanvas(
+                                posterModel = posterImageModel,
+                                ambientStyle = ambientCanvasStyle,
+                                accentColor = accentColor,
+                                dimBanner = heroDimBanner,
                             )
                         }
 
@@ -348,7 +374,7 @@ fun NuvioHeroSection(
                         // Style 1: Option 1 1:1 Match (Official Wide Banner / High-Res)
                         // -------------------------------------------------------------
 
-                        // 1. Cover / Wide Artwork
+                        // 1. Cover / Wide Artwork or Fallback Background
                         if (bannerImageModel != null) {
                             SubcomposeAsyncImage(
                                 model = bannerImageModel,
@@ -373,13 +399,21 @@ fun NuvioHeroSection(
                                             modifier = Modifier.fillMaxSize(),
                                         )
                                     } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(Color(0xFF1E1E1E)),
+                                        HeroFallbackBackgroundCanvas(
+                                            posterModel = posterImageModel,
+                                            ambientStyle = ambientCanvasStyle,
+                                            accentColor = accentColor,
+                                            dimBanner = heroDimBanner,
                                         )
                                     }
                                 },
+                            )
+                        } else {
+                            HeroFallbackBackgroundCanvas(
+                                posterModel = posterImageModel,
+                                ambientStyle = ambientCanvasStyle,
+                                accentColor = accentColor,
+                                dimBanner = heroDimBanner,
                             )
                         }
 
@@ -834,6 +868,137 @@ private fun HeroAmbientForegroundContent(
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun HeroFallbackBackgroundCanvas(
+    posterModel: Any,
+    ambientStyle: Int,
+    accentColor: Color,
+    dimBanner: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        when (ambientStyle) {
+            1 -> {
+                // Style 1: Dynamic Palette Mesh (Vibrant Colorful Lights)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(color = Color(0xFF101014))
+
+                    // Top-right dynamic aura
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = if (dimBanner) 0.50f else 0.75f),
+                                accentColor.copy(alpha = if (dimBanner) 0.18f else 0.35f),
+                                Color.Transparent,
+                            ),
+                            center = Offset(size.width * 0.85f, size.height * 0.20f),
+                            radius = size.width * 0.90f,
+                        ),
+                    )
+
+                    // Bottom-left complementary aura
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = if (dimBanner) 0.35f else 0.55f),
+                                Color.Transparent,
+                            ),
+                            center = Offset(size.width * 0.15f, size.height * 0.80f),
+                            radius = size.width * 0.80f,
+                        ),
+                    )
+
+                    // Center luminous glow
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = if (dimBanner) 0.08f else 0.18f),
+                                Color.Transparent,
+                            ),
+                            center = Offset(size.width * 0.50f, size.height * 0.45f),
+                            radius = size.width * 0.55f,
+                        ),
+                    )
+                }
+            }
+            2 -> {
+                // Style 2: Frosted Glass (Subtle Matte Texture)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    SubcomposeAsyncImage(
+                        model = posterModel,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .blur(48.dp)
+                            .alpha(if (dimBanner) 0.25f else 0.45f),
+                        loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
+                        error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
+                    )
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawRect(color = Color(0xFF141416).copy(alpha = 0.55f))
+                        // Top specular sheen
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.20f),
+                                    Color.White.copy(alpha = 0.05f),
+                                    Color.Transparent,
+                                ),
+                                startY = 0f,
+                                endY = size.height * 0.45f,
+                            ),
+                        )
+                        // Ambient color reflection
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    accentColor.copy(alpha = if (dimBanner) 0.30f else 0.50f),
+                                    Color.Transparent,
+                                ),
+                                center = Offset(size.width * 0.75f, size.height * 0.30f),
+                                radius = size.width * 0.75f,
+                            ),
+                        )
+                    }
+                }
+            }
+            else -> {
+                // Style 0 (Default): Cinematic Blur (Gentle ambient glow)
+                SubcomposeAsyncImage(
+                    model = posterModel,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(36.dp)
+                        .alpha(if (dimBanner) 0.45f else 0.80f),
+                    loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
+                    error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
+                )
+                // Color ambient wash
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    accentColor.copy(alpha = if (dimBanner) 0.40f else 0.60f),
+                                    accentColor.copy(alpha = 0.15f),
+                                    Color.Transparent,
+                                ),
+                                center = Offset(250f, 200f),
+                                radius = 800f,
+                            ),
+                        ),
                 )
             }
         }

@@ -229,6 +229,12 @@ fun MangaInfoBox(
         else -> if (heroAllowCroppedFallback) manga else null
     }
 
+    val ambientArtworkModel: Any = if (useAnilistArtwork && !unifiedArtwork?.posterUrl.isNullOrBlank()) {
+        unifiedArtwork!!.posterUrl!!
+    } else {
+        manga
+    }
+
     // Determine if rendering an official wide landscape banner or falling back to ambient canvas
     val isWideBanner = (chosenArtworkModel != manga) && (chosenArtworkModel is String) && (
         chosenArtworkModel == customBannerUrl ||
@@ -276,22 +282,21 @@ fun MangaInfoBox(
                 0 -> {
                     // MODE 0: Cinema Showcase Card (Widescreen Card + Ambient Aura)
                     // Layer 1: Ambient Glow Underlay behind everything (including status bar)
-                    if (effectiveArtworkModel != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(effectiveArtworkModel)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.Center,
-                            modifier = Modifier
-                                .matchParentSize()
-                                .blur(32.dp)
-                                .alpha(0.40f)
-                                .background(surfaceTintColor.copy(alpha = 0.15f)),
-                        )
-                    }
+                    val underlayModel = effectiveArtworkModel ?: ambientArtworkModel
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(underlayModel)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .blur(32.dp)
+                            .alpha(0.40f)
+                            .background(surfaceTintColor.copy(alpha = 0.15f)),
+                    )
 
                     // Scrims for status bar and background dissolve
                     Canvas(modifier = Modifier.matchParentSize()) {
@@ -370,22 +375,21 @@ fun MangaInfoBox(
                     val topVignetteStart = (appBarPadding * 0.55f).coerceAtLeast(16.dp)
 
                     // Layer 1: Ambient Glow Underlay behind everything (including status bar)
-                    if (effectiveArtworkModel != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(effectiveArtworkModel)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.Center,
-                            modifier = Modifier
-                                .matchParentSize()
-                                .blur(32.dp)
-                                .alpha(0.40f)
-                                .background(surfaceTintColor.copy(alpha = 0.15f)),
-                        )
-                    }
+                    val underlayModel = effectiveArtworkModel ?: ambientArtworkModel
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(underlayModel)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .blur(32.dp)
+                            .alpha(0.40f)
+                            .background(surfaceTintColor.copy(alpha = 0.15f)),
+                    )
 
                     // Scrims for status bar and background dissolve
                     Canvas(modifier = Modifier.matchParentSize()) {
@@ -627,43 +631,52 @@ fun MangaInfoBox(
             }
 
             if (!isWideBanner) {
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    when (ambientCanvasStyle) {
-                        1 -> {
-                            // Option B: Dynamic Palette Mesh
+                when (ambientCanvasStyle) {
+                    1 -> {
+                        // Style 1: Dynamic Palette Mesh (Vibrant Colorful Lights)
+                        Canvas(modifier = Modifier.matchParentSize()) {
                             drawRect(
                                 brush = Brush.radialGradient(
                                     colors = listOf(
-                                        primaryColor.copy(alpha = 0.30f),
+                                        primaryColor.copy(alpha = 0.55f),
+                                        primaryColor.copy(alpha = 0.15f),
                                         Color.Transparent,
                                     ),
-                                    center = Offset(size.width * 0.85f, size.height * 0.15f),
-                                    radius = size.width * 0.85f,
+                                    center = Offset(size.width * 0.85f, size.height * 0.20f),
+                                    radius = size.width * 0.90f,
                                 ),
                             )
                             drawRect(
                                 brush = Brush.radialGradient(
                                     colors = listOf(
-                                        tertiaryColor.copy(alpha = 0.22f),
+                                        tertiaryColor.copy(alpha = 0.40f),
                                         Color.Transparent,
                                     ),
-                                    center = Offset(size.width * 0.10f, size.height * 0.65f),
-                                    radius = size.width * 0.75f,
+                                    center = Offset(size.width * 0.15f, size.height * 0.70f),
+                                    radius = size.width * 0.80f,
                                 ),
                             )
                         }
-                        2 -> {
-                            // Option C: Hybrid Ambient Texture - Specular Top Sheen
+                    }
+                    2 -> {
+                        // Style 2: Frosted Glass (Subtle Matte Sheen)
+                        Canvas(modifier = Modifier.matchParentSize()) {
                             drawRect(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.White.copy(alpha = 0.18f),
+                                        Color.White.copy(alpha = 0.20f),
+                                        Color.White.copy(alpha = 0.05f),
                                         Color.Transparent,
                                     ),
-                                    endY = 48f,
+                                    startY = 0f,
+                                    endY = size.height * 0.50f,
                                 ),
                             )
                         }
+                    }
+                    else -> {
+                        // Style 0 (Default): Cinematic Blur (Gentle ambient glow)
+                        // Handled by the ambient glow underlay with cover artwork
                     }
                 }
             }
