@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -55,11 +56,26 @@ internal fun LibraryList(
             contentType = { "library_list_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
-            val highResCover = if (useAnilistArtwork) {
-                val mTitle = manga.ogTitle ?: manga.title
-                waterfallRepo.getCached(mTitle)?.posterUrl
-            } else {
-                null
+            val highResCover by produceState<String?>(
+                initialValue = if (useAnilistArtwork) {
+                    val mTitle = manga.ogTitle ?: manga.title
+                    waterfallRepo.getCached(mTitle)?.posterUrl
+                } else null,
+                key1 = manga.id,
+                key2 = useAnilistArtwork,
+            ) {
+                if (useAnilistArtwork) {
+                    val mTitle = manga.ogTitle ?: manga.title
+                    val cached = waterfallRepo.getCached(mTitle)?.posterUrl
+                    if (cached != null) {
+                        value = cached
+                    } else {
+                        val resolved = waterfallRepo.resolveArtwork(mTitle, mangaId = manga.id)
+                        value = resolved.posterUrl
+                    }
+                } else {
+                    value = null
+                }
             }
             MangaListItem(
                 isSelected = manga.id in selection,

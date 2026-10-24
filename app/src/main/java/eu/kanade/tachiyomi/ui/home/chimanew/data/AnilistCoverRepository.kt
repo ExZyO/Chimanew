@@ -26,6 +26,8 @@ import java.util.concurrent.ConcurrentHashMap
 data class AnilistMediaArtwork(
     val bannerUrl: String? = null,
     val extraLargeCoverUrl: String? = null,
+    val score10: Float? = null,
+    val score100: Int? = null,
 )
 
 class AnilistCoverRepository(
@@ -58,6 +60,8 @@ class AnilistCoverRepository(
                                 extraLarge
                                 large
                             }
+                            averageScore
+                            meanScore
                         }
                     }
                 """.trimIndent()
@@ -85,10 +89,16 @@ class AnilistCoverRepository(
                     val coverObj = media["coverImage"]?.jsonObject
                     val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
                         ?: coverObj?.get("large")?.jsonPrimitive?.content
+                    val avgScore = media["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                    val meanScore = media["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                    val score100 = avgScore ?: meanScore
+                    val score10 = score100?.let { it / 10f }
 
                     val artwork = AnilistMediaArtwork(
                         bannerUrl = banner?.ifBlank { null },
                         extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                        score10 = score10,
+                        score100 = score100,
                     )
                     malCache[malId] = artwork
                     if (id != null) {
@@ -124,6 +134,8 @@ class AnilistCoverRepository(
                                             extraLarge
                                             large
                                         }
+                                        averageScore
+                                        meanScore
                                     }
                                 }
                             }
@@ -156,10 +168,16 @@ class AnilistCoverRepository(
                             val coverObj = obj["coverImage"]?.jsonObject
                             val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
                                 ?: coverObj?.get("large")?.jsonPrimitive?.content
+                            val avgScore = obj["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                            val meanScore = obj["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                            val score100 = avgScore ?: meanScore
+                            val score10 = score100?.let { it / 10f }
 
                             val art = AnilistMediaArtwork(
                                 bannerUrl = banner?.ifBlank { null },
                                 extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                                score10 = score10,
+                                score100 = score100,
                             )
                             malCache[idMal] = art
                             if (id != null) {
@@ -197,6 +215,8 @@ class AnilistCoverRepository(
                                             extraLarge
                                             large
                                         }
+                                        averageScore
+                                        meanScore
                                     }
                                 }
                             }
@@ -228,10 +248,16 @@ class AnilistCoverRepository(
                             val coverObj = obj["coverImage"]?.jsonObject
                             val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
                                 ?: coverObj?.get("large")?.jsonPrimitive?.content
+                            val avgScore = obj["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                            val meanScore = obj["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                            val score100 = avgScore ?: meanScore
+                            val score10 = score100?.let { it / 10f }
 
                             cache[id] = AnilistMediaArtwork(
                                 bannerUrl = banner?.ifBlank { null },
                                 extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                                score10 = score10,
+                                score100 = score100,
                             )
                         }
 
@@ -266,6 +292,8 @@ class AnilistCoverRepository(
                                 extraLarge
                                 large
                             }
+                            averageScore
+                            meanScore
                         }
                     }
                 """.trimIndent()
@@ -293,10 +321,16 @@ class AnilistCoverRepository(
                     val coverObj = media["coverImage"]?.jsonObject
                     val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
                         ?: coverObj?.get("large")?.jsonPrimitive?.content
+                    val avgScore = media["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                    val meanScore = media["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                    val score100 = avgScore ?: meanScore
+                    val score10 = score100?.let { it / 10f }
 
                     val artwork = AnilistMediaArtwork(
                         bannerUrl = banner?.ifBlank { null },
                         extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                        score10 = score10,
+                        score100 = score100,
                     )
                     titleCache[title] = artwork
                     if (id != null) {

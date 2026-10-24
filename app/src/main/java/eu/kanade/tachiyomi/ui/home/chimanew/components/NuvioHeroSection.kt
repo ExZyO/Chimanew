@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
+import eu.kanade.presentation.manga.components.CommunityRatingBadge
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
@@ -115,6 +116,9 @@ fun NuvioHeroSection(
             val preferences = remember { Injekt.get<ChimanewPreferences>() }
             val heroArtworkPairing by preferences.heroArtworkPairing().collectPrefAsState()
             val heroShowUnreadBadge by preferences.heroShowUnreadBadges().collectPrefAsState()
+            val showCommunityRatings by preferences.showCommunityRatings().collectPrefAsState()
+            val communityRatingFormat by preferences.communityRatingFormat().collectPrefAsState()
+            val showRatingsOnHero by preferences.showRatingsOnHero().collectPrefAsState()
 
             val posterImageModel: Any = when {
                 "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
@@ -228,6 +232,8 @@ fun NuvioHeroSection(
                                 posterImageModel = posterImageModel,
                                 accentColor = accentColor,
                                 heroShowUnreadBadge = heroShowUnreadBadge,
+                                showRatingsOnHero = showRatingsOnHero && showCommunityRatings,
+                                communityRatingFormat = communityRatingFormat,
                                 onResumeClick = onResumeClick,
                             )
                         }
@@ -320,6 +326,8 @@ fun NuvioHeroSection(
                                 posterImageModel = posterImageModel,
                                 accentColor = accentColor,
                                 heroShowUnreadBadge = heroShowUnreadBadge,
+                                showRatingsOnHero = showRatingsOnHero && showCommunityRatings,
+                                communityRatingFormat = communityRatingFormat,
                                 onResumeClick = onResumeClick,
                             )
                         }
@@ -415,28 +423,40 @@ fun NuvioHeroSection(
                             .padding(horizontal = 16.dp, vertical = 20.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        // Format / Genre Pill (e.g. MANHWA • ACTION)
+                        // Format / Genre Pill (e.g. MANHWA • ACTION) + Community Rating
                         val genreText = if (item.genres.isNotEmpty()) {
                             item.genres.take(2).joinToString(" • ") { it.uppercase() }
                         } else {
                             "FEATURED"
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = accentColor.copy(alpha = 0.22f),
-                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.50f)),
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text(
-                                text = genreText,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp,
-                                    color = accentColor,
-                                ),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = accentColor.copy(alpha = 0.22f),
+                                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.50f)),
+                            ) {
+                                Text(
+                                    text = genreText,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.6.sp,
+                                        color = accentColor,
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                )
+                            }
+
+                            if (showRatingsOnHero && showCommunityRatings && item.communityRatings.isNotEmpty()) {
+                                CommunityRatingBadge(
+                                    ratings = item.communityRatings,
+                                    format = communityRatingFormat,
+                                )
+                            }
                         }
 
                         // Manga Title with Drop Shadow
@@ -613,6 +633,8 @@ private fun HeroAmbientForegroundContent(
     posterImageModel: Any,
     accentColor: Color,
     heroShowUnreadBadge: Boolean,
+    showRatingsOnHero: Boolean = true,
+    communityRatingFormat: Int = 0,
     onResumeClick: (HomeMangaItem) -> Unit,
 ) {
     Row(
@@ -711,11 +733,18 @@ private fun HeroAmbientForegroundContent(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            // Progress & Unread
+            // Progress, Unread & Community Ratings
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                if (showRatingsOnHero && item.communityRatings.isNotEmpty()) {
+                    CommunityRatingBadge(
+                        ratings = item.communityRatings,
+                        format = communityRatingFormat,
+                    )
+                }
+
                 val progressText = buildString {
                     if (item.lastChapterNumber != null) {
                         append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")

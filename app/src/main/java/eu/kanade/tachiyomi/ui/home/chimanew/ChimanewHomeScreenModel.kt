@@ -40,6 +40,7 @@ data class HomeMangaItem(
     val coverData: MangaCover,
     val highResBannerUrl: String? = null,
     val highResCoverUrl: String? = null,
+    val communityRatings: List<eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.CommunityRating> = emptyList(),
     val lastChapterNumber: Double? = null,
     val lastChapterId: Long? = null,
     val totalChapters: Long = 0,
@@ -267,6 +268,15 @@ class ChimanewHomeScreenModel(
                             bannerOptions = listOfNotNull(
                                 cachedAniList.bannerUrl?.let { eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkBannerOption(it, "ANILIST") },
                             ),
+                            ratings = listOfNotNull(
+                                if (cachedAniList.score10 != null || cachedAniList.score100 != null) {
+                                    eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.CommunityRating(
+                                        score10 = cachedAniList.score10,
+                                        score100 = cachedAniList.score100,
+                                        source = "AniList",
+                                    )
+                                } else null,
+                            ),
                         )
                         return artworkWaterfallRepository.getEffectiveArtwork(alArtwork)
                     }
@@ -295,6 +305,7 @@ class ChimanewHomeScreenModel(
                         coverData = coverData,
                         highResBannerUrl = artwork?.bannerUrl,
                         highResCoverUrl = artwork?.posterUrl,
+                        communityRatings = artwork?.ratings ?: emptyList(),
                         lastChapterNumber = lastChapterNumber,
                         lastChapterId = lastChapterId,
                         totalChapters = totalChapters,
@@ -473,7 +484,11 @@ class ChimanewHomeScreenModel(
                     val missingHeroArt = heroItems.filter { item ->
                         item.highResBannerUrl == null && !artworkWaterfallRepository.isCached(item.title)
                     }
-                    if (missingHeroArt.isNotEmpty()) {
+                    val missingLibraryArt = data.libraryList.filter { lib ->
+                        val mTitle = lib.manga.ogTitle ?: lib.manga.title
+                        !artworkWaterfallRepository.isCached(mTitle)
+                    }
+                    if (missingHeroArt.isNotEmpty() || missingLibraryArt.isNotEmpty()) {
                         screenModelScope.launchIO {
                             var anyUpdated = false
                             for (item in missingHeroArt) {
@@ -483,6 +498,7 @@ class ChimanewHomeScreenModel(
                                 val kitsuTrack = mangaTracks?.firstOrNull { it.trackerId == trackerManager.kitsu.id }
                                 val art = artworkWaterfallRepository.resolveArtwork(
                                     rawTitle = item.title,
+                                    mangaId = item.mangaId,
                                     anilistRemoteId = aniListTrack?.remoteId?.takeIf { it > 0 },
                                     kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
                                     malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
@@ -496,24 +512,21 @@ class ChimanewHomeScreenModel(
                                 artworkRefreshTrigger.value = System.currentTimeMillis()
                             }
 
-                            // Also resolve high-res covers in background for tracked library items
-                            for (lib in data.libraryList) {
+                            // Proactively warm library covers in background
+                            for (lib in missingLibraryArt) {
                                 val mTitle = lib.manga.ogTitle ?: lib.manga.title
-                                if (!artworkWaterfallRepository.isCached(mTitle)) {
-                                    val mTracks = tracksByManga[lib.manga.id]
-                                    val alTrack = mTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
-                                    val malTrack = mTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
-                                    val kitsuTrack = mTracks?.firstOrNull { it.trackerId == trackerManager.kitsu.id }
-                                    if (alTrack != null || malTrack != null || kitsuTrack != null) {
-                                        artworkWaterfallRepository.resolveArtwork(
-                                            rawTitle = mTitle,
-                                            anilistRemoteId = alTrack?.remoteId?.takeIf { it > 0 },
-                                            kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
-                                            malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
-                                        )
-                                        delay(80L)
-                                    }
-                                }
+                                val mTracks = tracksByManga[lib.manga.id]
+                                val alTrack = mTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                                val malTrack = mTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
+                                val kitsuTrack = mTracks?.firstOrNull { it.trackerId == trackerManager.kitsu.id }
+                                artworkWaterfallRepository.resolveArtwork(
+                                    rawTitle = mTitle,
+                                    mangaId = lib.manga.id,
+                                    anilistRemoteId = alTrack?.remoteId?.takeIf { it > 0 },
+                                    kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
+                                    malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
+                                )
+                                delay(80L)
                             }
                         }
                     }

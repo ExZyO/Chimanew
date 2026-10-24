@@ -6,8 +6,12 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -165,6 +169,9 @@ fun MangaInfoBox(
     val ambientCanvasStyle by chimanewPreferences.ambientCanvasStyle().collectAsState()
     val customBannerUrl by chimanewPreferences.mangaCustomBannerUrl(manga.id).collectAsState()
     val artworkWaterfallOrder by chimanewPreferences.artworkWaterfallOrder().collectAsState()
+    val showCommunityRatings by chimanewPreferences.showCommunityRatings().collectAsState()
+    val showRatingsInDetails by chimanewPreferences.showRatingsInDetails().collectAsState()
+    val communityRatingFormat by chimanewPreferences.communityRatingFormat().collectAsState()
 
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val mangaTitle = remember(manga) { manga.ogTitle ?: manga.title }
@@ -214,35 +221,19 @@ fun MangaInfoBox(
         (unifiedArtwork != null && chosenArtworkModel == unifiedArtwork?.bannerUrl)
     )
 
-    val activeStyle = if (useAnilistArtwork && isWideBanner) detailsBackdropStyle else 3
-    val backdropAlpha = when {
-        isWideBanner -> when (activeStyle) {
-            0 -> 0.55f // Cinematic Fade
-            1 -> 0.35f // Soft Blur
-            2 -> 0.85f // Full Opacity + Scrims
-            else -> 0.20f
-        }
-        else -> when (ambientCanvasStyle) {
-            0 -> 0.50f // Cinematic Ambient Blur
-            1 -> 0.35f // Dynamic Palette Mesh
-            2 -> 0.45f // Hybrid Ambient Texture
-            else -> 0.50f
-        }
+    val activeStyle = detailsBackdropStyle
+    val backdropAlpha = when (activeStyle) {
+        0 -> 0.55f // Cinematic Fade
+        1 -> 0.35f // Soft Blur
+        2 -> 0.85f // Full Opacity + Scrims
+        else -> 0.20f
     }
 
-    val backdropBlur = when {
-        isWideBanner -> when (activeStyle) {
-            0 -> 0.dp // Cinematic Fade - Crisp
-            1 -> 18.dp // Soft Atmospheric Blur
-            2 -> 0.dp // Full Opacity - Crisp
-            else -> 7.dp
-        }
-        else -> when (ambientCanvasStyle) {
-            0 -> 28.dp // Option A: Cinematic Ambient Blur
-            1 -> 20.dp // Option B: Dynamic Palette Mesh
-            2 -> 24.dp // Option C: Hybrid Ambient Texture
-            else -> 28.dp
-        }
+    val backdropBlur = when (activeStyle) {
+        0 -> 0.dp // Cinematic Fade - Crisp
+        1 -> 18.dp // Soft Atmospheric Blur
+        2 -> 0.dp // Full Opacity - Crisp
+        else -> 7.dp
     }
 
     val detailsBackdropScale by chimanewPreferences.detailsBackdropScale().collectAsState()
@@ -279,7 +270,7 @@ fun MangaInfoBox(
             )
 
             // Layer 2: Main Artwork Layer
-            val isFillWidth = isWideBanner && (detailsBackdropScale == 0 || detailsBackdropScale == 1)
+            val isFillWidth = (detailsBackdropScale == 0 || detailsBackdropScale == 1)
             val topBannerPadding = if (isFillWidth) {
                 (appBarPadding * 0.65f).coerceAtLeast(18.dp)
             } else {
@@ -316,33 +307,32 @@ fun MangaInfoBox(
             Canvas(
                 modifier = Modifier.matchParentSize(),
             ) {
-                if (isWideBanner) {
-                    // Top scrim for status bar and navigation action readability
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.70f),
-                                Color.Black.copy(alpha = 0.25f),
-                                Color.Transparent,
-                            ),
-                            endY = size.height * 0.40f,
+                // Top scrim for status bar and navigation action readability
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.70f),
+                            Color.Black.copy(alpha = 0.25f),
+                            Color.Transparent,
                         ),
-                    )
-                    // Bottom vertical dissolve: seamlessly ramps to 100% solid backgroundColor
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.40f),
-                                backgroundColor.copy(alpha = 0.85f),
-                                backgroundColor,
-                            ),
-                            startY = size.height * 0.45f,
-                            endY = size.height,
+                        endY = size.height * 0.40f,
+                    ),
+                )
+                // Bottom vertical dissolve: seamlessly ramps to 100% solid backgroundColor
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            backgroundColor.copy(alpha = 0.40f),
+                            backgroundColor.copy(alpha = 0.85f),
+                            backgroundColor,
                         ),
-                    )
-                } else {
-                    // Ambient Canvas fallback styles
+                        startY = size.height * 0.45f,
+                        endY = size.height,
+                    ),
+                )
+
+                if (!isWideBanner) {
                     when (ambientCanvasStyle) {
                         1 -> {
                             // Option B: Dynamic Palette Mesh
@@ -379,33 +369,15 @@ fun MangaInfoBox(
                                 ),
                             )
                         }
-                        else -> {
-                            // Option A: Cinematic Ambient Blur - Deep Top Scrim
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.65f),
-                                        Color.Transparent,
-                                    ),
-                                    endY = size.height * 0.35f,
-                                ),
-                            )
-                        }
                     }
-                    // Bottom fade to background
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.50f),
-                                backgroundColor,
-                            ),
-                            startY = size.height * 0.45f,
-                            endY = size.height,
-                        ),
-                    )
                 }
             }
+        }
+
+        val effectiveRatings = if (showCommunityRatings && showRatingsInDetails) {
+            unifiedArtwork?.ratings ?: emptyList()
+        } else {
+            emptyList()
         }
 
         // Manga & source info
@@ -430,6 +402,8 @@ fun MangaInfoBox(
                     usePanoramaCover = usePanoramaCover,
                     topAlignCover = topAlignCover,
                     // KMK <--
+                    communityRatings = effectiveRatings,
+                    communityRatingFormat = communityRatingFormat,
                 )
             } else {
                 MangaAndSourceTitlesLarge(
@@ -450,6 +424,8 @@ fun MangaInfoBox(
                     coverRatio = coverRatio,
                     usePanoramaCover = usePanoramaCover,
                     // KMK <--
+                    communityRatings = effectiveRatings,
+                    communityRatingFormat = communityRatingFormat,
                 )
             }
         }
@@ -729,6 +705,8 @@ private fun MangaAndSourceTitlesLarge(
     coverRatio: MutableFloatState,
     usePanoramaCover: Boolean = false,
     // KMK <--
+    communityRatings: List<CommunityRating> = emptyList(),
+    communityRatingFormat: Int = 0,
 ) {
     Column(
         modifier = Modifier
@@ -791,6 +769,8 @@ private fun MangaAndSourceTitlesLarge(
             librarySearch = librarySearch,
             onSourceClick = onSourceClick,
             // KMK <--
+            communityRatings = communityRatings,
+            communityRatingFormat = communityRatingFormat,
         )
     }
 }
@@ -815,6 +795,8 @@ private fun MangaAndSourceTitlesSmall(
     usePanoramaCover: Boolean = false,
     topAlignCover: Boolean = false,
     // KMK <--
+    communityRatings: List<CommunityRating> = emptyList(),
+    communityRatingFormat: Int = 0,
 ) {
     Row(
         modifier = Modifier
@@ -887,6 +869,8 @@ private fun MangaAndSourceTitlesSmall(
                 librarySearch = librarySearch,
                 onSourceClick = onSourceClick,
                 // KMK <--
+                communityRatings = communityRatings,
+                communityRatingFormat = communityRatingFormat,
             )
         }
     }
@@ -911,6 +895,8 @@ private fun ColumnScope.MangaContentInfo(
     librarySearch: (query: String) -> Unit,
     onSourceClick: () -> Unit,
     // KMK <--
+    communityRatings: List<CommunityRating> = emptyList(),
+    communityRatingFormat: Int = 0,
 ) {
     val context = LocalContext.current
     // KMK -->
@@ -1025,6 +1011,15 @@ private fun ColumnScope.MangaContentInfo(
     }
 
     Spacer(modifier = Modifier.height(2.dp))
+
+    if (communityRatings.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(2.dp))
+        CommunityRatingBadge(
+            ratings = communityRatings,
+            format = communityRatingFormat,
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+    }
 
     Row(
         modifier = Modifier.secondaryItemAlpha(),
@@ -1293,5 +1288,66 @@ internal fun RowScope.MangaActionButton(
                 textAlign = TextAlign.Center,
             )
         }
+    }
+}
+
+// EaZy Nuvio+ / Chimanew: Community Rating Badges
+@Composable
+fun CommunityRatingBadge(
+    ratings: List<CommunityRating>,
+    format: Int,
+    modifier: Modifier = Modifier,
+) {
+    if (ratings.isEmpty()) return
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (format == 4) {
+            ratings.forEach { r ->
+                SingleRatingChip(
+                    text = "★ ${String.format(java.util.Locale.US, "%.1f", r.score10)} ${r.source.take(2).uppercase()}",
+                    isAmber = true,
+                )
+            }
+        } else {
+            val r = ratings.first()
+            val text = when (format) {
+                0 -> "★ ${String.format(java.util.Locale.US, "%.1f", r.score10)}"
+                1 -> "${r.score100}%"
+                2 -> "★ ${String.format(java.util.Locale.US, "%.1f", r.score10)} • ${r.source}"
+                3 -> "${r.score100}% • ${r.source}"
+                else -> "★ ${String.format(java.util.Locale.US, "%.1f", r.score10)}"
+            }
+            SingleRatingChip(
+                text = text,
+                isAmber = format != 1 && format != 3,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SingleRatingChip(
+    text: String,
+    isAmber: Boolean,
+) {
+    val bgColor = if (isAmber) Color(0xFFF59E0B).copy(alpha = 0.20f) else Color(0xFF06B6D4).copy(alpha = 0.20f)
+    val textColor = if (isAmber) Color(0xFFFCD34D) else Color(0xFF67E8F9)
+    val borderColor = if (isAmber) Color(0xFFF59E0B).copy(alpha = 0.45f) else Color(0xFF06B6D4).copy(alpha = 0.45f)
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = bgColor,
+        border = BorderStroke(1.dp, borderColor),
+    ) {
+        Text(
+            text = text,
+            color = textColor,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
     }
 }

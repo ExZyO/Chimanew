@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
@@ -46,11 +47,26 @@ internal fun LibraryCompactGrid(
             contentType = { "library_compact_grid_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
-            val highResCover = if (useAnilistArtwork) {
-                val mTitle = manga.ogTitle ?: manga.title
-                waterfallRepo.getCached(mTitle)?.posterUrl
-            } else {
-                null
+            val highResCover by produceState<String?>(
+                initialValue = if (useAnilistArtwork) {
+                    val mTitle = manga.ogTitle ?: manga.title
+                    waterfallRepo.getCached(mTitle)?.posterUrl
+                } else null,
+                key1 = manga.id,
+                key2 = useAnilistArtwork,
+            ) {
+                if (useAnilistArtwork) {
+                    val mTitle = manga.ogTitle ?: manga.title
+                    val cached = waterfallRepo.getCached(mTitle)?.posterUrl
+                    if (cached != null) {
+                        value = cached
+                    } else {
+                        val resolved = waterfallRepo.resolveArtwork(mTitle, mangaId = manga.id)
+                        value = resolved.posterUrl
+                    }
+                } else {
+                    value = null
+                }
             }
             MangaCompactGridItem(
                 isSelected = manga.id in selection,

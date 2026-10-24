@@ -22,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap
 data class KitsuMediaArtwork(
     val bannerUrl: String? = null,
     val posterUrl: String? = null,
+    val score10: Float? = null,
+    val score100: Int? = null,
 )
 
 class KitsuCoverRepository(
@@ -42,7 +44,7 @@ class KitsuCoverRepository(
                 val url = "$API_URL/manga/$kitsuId"
                 val headers = Headers.Builder()
                     .add("Accept", "application/vnd.api+json")
-                    .add("User-Agent", "Chimanew/2.6.0")
+                    .add("User-Agent", "Chimanew/2.6.1")
                     .build()
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()
@@ -57,8 +59,11 @@ class KitsuCoverRepository(
                 val posterUrl = attributes["posterImage"]?.jsonObject?.let {
                     it["large"]?.jsonPrimitive?.content ?: it["original"]?.jsonPrimitive?.content
                 }
+                val avgRating = attributes["averageRating"]?.jsonPrimitive?.contentOrNull?.toFloatOrNull()
+                val score10 = avgRating?.let { it / 10f }
+                val score100 = avgRating?.toInt()
 
-                val artwork = KitsuMediaArtwork(bannerUrl, posterUrl)
+                val artwork = KitsuMediaArtwork(bannerUrl, posterUrl, score10, score100)
                 idCache[kitsuId] = artwork
                 artwork
             } catch (e: Exception) {
@@ -79,7 +84,7 @@ class KitsuCoverRepository(
                 val url = "$API_URL/manga?filter[text]=$encoded&page[limit]=5"
                 val headers = Headers.Builder()
                     .add("Accept", "application/vnd.api+json")
-                    .add("User-Agent", "Chimanew/2.6.0")
+                    .add("User-Agent", "Chimanew/2.6.1")
                     .build()
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()
@@ -114,8 +119,11 @@ class KitsuCoverRepository(
                 val posterUrl = matchedObj["posterImage"]?.jsonObject?.let {
                     it["large"]?.jsonPrimitive?.content ?: it["original"]?.jsonPrimitive?.content
                 }
+                val avgRating = matchedObj["averageRating"]?.jsonPrimitive?.contentOrNull?.toFloatOrNull()
+                val score10 = avgRating?.let { it / 10f }
+                val score100 = avgRating?.toInt()
 
-                val artwork = KitsuMediaArtwork(bannerUrl, posterUrl)
+                val artwork = KitsuMediaArtwork(bannerUrl, posterUrl, score10, score100)
                 titleCache[title] = artwork
                 artwork
             } catch (e: Exception) {

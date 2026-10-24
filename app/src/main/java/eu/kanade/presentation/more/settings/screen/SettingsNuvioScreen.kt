@@ -41,6 +41,7 @@ object SettingsNuvioScreen : SearchableSettings {
             getShelvesGroup(chimanewPreferences, navigator),
             getCardsGroup(chimanewPreferences),
             getArtworkGroup(chimanewPreferences, navigator),
+            getRatingsGroup(chimanewPreferences),
             getDetailsPageGroup(chimanewPreferences),
             getNavbarGroup(chimanewPreferences),
         )
@@ -292,6 +293,45 @@ object SettingsNuvioScreen : SearchableSettings {
                     ),
                     title = stringResource(MR.strings.pref_chimanew_artwork_ambient_style),
                     subtitle = stringResource(MR.strings.pref_chimanew_artwork_ambient_style_summary),
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getRatingsGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
+        val showRatings by preferences.showCommunityRatings().collectPrefAsState()
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_chimanew_ratings_category),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.showCommunityRatings(),
+                    title = stringResource(MR.strings.pref_chimanew_show_community_ratings),
+                    subtitle = stringResource(MR.strings.pref_chimanew_show_community_ratings_summary),
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.communityRatingFormat(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_community_rating_format_star),
+                        1 to stringResource(MR.strings.pref_chimanew_community_rating_format_percentage),
+                        2 to stringResource(MR.strings.pref_chimanew_community_rating_format_star_source),
+                        3 to stringResource(MR.strings.pref_chimanew_community_rating_format_percentage_source),
+                        4 to stringResource(MR.strings.pref_chimanew_community_rating_format_multi),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_community_rating_format),
+                    enabled = showRatings,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.showRatingsOnHero(),
+                    title = stringResource(MR.strings.pref_chimanew_show_ratings_on_hero),
+                    subtitle = stringResource(MR.strings.pref_chimanew_show_ratings_on_hero_summary),
+                    enabled = showRatings,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.showRatingsInDetails(),
+                    title = stringResource(MR.strings.pref_chimanew_show_ratings_in_details),
+                    subtitle = stringResource(MR.strings.pref_chimanew_show_ratings_in_details_summary),
+                    enabled = showRatings,
                 ),
             ),
         )

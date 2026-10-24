@@ -68,6 +68,27 @@ class ChimanewPreferences(
         "anilist:true,kitsu:true,mangadex:true",
     )
 
+    fun artworkBannerOrder() = preferenceStore.getString(
+        "pref_chimanew_artwork_banner_order",
+        "anilist:true,kitsu:true",
+    )
+
+    fun artworkCoverOrder() = preferenceStore.getString(
+        "pref_chimanew_artwork_cover_order",
+        "mangadex:true,anilist:true,kitsu:true",
+    )
+
+    fun showCommunityRatings() = preferenceStore.getBoolean("pref_chimanew_show_community_ratings", true)
+
+    fun communityRatingFormat() = preferenceStore.getInt(
+        "pref_chimanew_community_rating_format",
+        0, // 0 = Golden Star, 1 = Percentage, 2 = Star + Source, 3 = Percentage + Source, 4 = Combined Multi-Tracker
+    )
+
+    fun showRatingsOnHero() = preferenceStore.getBoolean("pref_chimanew_show_ratings_on_hero", true)
+
+    fun showRatingsInDetails() = preferenceStore.getBoolean("pref_chimanew_show_ratings_in_details", true)
+
     fun ambientCanvasStyle() = preferenceStore.getInt(
         "pref_chimanew_ambient_canvas_style",
         0, // 0 = Cinematic Blur, 1 = Palette Mesh, 2 = Hybrid Texture
