@@ -19,6 +19,12 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 @Serializable
+data class PersistedBannerOption(
+    val url: String,
+    val source: String,
+)
+
+@Serializable
 data class PersistedCoverOption(
     val url: String,
     val source: String,
@@ -31,6 +37,12 @@ data class PersistedArtworkEntry(
     val posterUrl: String? = null,
     val allBanners: List<String> = emptyList(),
     val allCovers: List<PersistedCoverOption> = emptyList(),
+    val bannerOptions: List<PersistedBannerOption> = emptyList(),
+)
+
+data class ArtworkBannerOption(
+    val url: String,
+    val source: String,
 )
 
 data class ArtworkCoverOption(
@@ -44,6 +56,7 @@ data class UnifiedArtwork(
     val posterUrl: String? = null,
     val allAvailableBanners: List<String> = emptyList(),
     val allAvailableCovers: List<ArtworkCoverOption> = emptyList(),
+    val bannerOptions: List<ArtworkBannerOption> = emptyList(),
 )
 
 class ArtworkWaterfallRepository(
@@ -57,6 +70,12 @@ class ArtworkWaterfallRepository(
     private val cache = ConcurrentHashMap<String, UnifiedArtwork>()
     private val scope = CoroutineScope(Dispatchers.IO)
     private val cacheFile by lazy { File(context.filesDir, "chimanew_artwork_waterfall_cache.json") }
+    private val jsonHelper = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        encodeDefaults = true
+        prettyPrint = false
+    }
     private var saveJob: Job? = null
 
     init {
@@ -68,13 +87,26 @@ class ArtworkWaterfallRepository(
             if (cacheFile.exists()) {
                 val content = cacheFile.readText()
                 if (content.isNotBlank()) {
-                    val persistedMap = json.decodeFromString<Map<String, PersistedArtworkEntry>>(content)
+                    val persistedMap = jsonHelper.decodeFromString<Map<String, PersistedArtworkEntry>>(content)
                     for ((title, entry) in persistedMap) {
+                        val bannersWithOptions = if (entry.bannerOptions.isNotEmpty()) {
+                            entry.bannerOptions.map { ArtworkBannerOption(it.url, it.source) }
+                        } else {
+                            entry.allBanners.map { url ->
+                                val inferredSource = when {
+                                    url.contains("kitsu", ignoreCase = true) -> "KITSU"
+                                    url.contains("anilist", ignoreCase = true) -> "ANILIST"
+                                    else -> "ANILIST"
+                                }
+                                ArtworkBannerOption(url, inferredSource)
+                            }
+                        }
                         cache[title] = UnifiedArtwork(
-                            bannerUrl = entry.bannerUrl,
-                            posterUrl = entry.posterUrl,
-                            allAvailableBanners = entry.allBanners,
+                            bannerUrl = null,
+                            posterUrl = null,
+                            allAvailableBanners = entry.allBanners.ifEmpty { bannersWithOptions.map { it.url } },
                             allAvailableCovers = entry.allCovers.map { ArtworkCoverOption(it.url, it.source, it.subtitle) },
+                            bannerOptions = bannersWithOptions,
                         )
                     }
                 }
@@ -95,9 +127,10 @@ class ArtworkWaterfallRepository(
                         posterUrl = value.posterUrl,
                         allBanners = value.allAvailableBanners,
                         allCovers = value.allAvailableCovers.map { PersistedCoverOption(it.url, it.source, it.subtitle) },
+                        bannerOptions = value.bannerOptions.map { PersistedBannerOption(it.url, it.source) },
                     )
                 }
-                val content = json.encodeToString(snapshot)
+                val content = jsonHelper.encodeToString(snapshot)
                 cacheFile.writeText(content)
             } catch (e: Exception) {
                 logcat(throwable = e) { "Failed to save persistent artwork cache to disk" }
@@ -105,7 +138,44 @@ class ArtworkWaterfallRepository(
         }
     }
 
-    fun getCached(title: String): UnifiedArtwork? = cache[cleanTitle(title)]
+    fun isCached(title: String): Boolean = cache.containsKey(cleanTitle(title))
+
+    fun getEffectiveArtwork(raw: UnifiedArtwork): UnifiedArtwork {
+        val configuredOrder = parsePriorityOrder(preferences.artworkWaterfallOrder().get())
+
+        var effectiveBanner: String? = null
+        for (provider in configuredOrder) {
+            val banner = raw.bannerOptions.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
+                ?: when (provider) {
+                    "ANILIST" -> raw.allAvailableBanners.firstOrNull { it.contains("anilist", ignoreCase = true) }
+                    "KITSU" -> raw.allAvailableBanners.firstOrNull { it.contains("kitsu", ignoreCase = true) }
+                    else -> null
+                }
+            if (!banner.isNullOrBlank()) {
+                effectiveBanner = banner
+                break
+            }
+        }
+
+        var effectivePoster: String? = null
+        for (provider in configuredOrder) {
+            val cover = raw.allAvailableCovers.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
+            if (!cover.isNullOrBlank()) {
+                effectivePoster = cover
+                break
+            }
+        }
+
+        return raw.copy(
+            bannerUrl = effectiveBanner,
+            posterUrl = effectivePoster,
+        )
+    }
+
+    fun getCached(title: String): UnifiedArtwork? {
+        val raw = cache[cleanTitle(title)] ?: return null
+        return getEffectiveArtwork(raw)
+    }
 
     suspend fun resolveArtwork(
         rawTitle: String,
@@ -114,21 +184,14 @@ class ArtworkWaterfallRepository(
     ): UnifiedArtwork {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return UnifiedArtwork()
-        cache[title]?.let { return it }
+        cache[title]?.let { return getEffectiveArtwork(it) }
 
-        val configuredOrder = parsePriorityOrder(preferences.artworkWaterfallOrder().get())
-
-        // Always query configured providers first, then any unlisted providers for additional covers
         val allProviders = listOf("ANILIST", "KITSU", "MANGADEX")
-        val fullOrder = configuredOrder + (allProviders - configuredOrder.toSet())
-
-        var resolvedBanner: String? = null
-        var resolvedPoster: String? = null
         val banners = mutableListOf<String>()
+        val bannerOptions = mutableListOf<ArtworkBannerOption>()
         val covers = mutableListOf<ArtworkCoverOption>()
 
-        for (provider in fullOrder) {
-            val isEnabled = provider in configuredOrder
+        for (provider in allProviders) {
             when (provider) {
                 "ANILIST" -> {
                     val alArt = if (anilistRemoteId != null && anilistRemoteId > 0) {
@@ -140,17 +203,12 @@ class ArtworkWaterfallRepository(
                     alArt?.bannerUrl?.let {
                         if (it.isNotBlank()) {
                             banners.add(it)
-                            if (resolvedBanner == null && isEnabled) {
-                                resolvedBanner = it
-                            }
+                            bannerOptions.add(ArtworkBannerOption(it, "ANILIST"))
                         }
                     }
                     alArt?.extraLargeCoverUrl?.let {
                         if (it.isNotBlank()) {
                             covers.add(ArtworkCoverOption(url = it, source = "AniList", subtitle = "HD Poster"))
-                            if (resolvedPoster == null && isEnabled) {
-                                resolvedPoster = it
-                            }
                         }
                     }
                 }
@@ -164,17 +222,12 @@ class ArtworkWaterfallRepository(
                     kitsuArt?.bannerUrl?.let {
                         if (it.isNotBlank()) {
                             banners.add(it)
-                            if (resolvedBanner == null && isEnabled) {
-                                resolvedBanner = it
-                            }
+                            bannerOptions.add(ArtworkBannerOption(it, "KITSU"))
                         }
                     }
                     kitsuArt?.posterUrl?.let {
                         if (it.isNotBlank()) {
                             covers.add(ArtworkCoverOption(url = it, source = "Kitsu", subtitle = "Official Poster"))
-                            if (resolvedPoster == null && isEnabled) {
-                                resolvedPoster = it
-                            }
                         }
                     }
                 }
@@ -185,23 +238,21 @@ class ArtworkWaterfallRepository(
                             val sub = listOfNotNull(c.volume?.let { "Vol. $it" }, c.locale).joinToString(" ").ifBlank { null }
                             covers.add(ArtworkCoverOption(url = c.url, source = "MangaDex", subtitle = sub))
                         }
-                        if (resolvedPoster == null && mdCovers.isNotEmpty() && isEnabled) {
-                            resolvedPoster = mdCovers.firstOrNull()?.url
-                        }
                     }
                 }
             }
         }
 
-        val result = UnifiedArtwork(
-            bannerUrl = resolvedBanner,
-            posterUrl = resolvedPoster,
+        val rawResult = UnifiedArtwork(
+            bannerUrl = null,
+            posterUrl = null,
             allAvailableBanners = banners.distinct(),
             allAvailableCovers = covers.distinctBy { it.url },
+            bannerOptions = bannerOptions.distinctBy { it.url },
         )
-        cache[title] = result
+        cache[title] = rawResult
         scheduleSaveToDisk()
-        return result
+        return getEffectiveArtwork(rawResult)
     }
 
     companion object {
@@ -234,7 +285,7 @@ class ArtworkWaterfallRepository(
                     }
                 }
             }
-            return result.ifEmpty { listOf("ANILIST", "KITSU", "MANGADEX") }
+            return result
         }
     }
 }

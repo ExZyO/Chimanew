@@ -126,7 +126,6 @@ fun NuvioHeroSection(
                 heroArtworkPairing == 1 -> posterImageModel // Unified: same cover for both
                 // Separate: wide banner for backdrop with automatic fallback to posterImageModel if no banner
                 !item.highResBannerUrl.isNullOrBlank() && "banner" in heroArtworkSources -> item.highResBannerUrl
-                !item.highResBannerUrl.isNullOrBlank() -> item.highResBannerUrl
                 else -> posterImageModel
             }
 

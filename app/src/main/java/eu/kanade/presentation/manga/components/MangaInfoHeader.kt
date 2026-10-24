@@ -163,8 +163,9 @@ fun MangaInfoBox(
     val detailsBackdropArtwork by chimanewPreferences.detailsBackdropArtwork().collectAsState()
     val ambientCanvasStyle by chimanewPreferences.ambientCanvasStyle().collectAsState()
     val customBannerUrl by chimanewPreferences.mangaCustomBannerUrl(manga.id).collectAsState()
+    val artworkWaterfallOrder by chimanewPreferences.artworkWaterfallOrder().collectAsState()
 
-    val unifiedArtwork by produceState<UnifiedArtwork?>(initialValue = null, manga.id, useAnilistArtwork) {
+    val unifiedArtwork by produceState<UnifiedArtwork?>(initialValue = null, manga.id, useAnilistArtwork, artworkWaterfallOrder) {
         if (!useAnilistArtwork) {
             value = null
             return@produceState

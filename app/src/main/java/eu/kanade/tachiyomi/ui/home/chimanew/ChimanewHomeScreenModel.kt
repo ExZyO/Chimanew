@@ -76,6 +76,7 @@ private data class HeroPrefs(
     val useAnilistArtwork: Boolean,
     val heroArtworkSources: Set<String>,
     val heroTrackerStatuses: Set<String>,
+    val artworkWaterfallOrder: String,
 )
 
 @Immutable
@@ -105,6 +106,7 @@ private data class NuvioHomePrefs(
     val heroArtworkSources: Set<String>,
     val heroCategories: Set<String>,
     val heroTrackerStatuses: Set<String>,
+    val artworkWaterfallOrder: String,
     val showContinue: Boolean,
     val showUpdated: Boolean,
     val showCategoryShelves: Boolean,
@@ -165,8 +167,9 @@ class ChimanewHomeScreenModel(
                 preferences.useAnilistArtwork().changes(),
                 preferences.heroArtworkSources().changes(),
                 preferences.heroTrackerStatuses().changes(),
-            ) { (showHero, heroSource, heroStyle), useAnilist, artworkSources, trackerStatuses ->
-                HeroPrefs(showHero, heroSource, heroStyle, useAnilist, artworkSources, trackerStatuses)
+                preferences.artworkWaterfallOrder().changes(),
+            ) { (showHero, heroSource, heroStyle), useAnilist, artworkSources, trackerStatuses, waterfallOrder ->
+                HeroPrefs(showHero, heroSource, heroStyle, useAnilist, artworkSources, trackerStatuses, waterfallOrder)
             }
 
             val shelvesPrefsFlow = combine(
@@ -198,6 +201,7 @@ class ChimanewHomeScreenModel(
                     heroArtworkSources = heroPrefs.heroArtworkSources,
                     heroCategories = cardPrefs.heroCategories,
                     heroTrackerStatuses = heroPrefs.heroTrackerStatuses,
+                    artworkWaterfallOrder = heroPrefs.artworkWaterfallOrder,
                     showContinue = shelvesPrefs.showContinue,
                     showUpdated = shelvesPrefs.showUpdated,
                     showCategoryShelves = shelvesPrefs.showCategoryShelves,
@@ -238,10 +242,20 @@ class ChimanewHomeScreenModel(
                         anilistCoverRepository.getCachedByTitle(title)
                     }
                     if (cachedAniList != null) {
-                        return UnifiedArtwork(
+                        val alArtwork = UnifiedArtwork(
                             bannerUrl = cachedAniList.bannerUrl,
                             posterUrl = cachedAniList.extraLargeCoverUrl,
+                            allAvailableBanners = listOfNotNull(cachedAniList.bannerUrl),
+                            allAvailableCovers = listOfNotNull(
+                                cachedAniList.extraLargeCoverUrl?.let {
+                                    eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkCoverOption(url = it, source = "AniList", subtitle = "HD Poster")
+                                },
+                            ),
+                            bannerOptions = listOfNotNull(
+                                cachedAniList.bannerUrl?.let { eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkBannerOption(it, "ANILIST") },
+                            ),
                         )
+                        return artworkWaterfallRepository.getEffectiveArtwork(alArtwork)
                     }
                     return null
                 }
@@ -444,7 +458,7 @@ class ChimanewHomeScreenModel(
 
                 if (prefs.useAnilistArtwork) {
                     val missingHeroArt = heroItems.filter { item ->
-                        item.highResBannerUrl == null && artworkWaterfallRepository.getCached(item.title) == null
+                        item.highResBannerUrl == null && !artworkWaterfallRepository.isCached(item.title)
                     }
                     if (missingHeroArt.isNotEmpty()) {
                         screenModelScope.launchIO {
