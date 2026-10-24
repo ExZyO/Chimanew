@@ -42,7 +42,7 @@ class KitsuCoverRepository(
                 val url = "$API_URL/manga/$kitsuId"
                 val headers = Headers.Builder()
                     .add("Accept", "application/vnd.api+json")
-                    .add("User-Agent", "Chimanew/2.5.8")
+                    .add("User-Agent", "Chimanew/2.6.0")
                     .build()
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()
@@ -79,7 +79,7 @@ class KitsuCoverRepository(
                 val url = "$API_URL/manga?filter[text]=$encoded&page[limit]=5"
                 val headers = Headers.Builder()
                     .add("Accept", "application/vnd.api+json")
-                    .add("User-Agent", "Chimanew/2.5.9")
+                    .add("User-Agent", "Chimanew/2.6.0")
                     .build()
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()

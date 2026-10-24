@@ -48,7 +48,7 @@ class MangadexCoverRepository(
             try {
                 val url = "$API_URL/cover?manga[]=$mangaId&limit=50&order[volume]=desc"
                 val headers = Headers.Builder()
-                    .add("User-Agent", "Chimanew/2.5.8")
+                    .add("User-Agent", "Chimanew/2.6.0")
                     .build()
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()
@@ -85,7 +85,7 @@ class MangadexCoverRepository(
                 val encoded = URLEncoder.encode(title, "UTF-8")
                 val searchUrl = "$API_URL/manga?title=$encoded&limit=5&order[relevance]=desc"
                 val headers = Headers.Builder()
-                    .add("User-Agent", "Chimanew/2.5.9")
+                    .add("User-Agent", "Chimanew/2.6.0")
                     .build()
 
                 val searchResponse = client.newCall(GET(searchUrl, headers)).awaitSuccess()
