@@ -75,7 +75,8 @@ fun NuvioHeroSection(
 
     val preferences = remember { Injekt.get<ChimanewPreferences>() }
     val heroRequireSelectedArtwork by preferences.heroRequireSelectedArtwork().collectPrefAsState()
-    val displayItems = remember(items, heroStyle, heroRequireSelectedArtwork) {
+    val heroArtworkPairing by preferences.heroArtworkPairing().collectPrefAsState()
+    val displayItems = remember(items, heroStyle, heroRequireSelectedArtwork, heroArtworkSources, heroArtworkPairing) {
         if (!heroRequireSelectedArtwork) {
             items
         } else {
@@ -83,7 +84,18 @@ fun NuvioHeroSection(
                 val hasBanner = !item.highResBannerUrl.isNullOrBlank()
                 val hasCover = !item.highResCoverUrl.isNullOrBlank()
                 when (heroStyle) {
-                    2 -> hasBanner && hasCover
+                    2 -> {
+                        if (heroArtworkPairing == 1) {
+                            hasCover
+                        } else {
+                            val needsBanner = "banner" in heroArtworkSources
+                            val needsCover = "cover" in heroArtworkSources
+                            if (needsBanner && needsCover) hasBanner && hasCover
+                            else if (needsBanner) hasBanner
+                            else if (needsCover) hasCover
+                            else hasCover
+                        }
+                    }
                     1 -> hasBanner
                     0 -> hasCover
                     else -> hasCover
@@ -204,6 +216,7 @@ fun NuvioHeroSection(
                                             ambientStyle = ambientCanvasStyle,
                                             accentColor = accentColor,
                                             dimBanner = heroDimBanner,
+                                            allowCoverBlur = heroAllowCroppedFallback,
                                         )
                                     }
                                 },
@@ -214,6 +227,7 @@ fun NuvioHeroSection(
                                 ambientStyle = ambientCanvasStyle,
                                 accentColor = accentColor,
                                 dimBanner = heroDimBanner,
+                                allowCoverBlur = heroAllowCroppedFallback,
                             )
                         }
 
@@ -313,6 +327,7 @@ fun NuvioHeroSection(
                                             ambientStyle = ambientCanvasStyle,
                                             accentColor = accentColor,
                                             dimBanner = heroDimBanner,
+                                            allowCoverBlur = heroAllowCroppedFallback,
                                         )
                                     }
                                 },
@@ -323,6 +338,7 @@ fun NuvioHeroSection(
                                 ambientStyle = ambientCanvasStyle,
                                 accentColor = accentColor,
                                 dimBanner = heroDimBanner,
+                                allowCoverBlur = heroAllowCroppedFallback,
                             )
                         }
 
@@ -423,6 +439,7 @@ fun NuvioHeroSection(
                                             ambientStyle = ambientCanvasStyle,
                                             accentColor = accentColor,
                                             dimBanner = heroDimBanner,
+                                            allowCoverBlur = heroAllowCroppedFallback,
                                         )
                                     }
                                 },
@@ -433,6 +450,7 @@ fun NuvioHeroSection(
                                 ambientStyle = ambientCanvasStyle,
                                 accentColor = accentColor,
                                 dimBanner = heroDimBanner,
+                                allowCoverBlur = heroAllowCroppedFallback,
                             )
                         }
 
@@ -899,6 +917,7 @@ fun HeroFallbackBackgroundCanvas(
     ambientStyle: Int,
     accentColor: Color,
     dimBanner: Boolean,
+    allowCoverBlur: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -949,20 +968,22 @@ fun HeroFallbackBackgroundCanvas(
             2 -> {
                 // Style 2: Frosted Glass (Subtle Matte Texture)
                 Box(modifier = Modifier.fillMaxSize()) {
-                    SubcomposeAsyncImage(
-                        model = posterModel,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .blur(48.dp)
-                            .alpha(if (dimBanner) 0.25f else 0.45f),
-                        loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
-                        error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
-                    )
+                    if (allowCoverBlur) {
+                        SubcomposeAsyncImage(
+                            model = posterModel,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(48.dp)
+                                .alpha(if (dimBanner) 0.25f else 0.45f),
+                            loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
+                            error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
+                        )
+                    }
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawRect(color = Color(0xFF141416).copy(alpha = 0.55f))
+                        drawRect(color = Color(0xFF141416).copy(alpha = if (allowCoverBlur) 0.55f else 1.0f))
                         // Top specular sheen
                         drawRect(
                             brush = Brush.verticalGradient(
@@ -990,35 +1011,39 @@ fun HeroFallbackBackgroundCanvas(
                 }
             }
             else -> {
-                // Style 0 (Default): Cinematic Blur (Gentle ambient glow)
-                SubcomposeAsyncImage(
-                    model = posterModel,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.Center,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(36.dp)
-                        .alpha(if (dimBanner) 0.45f else 0.80f),
-                    loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
-                    error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
-                )
-                // Color ambient wash
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    accentColor.copy(alpha = if (dimBanner) 0.40f else 0.60f),
-                                    accentColor.copy(alpha = 0.15f),
-                                    Color.Transparent,
+                // Style 0 (Default): Clean Subtle Aura (or Gentle ambient glow)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (allowCoverBlur) {
+                        SubcomposeAsyncImage(
+                            model = posterModel,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(36.dp)
+                                .alpha(if (dimBanner) 0.45f else 0.80f),
+                            loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
+                            error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
+                        )
+                    }
+                    // Color ambient wash
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        accentColor.copy(alpha = if (dimBanner) 0.40f else 0.60f),
+                                        accentColor.copy(alpha = 0.15f),
+                                        if (allowCoverBlur) Color.Transparent else Color(0xFF121215),
+                                    ),
+                                    center = Offset(250f, 200f),
+                                    radius = 800f,
                                 ),
-                                center = Offset(250f, 200f),
-                                radius = 800f,
                             ),
-                        ),
-                )
+                    )
+                }
             }
         }
     }

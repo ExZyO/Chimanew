@@ -70,10 +70,14 @@ class ArtworkPriorityCustomizerScreen : Screen() {
         const val PROVIDER_MANGADEX = "mangadex"
         const val PROVIDER_NAVER = "naver"
         const val PROVIDER_KUAIKAN = "kuaikan"
+        const val PROVIDER_BOOKWALKER = "bookwalker"
+        const val PROVIDER_BANGUMI = "bangumi"
 
         val ALL_PROVIDERS = listOf(
             PROVIDER_NAVER,
             PROVIDER_KUAIKAN,
+            PROVIDER_BOOKWALKER,
+            PROVIDER_BANGUMI,
             PROVIDER_MANGADEX,
             PROVIDER_ANILIST,
             PROVIDER_KITSU,
@@ -129,6 +133,8 @@ class ArtworkPriorityCustomizerScreen : Screen() {
         val providerTitles = mapOf(
             PROVIDER_NAVER to stringResource(MR.strings.pref_chimanew_artwork_provider_naver),
             PROVIDER_KUAIKAN to stringResource(MR.strings.pref_chimanew_artwork_provider_kuaikan),
+            PROVIDER_BOOKWALKER to stringResource(MR.strings.pref_chimanew_artwork_provider_bookwalker),
+            PROVIDER_BANGUMI to stringResource(MR.strings.pref_chimanew_artwork_provider_bangumi),
             PROVIDER_ANILIST to stringResource(MR.strings.pref_chimanew_artwork_provider_anilist),
             PROVIDER_KITSU to stringResource(MR.strings.pref_chimanew_artwork_provider_kitsu),
             PROVIDER_MANGADEX to stringResource(MR.strings.pref_chimanew_artwork_provider_mangadex),
@@ -137,6 +143,8 @@ class ArtworkPriorityCustomizerScreen : Screen() {
         val providerSubtitles = mapOf(
             PROVIDER_NAVER to stringResource(MR.strings.pref_chimanew_artwork_provider_naver_desc),
             PROVIDER_KUAIKAN to stringResource(MR.strings.pref_chimanew_artwork_provider_kuaikan_desc),
+            PROVIDER_BOOKWALKER to stringResource(MR.strings.pref_chimanew_artwork_provider_bookwalker_desc),
+            PROVIDER_BANGUMI to stringResource(MR.strings.pref_chimanew_artwork_provider_bangumi_desc),
             PROVIDER_ANILIST to stringResource(MR.strings.pref_chimanew_artwork_provider_anilist_desc),
             PROVIDER_KITSU to stringResource(MR.strings.pref_chimanew_artwork_provider_kitsu_desc),
             PROVIDER_MANGADEX to stringResource(MR.strings.pref_chimanew_artwork_provider_mangadex_desc),
@@ -178,9 +186,9 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                         chimanewPreferences.artworkBannerOrder()
                     }
                     val allowed = if (selectedTabIndex == 0) {
-                        listOf(PROVIDER_MANGADEX, PROVIDER_ANILIST, PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_KITSU)
+                        listOf(PROVIDER_MANGADEX, PROVIDER_BOOKWALKER, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_KITSU)
                     } else {
-                        listOf(PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_ANILIST, PROVIDER_KITSU)
+                        listOf(PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_BANGUMI, PROVIDER_BOOKWALKER, PROVIDER_ANILIST, PROVIDER_KITSU)
                     }
 
                     val rawOrder = remember { orderPref.get() }

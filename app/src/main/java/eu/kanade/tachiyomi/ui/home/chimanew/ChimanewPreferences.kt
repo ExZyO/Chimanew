@@ -69,19 +69,21 @@ class ChimanewPreferences(
 
     fun detailsBackdropScale() = preferenceStore.getInt("pref_chimanew_details_backdrop_scale", 2) // 0 = Ambient Backdrop (Full Art + Blur), 1 = Natural Fit (Compact), 2 = Fill Screen (Crop)
 
+    fun heroFallbackStyle() = preferenceStore.getInt("pref_nuvio_hero_fallback_style", 0) // 0 = Clean Subtle Aura, 1 = Ambient Mesh Canvas, 2 = Cropped Fill
+
     fun artworkWaterfallOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_waterfall_order",
-        "naver:true,kuaikan:true,anilist:true,kitsu:true,mangadex:true",
+        "naver:true,kuaikan:true,bookwalker:true,bangumi:true,anilist:true,kitsu:true,mangadex:true",
     )
 
     fun artworkBannerOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_banner_order",
-        "naver:true,kuaikan:true,anilist:true,kitsu:true",
+        "naver:true,kuaikan:true,bangumi:true,bookwalker:true,anilist:true,kitsu:true",
     )
 
     fun artworkCoverOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_cover_order",
-        "mangadex:true,anilist:true,naver:true,kuaikan:true,kitsu:true",
+        "mangadex:true,bookwalker:true,bangumi:true,anilist:true,naver:true,kuaikan:true,kitsu:true",
     )
 
     fun showCommunityRatings() = preferenceStore.getBoolean("pref_chimanew_show_community_ratings", true)

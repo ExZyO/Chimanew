@@ -117,6 +117,16 @@ object SettingsNuvioScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_nuvio_hero_allow_cropped_fallback),
                     subtitle = stringResource(MR.strings.pref_nuvio_hero_allow_cropped_fallback_summary),
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.ambientCanvasStyle(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_artwork_ambient_cinematic_blur),
+                        1 to stringResource(MR.strings.pref_chimanew_artwork_ambient_palette_mesh),
+                        2 to stringResource(MR.strings.pref_chimanew_artwork_ambient_hybrid_texture),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_artwork_ambient_style),
+                    subtitle = stringResource(MR.strings.pref_chimanew_artwork_ambient_style_summary),
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.heroRequireSelectedArtwork(),
                     title = stringResource(MR.strings.pref_chimanew_hero_require_selected_artwork),

@@ -86,6 +86,8 @@ class ArtworkWaterfallRepository(
     private val context: Application = Injekt.get(),
     private val naverRepo: NaverWebtoonCoverRepository = Injekt.get(),
     private val kuaikanRepo: KuaikanCoverRepository = Injekt.get(),
+    private val bookwalkerRepo: BookWalkerCoverRepository = Injekt.get(),
+    private val bangumiRepo: BangumiCoverRepository = Injekt.get(),
 ) {
     private val cache = ConcurrentHashMap<String, UnifiedArtwork>()
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -117,6 +119,8 @@ class ArtworkWaterfallRepository(
                                     url.contains("kitsu", ignoreCase = true) -> "KITSU"
                                     url.contains("pstatic", ignoreCase = true) || url.contains("naver", ignoreCase = true) -> "NAVER"
                                     url.contains("kkmh", ignoreCase = true) || url.contains("kuaikan", ignoreCase = true) -> "KUAIKAN"
+                                    url.contains("bookwalker", ignoreCase = true) -> "BOOKWALKER"
+                                    url.contains("bgm.tv", ignoreCase = true) || url.contains("bangumi", ignoreCase = true) -> "BANGUMI"
                                     url.contains("anilist", ignoreCase = true) -> "ANILIST"
                                     else -> "ANILIST"
                                 }
@@ -167,11 +171,11 @@ class ArtworkWaterfallRepository(
     fun getEffectiveArtwork(raw: UnifiedArtwork): UnifiedArtwork {
         val bannerOrder = parsePriorityOrder(
             preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("NAVER", "KUAIKAN", "ANILIST", "KITSU"),
+            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "BOOKWALKER", "ANILIST", "KITSU"),
         )
         val coverOrder = parsePriorityOrder(
             preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("MANGADEX", "ANILIST", "NAVER", "KUAIKAN", "KITSU"),
+            allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU"),
         )
 
         var effectiveBanner: String? = null
@@ -180,6 +184,8 @@ class ArtworkWaterfallRepository(
                 ?: when (provider) {
                     "NAVER" -> raw.allAvailableBanners.firstOrNull { it.contains("pstatic", ignoreCase = true) || it.contains("naver", ignoreCase = true) }
                     "KUAIKAN" -> raw.allAvailableBanners.firstOrNull { it.contains("kkmh", ignoreCase = true) || it.contains("kuaikan", ignoreCase = true) }
+                    "BANGUMI" -> raw.allAvailableBanners.firstOrNull { it.contains("bgm.tv", ignoreCase = true) || it.contains("bangumi", ignoreCase = true) }
+                    "BOOKWALKER" -> raw.allAvailableBanners.firstOrNull { it.contains("bookwalker", ignoreCase = true) }
                     "ANILIST" -> raw.allAvailableBanners.firstOrNull { it.contains("anilist", ignoreCase = true) }
                     "KITSU" -> raw.allAvailableBanners.firstOrNull { it.contains("kitsu", ignoreCase = true) }
                     else -> null
@@ -194,6 +200,8 @@ class ArtworkWaterfallRepository(
         for (provider in coverOrder) {
             val cover = raw.allAvailableCovers.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
                 ?: when (provider) {
+                    "BOOKWALKER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bookwalker", ignoreCase = true) }?.url
+                    "BANGUMI" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bgm.tv", ignoreCase = true) || it.url.contains("bangumi", ignoreCase = true) }?.url
                     "NAVER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("pstatic", ignoreCase = true) || it.url.contains("naver", ignoreCase = true) }?.url
                     "KUAIKAN" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kkmh", ignoreCase = true) || it.url.contains("kuaikan", ignoreCase = true) }?.url
                     else -> null
@@ -338,7 +346,42 @@ class ArtworkWaterfallRepository(
             }
         }
 
-        // 4. KITSU
+        // 4. JAPANESE ARTWORK PROVIDERS (BookWalker Japan & Bangumi)
+        val isJapanese = alArt?.countryOfOrigin == "JP" ||
+            containsJapanese(title) ||
+            (alArt?.nativeTitle != null && containsJapanese(alArt.nativeTitle))
+
+        val japaneseQuery = listOfNotNull(
+            alArt?.nativeTitle?.takeIf { containsJapanese(it) },
+            alArt?.synonyms?.firstOrNull { containsJapanese(it) },
+            title.takeIf { containsJapanese(it) },
+            alArt?.romajiTitle,
+        ).firstOrNull() ?: if (isJapanese) title else null
+
+        if (japaneseQuery != null) {
+            // BookWalker Japan
+            val bwArt = bookwalkerRepo.getCached(japaneseQuery) ?: bookwalkerRepo.fetchArtwork(japaneseQuery)
+            bwArt?.coverUrl?.let {
+                if (it.isNotBlank()) {
+                    covers.add(ArtworkCoverOption(url = it, source = "BookWalker", subtitle = "Official Tankōbon Art"))
+                }
+            }
+
+            // Bangumi (bgm.tv)
+            val bgmArt = bangumiRepo.getCached(japaneseQuery) ?: bangumiRepo.fetchArtwork(japaneseQuery)
+            bgmArt?.coverUrl?.let {
+                if (it.isNotBlank()) {
+                    covers.add(ArtworkCoverOption(url = it, source = "Bangumi", subtitle = "Official Series Art"))
+                    bannerOptions.add(ArtworkBannerOption(it, "BANGUMI"))
+                    banners.add(it)
+                }
+            }
+            if (bgmArt?.score10 != null && bgmArt.score100 != null) {
+                ratings.add(CommunityRating(score10 = bgmArt.score10, score100 = bgmArt.score100, source = "Bangumi"))
+            }
+        }
+
+        // 5. KITSU
         val kitsuArt = if (effectiveKitsuId != null && effectiveKitsuId > 0) {
             kitsuRepo.getCached(effectiveKitsuId) ?: kitsuRepo.fetchByKitsuId(effectiveKitsuId)
         } else {
@@ -360,7 +403,7 @@ class ArtworkWaterfallRepository(
             ratings.add(CommunityRating(score10 = kitsuArt.score10, score100 = kitsuArt.score100, source = "Kitsu"))
         }
 
-        // 5. MANGADEX
+        // 6. MANGADEX
         val mdArt = mangadexRepo.getCachedByTitle(title) ?: mangadexRepo.fetchCoversByTitle(title)
         mdArt?.covers?.let { mdCovers ->
             mdCovers.forEach { c ->
@@ -387,9 +430,11 @@ class ArtworkWaterfallRepository(
     companion object {
         private val HANGUL_REGEX = Regex("""[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]""")
         private val HANZI_REGEX = Regex("""[\u4E00-\u9FFF\u3400-\u4DBF]""")
+        private val JAPANESE_REGEX = Regex("""[\u3040-\u309F\u30A0-\u30FF]""")
 
         fun containsHangul(text: String): Boolean = HANGUL_REGEX.containsMatchIn(text)
         fun containsHanzi(text: String): Boolean = HANZI_REGEX.containsMatchIn(text)
+        fun containsJapanese(text: String): Boolean = JAPANESE_REGEX.containsMatchIn(text)
 
         fun cleanTitle(title: String): String {
             val cleaned = title
@@ -403,7 +448,7 @@ class ArtworkWaterfallRepository(
 
         fun parsePriorityOrder(
             raw: String,
-            allowed: List<String> = listOf("NAVER", "KUAIKAN", "ANILIST", "KITSU", "MANGADEX"),
+            allowed: List<String> = listOf("NAVER", "KUAIKAN", "BOOKWALKER", "BANGUMI", "ANILIST", "KITSU", "MANGADEX"),
         ): List<String> {
             if (raw.isBlank()) return allowed
             val result = mutableListOf<String>()

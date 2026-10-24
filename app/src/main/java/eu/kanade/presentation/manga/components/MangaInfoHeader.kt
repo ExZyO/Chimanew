@@ -371,37 +371,101 @@ fun MangaInfoBox(
 
                 1 -> {
                     // MODE 1: Feathered Cinema Vignette (Full Widescreen Banner with Ambient Halo & Seamless Dissolve)
-                    // Layer 1: Ambient Glow Underlay behind everything (including status bar)
-                    val underlayModel = effectiveArtworkModel ?: ambientArtworkModel
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(underlayModel)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.Center,
-                        modifier = Modifier
-                            .matchParentSize()
-                            .blur(36.dp)
-                            .alpha(0.55f)
-                            .background(surfaceTintColor.copy(alpha = 0.12f)),
-                    )
-
-                    // Scrims for underlay halo dissolve into background
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    backgroundColor.copy(alpha = 0.45f),
-                                    backgroundColor.copy(alpha = 0.85f),
-                                    backgroundColor,
-                                ),
-                                startY = size.height * 0.40f,
-                                endY = size.height,
-                            ),
+                    if (effectiveArtworkModel != null || heroAllowCroppedFallback) {
+                        // Layer 1: Ambient Glow Underlay behind everything (including status bar)
+                        val underlayModel = effectiveArtworkModel ?: ambientArtworkModel
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(underlayModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            modifier = Modifier
+                                .matchParentSize()
+                                .blur(36.dp)
+                                .alpha(0.55f)
+                                .background(surfaceTintColor.copy(alpha = 0.12f)),
                         )
+
+                        // Scrims for underlay halo dissolve into background
+                        Canvas(modifier = Modifier.matchParentSize()) {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        backgroundColor.copy(alpha = 0.45f),
+                                        backgroundColor.copy(alpha = 0.85f),
+                                        backgroundColor,
+                                    ),
+                                    startY = size.height * 0.40f,
+                                    endY = size.height,
+                                ),
+                            )
+                        }
+                    } else {
+                        // Covers not allowed as banner: render clean procedural fallback based on ambientCanvasStyle
+                        when (ambientCanvasStyle) {
+                            1 -> {
+                                Canvas(modifier = Modifier.matchParentSize()) {
+                                    drawRect(color = backgroundColor)
+                                    drawRect(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(
+                                                primaryColor.copy(alpha = 0.45f),
+                                                primaryColor.copy(alpha = 0.12f),
+                                                Color.Transparent,
+                                            ),
+                                            center = Offset(size.width * 0.85f, size.height * 0.20f),
+                                            radius = size.width * 0.90f,
+                                        ),
+                                    )
+                                    drawRect(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(
+                                                tertiaryColor.copy(alpha = 0.35f),
+                                                Color.Transparent,
+                                            ),
+                                            center = Offset(size.width * 0.15f, size.height * 0.70f),
+                                            radius = size.width * 0.80f,
+                                        ),
+                                    )
+                                }
+                            }
+                            2 -> {
+                                Canvas(modifier = Modifier.matchParentSize()) {
+                                    drawRect(color = backgroundColor)
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.White.copy(alpha = 0.15f),
+                                                Color.White.copy(alpha = 0.04f),
+                                                Color.Transparent,
+                                            ),
+                                            startY = 0f,
+                                            endY = size.height * 0.50f,
+                                        ),
+                                    )
+                                }
+                            }
+                            else -> {
+                                Canvas(modifier = Modifier.matchParentSize()) {
+                                    drawRect(color = backgroundColor)
+                                    drawRect(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(
+                                                primaryColor.copy(alpha = 0.30f),
+                                                primaryColor.copy(alpha = 0.08f),
+                                                Color.Transparent,
+                                            ),
+                                            center = Offset(size.width * 0.50f, size.height * 0.25f),
+                                            radius = size.width * 0.75f,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // Layer 2: Full Widescreen Foreground Banner with Feathered Dissolve
@@ -436,14 +500,15 @@ fun MangaInfoBox(
                                     } else {
                                         size.height * 0.65f
                                     }
-                                    val fadeStart = (bannerHeightPx * 0.45f).coerceAtLeast(appBarPadding.toPx())
+                                    val fadeStart = (bannerHeightPx * 0.82f).coerceAtLeast(appBarPadding.toPx())
                                     val fadeEnd = bannerHeightPx.coerceAtMost(size.height)
                                     drawRect(
                                         brush = Brush.verticalGradient(
                                             colors = listOf(
                                                 Color.Black,
-                                                Color.Black.copy(alpha = 0.65f),
-                                                Color.Black.copy(alpha = 0.20f),
+                                                Color.Black,
+                                                Color.Black.copy(alpha = 0.70f),
+                                                Color.Black.copy(alpha = 0.25f),
                                                 Color.Transparent,
                                             ),
                                             startY = fadeStart,
@@ -452,8 +517,7 @@ fun MangaInfoBox(
                                         blendMode = BlendMode.DstIn,
                                     )
                                 }
-                                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                                .alpha(if (activeStyle == 1) 0.50f else 0.95f),
+                                .alpha(1.0f),
                         )
                     }
 
@@ -618,7 +682,7 @@ fun MangaInfoBox(
                 }
             }
 
-            if (!isWideBanner) {
+            if (!isWideBanner && activeStyle != 1) {
                 when (ambientCanvasStyle) {
                     1 -> {
                         // Style 1: Dynamic Palette Mesh (Vibrant Colorful Lights)

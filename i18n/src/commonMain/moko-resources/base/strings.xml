@@ -138,6 +138,10 @@
     <string name="pref_chimanew_artwork_provider_naver_desc">Authentic Korean banners &amp; official webtoon key visuals</string>
     <string name="pref_chimanew_artwork_provider_kuaikan">Kuaikan Manhua</string>
     <string name="pref_chimanew_artwork_provider_kuaikan_desc">Studio widescreen banners &amp; official manhua covers</string>
+    <string name="pref_chimanew_artwork_provider_bookwalker">BookWalker Japan</string>
+    <string name="pref_chimanew_artwork_provider_bookwalker_desc">Ultra-high-definition Japanese tankōbon volume jackets &amp; official covers</string>
+    <string name="pref_chimanew_artwork_provider_bangumi">Bangumi (bgm.tv)</string>
+    <string name="pref_chimanew_artwork_provider_bangumi_desc">Official Japanese manga key visuals &amp; community scores</string>
     <string name="pref_chimanew_artwork_provider_anilist">AniList</string>
     <string name="pref_chimanew_artwork_provider_anilist_desc">Official wide landscape banners &amp; extra-large manga covers</string>
     <string name="pref_chimanew_artwork_provider_kitsu">Kitsu</string>
