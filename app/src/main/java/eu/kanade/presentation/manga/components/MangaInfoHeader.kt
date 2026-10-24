@@ -62,6 +62,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -330,14 +331,14 @@ fun MangaInfoBox(
                 )
 
                 // Bottom vertical dissolve: dynamically anchored to the bottom edge of the banner
-                val effectiveBannerHeight = if (isFillWidth && bannerAspectRatio > 0f) {
+                val effectiveBannerHeight: Float = if (isFillWidth && bannerAspectRatio > 0f) {
                     size.width / bannerAspectRatio
                 } else {
                     size.height * 0.70f
                 }
 
-                val fadeStart = (effectiveBannerHeight * 0.35f).coerceAtLeast(40f)
-                val fadeEnd = effectiveBannerHeight.coerceAtMost(size.height)
+                val fadeStart: Float = (effectiveBannerHeight * 0.35f).coerceAtLeast(40f)
+                val fadeEnd: Float = effectiveBannerHeight.coerceAtMost(size.height)
 
                 drawRect(
                     brush = Brush.verticalGradient(
