@@ -55,6 +55,10 @@ class ChimanewPreferences(
 
     fun detailsBackdropArtwork() = preferenceStore.getInt("pref_chimanew_details_backdrop_artwork", 0)
 
+    fun detailsBackdropScale() = preferenceStore.getInt("pref_chimanew_details_backdrop_scale", 0) // 0 = Full Art / No Zoom (FillWidth), 1 = Fill Screen (Crop)
+
+    fun heroArtworkPairing() = preferenceStore.getInt("pref_nuvio_hero_artwork_pairing", 0) // 0 = Separate with fallback, 1 = Unified
+
     fun artworkWaterfallOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_waterfall_order",
         "ANILIST,KITSU,MANGADEX",

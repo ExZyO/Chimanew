@@ -51,9 +51,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import eu.kanade.presentation.util.formatChapterNumber
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun NuvioHeroSection(
@@ -108,17 +112,21 @@ fun NuvioHeroSection(
                 ?: MaterialTheme.colorScheme.primary
             val surfaceColor = MaterialTheme.colorScheme.background
 
-            val bannerImageModel: Any = when {
-                "banner" in heroArtworkSources && !item.highResBannerUrl.isNullOrBlank() -> item.highResBannerUrl
-                "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
-                "default" in heroArtworkSources -> item.coverData
-                else -> item.highResBannerUrl ?: item.highResCoverUrl ?: item.coverData
-            }
+            val preferences = remember { Injekt.get<ChimanewPreferences>() }
+            val heroArtworkPairing by preferences.heroArtworkPairing().collectPrefAsState()
 
             val posterImageModel: Any = when {
                 "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
                 "default" in heroArtworkSources -> item.coverData
                 else -> item.highResCoverUrl ?: item.coverData
+            }
+
+            val bannerImageModel: Any = when {
+                heroArtworkPairing == 1 -> posterImageModel // Unified: same cover for both
+                // Separate: wide banner for backdrop with automatic fallback to posterImageModel if no banner
+                !item.highResBannerUrl.isNullOrBlank() && "banner" in heroArtworkSources -> item.highResBannerUrl
+                !item.highResBannerUrl.isNullOrBlank() -> item.highResBannerUrl
+                else -> posterImageModel
             }
 
             Box(

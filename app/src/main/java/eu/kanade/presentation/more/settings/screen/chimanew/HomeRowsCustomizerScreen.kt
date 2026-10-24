@@ -23,6 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.toMutableStateList
@@ -40,6 +42,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
@@ -66,7 +70,20 @@ class HomeRowsCustomizerScreen : Screen() {
         const val SHELF_NOT_TRACKED = "not_tracked"
         const val SHELF_CATEGORIES = "categories"
         const val SHELF_RECENTLY_ADDED = "recently_added"
+        const val CATEGORY_PREFIX = "category_"
 
+        val STANDARD_SHELF_IDS = listOf(
+            SHELF_CONTINUE_READING,
+            SHELF_READING,
+            SHELF_PLAN_TO_READ,
+            SHELF_ON_HOLD,
+            SHELF_COMPLETED,
+            SHELF_DROPPED,
+            SHELF_NOT_TRACKED,
+            SHELF_RECENTLY_ADDED,
+        )
+
+        // Backward compatibility
         val ALL_SHELF_IDS = listOf(
             SHELF_CONTINUE_READING,
             SHELF_READING,
@@ -79,27 +96,73 @@ class HomeRowsCustomizerScreen : Screen() {
             SHELF_RECENTLY_ADDED,
         )
 
-        fun parseOrder(raw: String): List<Pair<String, Boolean>> {
+        fun parseOrder(raw: String, categories: List<Category> = emptyList()): List<Pair<String, Boolean>> {
+            val categoryIds = categories.map { "$CATEGORY_PREFIX${it.id}" }.toSet()
+            val allValidIds = (STANDARD_SHELF_IDS + categoryIds + SHELF_CATEGORIES).toSet()
+
             if (raw.isBlank()) {
-                return ALL_SHELF_IDS.map { it to (it != SHELF_DROPPED) }
+                val defaultList = mutableListOf<Pair<String, Boolean>>()
+                defaultList.add(SHELF_CONTINUE_READING to true)
+                defaultList.add(SHELF_READING to true)
+                defaultList.add(SHELF_PLAN_TO_READ to true)
+                defaultList.add(SHELF_ON_HOLD to true)
+                defaultList.add(SHELF_COMPLETED to true)
+                defaultList.add(SHELF_DROPPED to false)
+                defaultList.add(SHELF_NOT_TRACKED to true)
+                if (categories.isNotEmpty()) {
+                    for (cat in categories) {
+                        defaultList.add("$CATEGORY_PREFIX${cat.id}" to true)
+                    }
+                } else {
+                    defaultList.add(SHELF_CATEGORIES to true)
+                }
+                defaultList.add(SHELF_RECENTLY_ADDED to true)
+                return defaultList
             }
+
             val parsed = mutableListOf<Pair<String, Boolean>>()
             val seen = mutableSetOf<String>()
+
             for (token in raw.split(",")) {
                 val parts = token.trim().split(":", limit = 2)
                 if (parts.size != 2) continue
                 val id = parts[0]
                 val enabled = parts[1].toBooleanStrictOrNull() ?: true
-                if (id in ALL_SHELF_IDS && id !in seen) {
+
+                if (id == SHELF_CATEGORIES) {
+                    if (categories.isNotEmpty()) {
+                        for (cat in categories) {
+                            val catShelfId = "$CATEGORY_PREFIX${cat.id}"
+                            if (catShelfId !in seen) {
+                                parsed.add(catShelfId to enabled)
+                                seen.add(catShelfId)
+                            }
+                        }
+                    } else if (id !in seen) {
+                        parsed.add(id to enabled)
+                        seen.add(id)
+                    }
+                } else if (id in allValidIds && id !in seen) {
                     parsed.add(id to enabled)
                     seen.add(id)
                 }
             }
-            for (id in ALL_SHELF_IDS) {
+
+            for (id in STANDARD_SHELF_IDS) {
                 if (id !in seen) {
                     parsed.add(id to (id != SHELF_DROPPED))
+                    seen.add(id)
                 }
             }
+
+            for (cat in categories) {
+                val catShelfId = "$CATEGORY_PREFIX${cat.id}"
+                if (catShelfId !in seen) {
+                    parsed.add(catShelfId to true)
+                    seen.add(catShelfId)
+                }
+            }
+
             return parsed
         }
 
@@ -112,9 +175,11 @@ class HomeRowsCustomizerScreen : Screen() {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
+        val getCategories = remember { Injekt.get<GetCategories>() }
+        val categories by getCategories.subscribe().collectAsState(initial = emptyList())
         val orderPref = chimanewPreferences.homeShelfOrder()
 
-        val titleMap = mapOf(
+        val standardTitles = mapOf(
             SHELF_CONTINUE_READING to stringResource(MR.strings.pref_nuvio_shelf_continue_reading),
             SHELF_READING to stringResource(MR.strings.pref_nuvio_shelf_reading),
             SHELF_PLAN_TO_READ to stringResource(MR.strings.pref_nuvio_shelf_plan_to_read),
@@ -125,19 +190,22 @@ class HomeRowsCustomizerScreen : Screen() {
             SHELF_CATEGORIES to stringResource(MR.strings.pref_nuvio_shelf_categories),
             SHELF_RECENTLY_ADDED to stringResource(MR.strings.pref_nuvio_shelf_recently_added),
         )
+        val categoryPrefixStr = stringResource(MR.strings.pref_chimanew_shelf_category_prefix)
 
-        val rawOrder = remember { orderPref.get() }
-        val parsedList = remember(rawOrder) {
-            parseOrder(rawOrder).map { (id, enabled) ->
+        val itemsState = remember(categories) {
+            val rawOrder = orderPref.get()
+            val categoryTitleMap = categories.associate { cat ->
+                "$CATEGORY_PREFIX${cat.id}" to categoryPrefixStr.replace("%s", cat.name.ifBlank { "Default" })
+            }
+            parseOrder(rawOrder, categories).map { (id, enabled) ->
                 HomeShelfItem(
                     id = id,
-                    title = titleMap[id] ?: id,
+                    title = standardTitles[id] ?: categoryTitleMap[id] ?: id,
                     enabled = enabled,
                 )
-            }
+            }.toMutableStateList()
         }
 
-        val itemsState = remember { parsedList.toMutableStateList() }
         val lazyListState = rememberLazyListState()
 
         val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->

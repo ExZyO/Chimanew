@@ -631,7 +631,7 @@ class MangaScreen(
                     onDismissRequest = onDismissRequest,
                     onCustomCoverFilePick = { getContent.launch("image/*") },
                     onCoverUpdated = {
-                        screenModel.fetchAllFromSource(manual = false)
+                        screenModel.fetchAllFromSource(manualFetch = false)
                     },
                 )
             }

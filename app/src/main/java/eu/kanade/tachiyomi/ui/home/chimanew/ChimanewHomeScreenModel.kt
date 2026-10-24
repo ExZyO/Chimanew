@@ -570,6 +570,28 @@ class ChimanewHomeScreenModel(
                 // 3. Category shelves
                 if (prefs.showCategoryShelves && categoryShelves.isNotEmpty()) {
                     availableShelvesMap[HomeRowsCustomizerScreen.SHELF_CATEGORIES] = categoryShelves
+                    for (cat in data.categories) {
+                        val itemsForCat = data.libraryList.filter { cat.id in it.categories }
+                        if (itemsForCat.isNotEmpty()) {
+                            val shelf = HomeShelf(
+                                id = "cat_${cat.id}",
+                                title = cat.name.ifBlank { "Library" },
+                                items = itemsForCat.map { lib ->
+                                    createHomeItem(
+                                        mangaId = lib.manga.id,
+                                        title = lib.manga.title,
+                                        coverData = lib.manga.asMangaCover(),
+                                        totalChapters = lib.totalChapters,
+                                        readChapters = lib.readCount,
+                                        unreadCount = lib.unreadCount,
+                                        genres = lib.manga.ogGenre ?: emptyList(),
+                                        description = lib.manga.ogDescription,
+                                    )
+                                },
+                            )
+                            availableShelvesMap["${HomeRowsCustomizerScreen.CATEGORY_PREFIX}${cat.id}"] = listOf(shelf)
+                        }
+                    }
                 }
 
                 // 4. Recently updated
@@ -583,7 +605,7 @@ class ChimanewHomeScreenModel(
                     )
                 }
 
-                val orderedCustomEntries = HomeRowsCustomizerScreen.parseOrder(prefs.homeShelfOrder)
+                val orderedCustomEntries = HomeRowsCustomizerScreen.parseOrder(prefs.homeShelfOrder, data.categories)
                 val finalShelves = mutableListOf<HomeShelf>()
                 for ((shelfId, isEnabled) in orderedCustomEntries) {
                     if (isEnabled) {

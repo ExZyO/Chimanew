@@ -104,6 +104,15 @@
     <string name="pref_chimanew_details_backdrop_artwork_banner">Official Wide Banner (Landscape)</string>
     <string name="pref_chimanew_details_backdrop_artwork_cover">High-Res Manga Cover (Portrait)</string>
     <string name="pref_chimanew_details_backdrop_artwork_local">Default Library Cover</string>
+    <string name="pref_chimanew_details_backdrop_scale">Backdrop Image Scaling</string>
+    <string name="pref_chimanew_details_backdrop_scale_summary">Control whether the details header banner is zoomed to fill the screen or kept full width</string>
+    <string name="pref_chimanew_details_backdrop_scale_fit">Full Art / No Zoom (Fill Width)</string>
+    <string name="pref_chimanew_details_backdrop_scale_crop">Fill Screen (Cinematic Zoom)</string>
+    <string name="pref_nuvio_hero_artwork_pairing">Hero Artwork Pairing (Option 3)</string>
+    <string name="pref_nuvio_hero_artwork_pairing_summary">Separate: wide banner for backdrop + cover poster (with auto-fallback). Unified: same cover art for both.</string>
+    <string name="pref_nuvio_hero_artwork_pairing_separate">Separate Artwork (Wide Banner + Cover Poster)</string>
+    <string name="pref_nuvio_hero_artwork_pairing_unified">Unified Artwork (Same Art for Both)</string>
+    <string name="pref_chimanew_shelf_category_prefix">Category: %s</string>
     <string name="pref_chimanew_navbar_category">Navigation Bar</string>
     <string name="pref_chimanew_navbar_autohide">Auto-hide Navbar on Scroll</string>
     <string name="pref_chimanew_navbar_autohide_summary">Smoothly collapse navbar when scrolling down and expand when scrolling up</string>

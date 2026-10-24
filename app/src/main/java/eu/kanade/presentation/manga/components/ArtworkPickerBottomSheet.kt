@@ -86,8 +86,9 @@ import eu.kanade.tachiyomi.util.editCover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.manga.interactor.UpdateManga
+import eu.kanade.domain.manga.interactor.UpdateManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
@@ -110,7 +111,7 @@ fun ArtworkPickerBottomSheet(
     val preferences = remember { Injekt.get<ChimanewPreferences>() }
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val customBannerPref = remember(manga.id) { preferences.mangaCustomBannerUrl(manga.id) }
-    val currentCustomBanner by customBannerPref.collectAsState()
+    val currentCustomBanner by customBannerPref.collectPrefAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }

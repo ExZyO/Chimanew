@@ -233,11 +233,17 @@ fun MangaInfoBox(
         }
     }
 
+    val detailsBackdropScale by chimanewPreferences.detailsBackdropScale().collectAsState()
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+    val surfaceTintColor = MaterialTheme.colorScheme.surfaceTint
+    val backgroundColor = MaterialTheme.colorScheme.background
+
     Box(modifier = modifier) {
         // Backdrop
         val backdropGradientColors = listOf(
             Color.Transparent,
-            MaterialTheme.colorScheme.background,
+            backgroundColor,
         )
         // EaZy Nuvio+ / Chimanew: resilient fallback to local manga cover if remote banner/artwork fails to load
         var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
@@ -249,7 +255,7 @@ fun MangaInfoBox(
                 .crossfade(true)
                 .build(),
             contentDescription = null,
-            contentScale = ContentScale.Crop,
+            contentScale = if (isWideBanner && detailsBackdropScale == 0) ContentScale.FillWidth else ContentScale.Crop,
             alignment = Alignment.TopCenter,
             onError = {
                 if (chosenArtworkModel != manga) {
@@ -294,7 +300,7 @@ fun MangaInfoBox(
                                 drawRect(
                                     brush = Brush.radialGradient(
                                         colors = listOf(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.30f),
+                                            primaryColor.copy(alpha = 0.30f),
                                             Color.Transparent,
                                         ),
                                         center = Offset(size.width * 0.85f, size.height * 0.15f),
@@ -304,7 +310,7 @@ fun MangaInfoBox(
                                 drawRect(
                                     brush = Brush.radialGradient(
                                         colors = listOf(
-                                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f),
+                                            tertiaryColor.copy(alpha = 0.22f),
                                             Color.Transparent,
                                         ),
                                         center = Offset(size.width * 0.10f, size.height * 0.65f),
@@ -346,7 +352,7 @@ fun MangaInfoBox(
                         )
                     }
                 }
-                .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = if (isWideBanner && activeStyle == 1) 0.35f else 0.15f))
+                .background(surfaceTintColor.copy(alpha = if (isWideBanner && activeStyle == 1) 0.35f else 0.15f))
                 .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
                 .alpha(backdropAlpha),
         )

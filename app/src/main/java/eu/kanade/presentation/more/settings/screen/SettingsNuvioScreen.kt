@@ -101,6 +101,15 @@ object SettingsNuvioScreen : SearchableSettings {
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_style),
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.heroArtworkPairing(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_nuvio_hero_artwork_pairing_separate),
+                        1 to stringResource(MR.strings.pref_nuvio_hero_artwork_pairing_unified),
+                    ),
+                    title = stringResource(MR.strings.pref_nuvio_hero_artwork_pairing),
+                    subtitle = stringResource(MR.strings.pref_nuvio_hero_artwork_pairing_summary),
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.useAnilistArtwork(),
                     title = stringResource(MR.strings.pref_nuvio_use_anilist_artwork),
@@ -220,6 +229,16 @@ object SettingsNuvioScreen : SearchableSettings {
                         2 to stringResource(MR.strings.pref_chimanew_details_backdrop_artwork_local),
                     ),
                     title = stringResource(MR.strings.pref_chimanew_details_backdrop_artwork),
+                    enabled = useAnilistInDetails,
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.detailsBackdropScale(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_fit),
+                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_crop),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_details_backdrop_scale),
+                    subtitle = stringResource(MR.strings.pref_chimanew_details_backdrop_scale_summary),
                     enabled = useAnilistInDetails,
                 ),
             ),
