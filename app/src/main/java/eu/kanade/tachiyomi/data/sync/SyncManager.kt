@@ -176,7 +176,9 @@ class SyncManager(
 
         if (remoteBackup == null) {
             logcat(LogPriority.DEBUG) { "Skip restore due to network issues" }
-            // should we call showSyncError?
+            // EaZy Nuvio+ / Chimanew -->
+            notifier.showSyncError("Sync failed or timed out. Please check network and Google Drive authorization.")
+            // EaZy Nuvio+ / Chimanew <--
             return
         }
 

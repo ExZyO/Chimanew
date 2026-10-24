@@ -63,6 +63,9 @@ class SyncDataJob(private val context: Context, workerParams: WorkerParameters) 
             // KMK -->
             syncStatus.stop()
             // KMK <--
+            // EaZy Nuvio+ / Chimanew -->
+            context.cancelNotification(Notifications.ID_SYNC_PROGRESS)
+            // EaZy Nuvio+ / Chimanew <--
         }
     }
 

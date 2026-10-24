@@ -63,24 +63,14 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.5.6"
+          tag="v$(grep -E 'versionName\s*=\s*' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
             gh release upload "$tag" app/build/outputs/apk/release/*.apk --clobber
           else
             echo "Creating release $tag..."
-            printf '%s\n' \
-              "### What's New in v2.5.6" \
-              "- **Nuvio Liquid Glass Navbar with Auto-Hide on Scroll**: Real-time frosted blur navbar that smoothly collapses down on scroll down and expands on scroll up, matching Nuvio Mobile with a 0.5dp hairline divider, transparent indicator pills, and animated accent highlights." \
-              "- **Third Hero Banner Style (Netflix Ambient with Crisp Banner)**: Crisp unblurred widescreen publisher banner backdrop + sharp 2:3 portrait book cover card with metadata and white resume button in foreground (Option 3)." \
-              "- **Hero Banner Poster Alignment & Blur Fix**: Landscape posters and covers are now top-center aligned so character faces/heads are never cropped, with dark background placeholders to prevent empty blurs while loading." \
-              "- **Tracker Categories for Hero Carousel**: Select which tracking lists (Reading, Plan to Read, On Hold, Completed, Dropped) populate the Hero carousel, with multi-select support in Settings." \
-              "- **AniList Artwork on Manga Details Page**: Customizable manga details header backdrop with choices for artwork source (Wide Banner, High-Res Cover, Default Library Cover) and visual style (Cinematic Fade, Soft Atmospheric Blur, Full Opacity + Scrims, Standard Local Cover)." \
-              "- **Google Drive OAuth 403 Clarification**: Reiterate test user registration protocol in Google Cloud Console for OAuth 'Testing' mode." \
-              > release_notes.md
-            gh release create "$tag" \
-              app/build/outputs/apk/release/*.apk \
+            gh release create "$tag" app/build/outputs/apk/release/*.apk \
               --title "Chimanew ($tag)" \
-              --notes-file release_notes.md
+              --notes "Chimanew $tag: Nuvio Liquid Glass dynamic dock, in-memory direct Google Drive sync, AniList 50+ batching, and stability fixes."
           fi

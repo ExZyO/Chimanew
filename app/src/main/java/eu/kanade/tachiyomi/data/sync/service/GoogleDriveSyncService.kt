@@ -10,9 +10,9 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeToken
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse
+import com.google.api.client.http.ByteArrayContent
 import com.google.api.client.http.InputStreamContent
 import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
 import com.google.api.services.drive.model.File
@@ -30,6 +30,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
@@ -131,55 +132,51 @@ class GoogleDriveSyncService(context: Context, json: Json, syncPreferences: Sync
         }
     }
 
-    private suspend fun pushSyncData(syncData: SyncData) {
+    // EaZy Nuvio+ / Chimanew -->
+    private suspend fun pushSyncData(syncData: SyncData) = withIOContext {
         val drive = googleDriveService.driveService
             ?: throw Exception(context.stringResource(SYMR.strings.google_drive_not_signed_in))
 
         val fileList = getAppDataFileList(drive)
-        val backup = syncData.backup ?: return
+        val backup = syncData.backup ?: return@withIOContext
 
         val byteArray = protoBuf.encodeToByteArray(Backup.serializer(), backup)
         if (byteArray.isEmpty()) {
             throw IllegalStateException(context.stringResource(MR.strings.empty_backup_error))
         }
 
-        PipedOutputStream().use { pos ->
-            PipedInputStream(pos).use { pis ->
-                withIOContext {
-                    launch {
-                        GZIPOutputStream(pos).use { gzipOutputStream ->
-                            gzipOutputStream.write(byteArray)
-                        }
-                    }
+        val compressedBytes = ByteArrayOutputStream().use { baos ->
+            GZIPOutputStream(baos).use { gzipOutputStream ->
+                gzipOutputStream.write(byteArray)
+            }
+            baos.toByteArray()
+        }
 
-                    val mediaContent = InputStreamContent("application/octet-stream", pis)
+        val mediaContent = ByteArrayContent("application/octet-stream", compressedBytes)
 
-                    if (fileList.isNotEmpty()) {
-                        val fileId = fileList[0].id
-                        val fileMetadata = File().apply {
-                            name = remoteFileName
-                            mimeType = "application/octet-stream"
-                            appProperties = mapOf("deviceId" to syncData.deviceId)
-                        }
-                        drive.files().update(fileId, fileMetadata, mediaContent).execute()
-                        logcat(LogPriority.DEBUG) {
-                            "Updated existing sync data file in Google Drive with file ID: $fileId"
-                        }
-                    } else {
-                        val fileMetadata = File().apply {
-                            name = remoteFileName
-                            mimeType = "application/octet-stream"
-                            parents = listOf("appDataFolder")
-                            appProperties = mapOf("deviceId" to syncData.deviceId)
-                        }
-                        val uploadedFile = drive.files().create(fileMetadata, mediaContent)
-                            .setFields("id")
-                            .execute()
-                        logcat(LogPriority.DEBUG) {
-                            "Created new sync data file in Google Drive with file ID: ${uploadedFile.id}"
-                        }
-                    }
-                }
+        if (fileList.isNotEmpty()) {
+            val fileId = fileList[0].id
+            val fileMetadata = File().apply {
+                name = remoteFileName
+                mimeType = "application/octet-stream"
+                appProperties = mapOf("deviceId" to syncData.deviceId)
+            }
+            drive.files().update(fileId, fileMetadata, mediaContent).execute()
+            logcat(LogPriority.DEBUG) {
+                "Updated existing sync data file in Google Drive with file ID: $fileId"
+            }
+        } else {
+            val fileMetadata = File().apply {
+                name = remoteFileName
+                mimeType = "application/octet-stream"
+                parents = listOf("appDataFolder")
+                appProperties = mapOf("deviceId" to syncData.deviceId)
+            }
+            val uploadedFile = drive.files().create(fileMetadata, mediaContent)
+                .setFields("id")
+                .execute()
+            logcat(LogPriority.DEBUG) {
+                "Created new sync data file in Google Drive with file ID: ${uploadedFile.id}"
             }
         }
     }
@@ -187,7 +184,7 @@ class GoogleDriveSyncService(context: Context, json: Json, syncPreferences: Sync
     private fun getAppDataFileList(drive: Drive): MutableList<File> {
         try {
             // Search for the existing file by name in the appData folder
-            val query = "mimeType='application/x-gzip' and name = '$remoteFileName'"
+            val query = "name = '$remoteFileName' and trashed = false"
             val fileList = drive.files()
                 .list()
                 .setSpaces("appDataFolder")
@@ -203,6 +200,7 @@ class GoogleDriveSyncService(context: Context, json: Json, syncPreferences: Sync
             return mutableListOf()
         }
     }
+    // EaZy Nuvio+ / Chimanew <--
 
     suspend fun deleteSyncDataFromGoogleDrive(): DeleteSyncDataStatus {
         val drive = googleDriveService.driveService
@@ -388,12 +386,19 @@ class GoogleDriveService(private val context: Context) {
         credential.accessToken = accessToken
         credential.refreshToken = refreshToken
 
+        // EaZy Nuvio+ / Chimanew -->
         driveService = Drive.Builder(
             NetHttpTransport(),
             jsonFactory,
             credential,
         ).setApplicationName(context.stringResource(MR.strings.app_name))
+            .setHttpRequestInitializer { httpRequest ->
+                credential.initialize(httpRequest)
+                httpRequest.connectTimeout = 30000 // 30s
+                httpRequest.readTimeout = 60000 // 60s
+            }
             .build()
+        // EaZy Nuvio+ / Chimanew <--
     }
 
     /**
