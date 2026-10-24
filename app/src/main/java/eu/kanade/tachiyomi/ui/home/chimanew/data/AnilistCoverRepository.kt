@@ -38,6 +38,23 @@ class AnilistCoverRepository(
     private val malCache = ConcurrentHashMap<Long, AnilistMediaArtwork>()
     private val titleCache = ConcurrentHashMap<String, AnilistMediaArtwork>()
 
+    @Volatile
+    private var rateLimitedUntil: Long = 0L
+
+    private fun isRateLimited(): Boolean {
+        return System.currentTimeMillis() < rateLimitedUntil
+    }
+
+    private fun handleException(e: Exception, context: String) {
+        val msg = e.message.orEmpty()
+        if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
+            rateLimitedUntil = System.currentTimeMillis() + 60_000L
+            logcat(throwable = e) { "AniList rate limited (429) during $context. Pausing calls for 60s." }
+        } else {
+            logcat(throwable = e) { "Failed to fetch AniList artwork during $context" }
+        }
+    }
+
     fun getCached(remoteId: Long): AnilistMediaArtwork? = cache[remoteId]
 
     fun getCachedByMalId(malId: Long): AnilistMediaArtwork? = malCache[malId]
@@ -47,6 +64,7 @@ class AnilistCoverRepository(
     suspend fun fetchByMalId(malId: Long): AnilistMediaArtwork? {
         if (malId <= 0) return null
         malCache[malId]?.let { return it }
+        if (isRateLimited()) return null
 
         return withContext(Dispatchers.IO) {
             try {
@@ -111,7 +129,7 @@ class AnilistCoverRepository(
                     empty
                 }
             } catch (e: Exception) {
-                logcat(throwable = e) { "Failed to fetch AniList artwork for MAL ID: $malId" }
+                handleException(e, "fetchByMalId($malId)")
                 null
             }
         }
@@ -119,9 +137,10 @@ class AnilistCoverRepository(
 
     suspend fun fetchBatchByMalIds(malIds: List<Long>): Map<Long, AnilistMediaArtwork> {
         val uncached = malIds.distinct().filter { it > 0 && !malCache.containsKey(it) }
-        if (uncached.isNotEmpty()) {
+        if (uncached.isNotEmpty() && !isRateLimited()) {
             withContext(Dispatchers.IO) {
                 uncached.chunked(50).forEach { chunk ->
+                    if (isRateLimited()) return@forEach
                     try {
                         val query = """
                             query (${'$'}ids: [Int]) {
@@ -191,7 +210,7 @@ class AnilistCoverRepository(
                             }
                         }
                     } catch (e: Exception) {
-                        logcat(throwable = e) { "Failed to fetch AniList artwork batch for MAL IDs: $chunk" }
+                        handleException(e, "fetchBatchByMalIds($chunk)")
                     }
                 }
             }
@@ -201,14 +220,15 @@ class AnilistCoverRepository(
 
     suspend fun fetchBatch(remoteIds: List<Long>): Map<Long, AnilistMediaArtwork> {
         val uncached = remoteIds.distinct().filter { !cache.containsKey(it) }
-        if (uncached.isNotEmpty()) {
+        if (uncached.isNotEmpty() && !isRateLimited()) {
             withContext(Dispatchers.IO) {
                 uncached.chunked(50).forEach { chunk ->
+                    if (isRateLimited()) return@forEach
                     try {
                         val query = """
                             query (${'$'}ids: [Int]) {
                                 Page(perPage: 50) {
-                                    media(id_in: ${'$'}ids) {
+                                    media(id_in: ${'$'}ids, type: MANGA) {
                                         id
                                         bannerImage
                                         coverImage {
@@ -268,7 +288,7 @@ class AnilistCoverRepository(
                             }
                         }
                     } catch (e: Exception) {
-                        logcat(throwable = e) { "Failed to fetch AniList artwork batch for $chunk" }
+                        handleException(e, "fetchBatch($chunk)")
                     }
                 }
             }
@@ -280,12 +300,13 @@ class AnilistCoverRepository(
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return null
         titleCache[title]?.let { return it }
+        if (isRateLimited()) return null
 
         return withContext(Dispatchers.IO) {
             try {
                 val query = """
                     query (${'$'}title: String) {
-                        Media(search: ${'$'}title) {
+                        Media(search: ${'$'}title, type: MANGA) {
                             id
                             bannerImage
                             coverImage {
@@ -343,7 +364,7 @@ class AnilistCoverRepository(
                     empty
                 }
             } catch (e: Exception) {
-                logcat(throwable = e) { "Failed to fetch AniList artwork for title: $title" }
+                handleException(e, "fetchByTitle($title)")
                 null
             }
         }

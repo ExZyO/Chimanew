@@ -36,6 +36,7 @@ internal fun LibraryComfortableGrid(
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val useAnilistArtwork by preferences.useAnilistArtworkInLibrary().collectPrefAsState()
     val artworkWaterfallOrder by preferences.artworkWaterfallOrder().collectPrefAsState()
+    val artworkCoverOrder by preferences.artworkCoverOrder().collectPrefAsState()
 
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -56,6 +57,8 @@ internal fun LibraryComfortableGrid(
                 } else null,
                 key1 = manga.id,
                 key2 = useAnilistArtwork,
+                key3 = artworkCoverOrder,
+                key4 = artworkWaterfallOrder,
             ) {
                 if (useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title

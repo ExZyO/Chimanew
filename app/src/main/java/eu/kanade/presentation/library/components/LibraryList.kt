@@ -36,6 +36,7 @@ internal fun LibraryList(
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val useAnilistArtwork by preferences.useAnilistArtworkInLibrary().collectPrefAsState()
     val artworkWaterfallOrder by preferences.artworkWaterfallOrder().collectPrefAsState()
+    val artworkCoverOrder by preferences.artworkCoverOrder().collectPrefAsState()
 
     FastScrollLazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -63,6 +64,8 @@ internal fun LibraryList(
                 } else null,
                 key1 = manga.id,
                 key2 = useAnilistArtwork,
+                key3 = artworkCoverOrder,
+                key4 = artworkWaterfallOrder,
             ) {
                 if (useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title

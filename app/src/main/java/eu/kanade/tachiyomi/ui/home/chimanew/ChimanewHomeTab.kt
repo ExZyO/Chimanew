@@ -37,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -73,12 +74,21 @@ import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioHeroSection
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioMangaShelf
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
 data object ChimanewHomeTab : Tab {
     private fun readResolve(): Any = ChimanewHomeTab
+
+    private val scrollToTopChannel = Channel<Unit>(Channel.CONFLATED)
+
+    override suspend fun onReselect(navigator: cafe.adriel.voyager.navigator.Navigator) {
+        scrollToTopChannel.send(Unit)
+    }
 
     override val options: TabOptions
         @Composable
@@ -138,6 +148,21 @@ data object ChimanewHomeTab : Tab {
         }
 
         val listState = rememberLazyListState()
+
+        var hasScrolledToTopOnce by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(state.heroItems.size, state.shelves.size) {
+            if (!hasScrolledToTopOnce && (state.heroItems.isNotEmpty() || state.shelves.isNotEmpty())) {
+                hasScrolledToTopOnce = true
+                listState.scrollToItem(0, 0)
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            scrollToTopChannel.receiveAsFlow().collectLatest {
+                listState.animateScrollToItem(0)
+            }
+        }
+
         val scrollAlpha by remember {
             derivedStateOf {
                 if (listState.firstVisibleItemIndex > 0) {

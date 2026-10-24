@@ -459,34 +459,34 @@ object HomeScreen : Screen() {
                                 val tabWidthPx = dockPixelWidth / tabCount
 
                                 var lastX = down.position.x
+                                var totalDragDistance = 0f
                                 val initialIdx = ((lastX - (tabWidthPx / 2f)) / tabWidthPx).coerceIn(0f, (tabCount - 1).toFloat())
-                                glideIndex = initialIdx
-                                glideStretch = 1.04f
 
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                     if (!change.pressed) {
-                                        // Released! Snap to closest index
+                                        // Released! Snap to closest index only if actually dragged
                                         val finalIdx = (glideIndex ?: activeIdx.toFloat()).roundToInt().coerceIn(0, tabCount - 1)
                                         glideIndex = null
                                         glideStretch = 1.0f
-                                        if (finalIdx != activeIdx) {
+                                        if (totalDragDistance > 20f && finalIdx != activeIdx) {
                                             tabNavigator.current = tabs[finalIdx]
-                                        } else {
-                                            scope.launch { tabs[finalIdx].onReselect(navigator) }
+                                            change.consume()
                                         }
-                                        change.consume()
                                         break
                                     }
                                     val currentX = change.position.x
                                     val deltaX = abs(currentX - lastX)
+                                    totalDragDistance += deltaX
                                     lastX = currentX
 
-                                    val continuousIdx = ((currentX - (tabWidthPx / 2f)) / tabWidthPx).coerceIn(0f, (tabCount - 1).toFloat())
-                                    glideIndex = continuousIdx
-                                    glideStretch = (1.02f + deltaX * 0.005f).coerceIn(1.02f, 1.14f)
-                                    change.consume()
+                                    if (totalDragDistance > 12f) {
+                                        val continuousIdx = ((currentX - (tabWidthPx / 2f)) / tabWidthPx).coerceIn(0f, (tabCount - 1).toFloat())
+                                        glideIndex = continuousIdx
+                                        glideStretch = (1.02f + deltaX * 0.005f).coerceIn(1.02f, 1.14f)
+                                        change.consume()
+                                    }
                                 }
                             }
                         },
@@ -550,7 +550,7 @@ object HomeScreen : Screen() {
                             val isTabActive = currentHoveredIdx == tabs.indexOf(tab)
 
                             val onClickTab: () -> Unit = {
-                                if (currentHoveredIdx != tabs.indexOf(tab)) {
+                                if (tabNavigator.current::class != tab::class) {
                                     tabNavigator.current = tab
                                 } else {
                                     scope.launch { tab.onReselect(navigator) }
@@ -567,15 +567,21 @@ object HomeScreen : Screen() {
                                 label = "dock_item_tint",
                             )
 
+                            val hasInnerClick = (tab == LibraryTab && useConsolidatedLibrary) || (tab == BrowseTab)
+
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
                                     .clip(RoundedCornerShape(999.dp))
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = onClickTab,
+                                    .then(
+                                        if (!hasInnerClick) {
+                                            Modifier.clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null,
+                                                onClick = onClickTab,
+                                            )
+                                        } else Modifier,
                                     ),
                                 contentAlignment = Alignment.Center,
                             ) {

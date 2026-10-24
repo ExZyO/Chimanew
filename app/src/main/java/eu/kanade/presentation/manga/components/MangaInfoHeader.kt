@@ -82,6 +82,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -170,19 +171,26 @@ fun MangaInfoBox(
     val ambientCanvasStyle by chimanewPreferences.ambientCanvasStyle().collectAsState()
     val customBannerUrl by chimanewPreferences.mangaCustomBannerUrl(manga.id).collectAsState()
     val artworkWaterfallOrder by chimanewPreferences.artworkWaterfallOrder().collectAsState()
+    val artworkBannerOrder by chimanewPreferences.artworkBannerOrder().collectAsState()
+    val artworkCoverOrder by chimanewPreferences.artworkCoverOrder().collectAsState()
     val showCommunityRatings by chimanewPreferences.showCommunityRatings().collectAsState()
     val showRatingsInDetails by chimanewPreferences.showRatingsInDetails().collectAsState()
     val communityRatingFormat by chimanewPreferences.communityRatingFormat().collectAsState()
 
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val mangaTitle = remember(manga) { manga.ogTitle ?: manga.title }
-    val cachedArtwork = remember(mangaTitle) { waterfallRepo.getCached(mangaTitle) }
+    val cachedArtwork = remember(mangaTitle, artworkBannerOrder, artworkCoverOrder, artworkWaterfallOrder) {
+        waterfallRepo.getCached(mangaTitle)
+    }
 
     val unifiedArtwork by produceState<UnifiedArtwork?>(
         initialValue = if (useAnilistArtwork) cachedArtwork else null,
         manga.id,
         useAnilistArtwork,
         artworkWaterfallOrder,
+        artworkBannerOrder,
+        artworkCoverOrder,
+        detailsBackdropArtwork,
     ) {
         if (!useAnilistArtwork) {
             value = null
@@ -252,31 +260,29 @@ fun MangaInfoBox(
         // EaZy Nuvio+ / Chimanew: resilient fallback to local manga cover if remote banner/artwork fails to load
         var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
         val effectiveArtworkModel = if (artworkLoadFailed) manga else chosenArtworkModel
+        var bannerAspectRatio by remember(effectiveArtworkModel) { mutableFloatStateOf(0f) }
 
         key(effectiveArtworkModel, detailsBackdropStyle, detailsBackdropScale, detailsBackdropArtwork, activeStyle) {
-            // Layer 1: Ambient Blurred Underlay (guarantees no empty black voids behind the banner)
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(effectiveArtworkModel)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alignment = Alignment.Center,
-                modifier = Modifier
-                    .matchParentSize()
-                    .blur(32.dp)
-                    .alpha(0.35f)
-                    .background(surfaceTintColor.copy(alpha = 0.15f)),
-            )
-
-            // Layer 2: Main Artwork Layer
-            val isFillWidth = (detailsBackdropScale == 0 || detailsBackdropScale == 1)
-            val topBannerPadding = if (isFillWidth) {
-                (appBarPadding * 0.65f).coerceAtLeast(18.dp)
-            } else {
-                0.dp
+            // Layer 1: Ambient Blurred Underlay (Rendered in Dual Layer mode or when glowing atmosphere is active)
+            if (detailsBackdropScale == 0 || activeStyle == 1 || !isWideBanner) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(effectiveArtworkModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.Center,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .blur(32.dp)
+                        .alpha(0.35f)
+                        .background(surfaceTintColor.copy(alpha = 0.15f)),
+                )
             }
+
+            // Layer 2: Main Artwork Layer - ALL THE WAY TO THE TOP (0.dp top padding)
+            val isFillWidth = (detailsBackdropScale == 0 || detailsBackdropScale == 1)
 
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
@@ -292,46 +298,68 @@ fun MangaInfoBox(
                     }
                 },
                 onSuccess = { result ->
+                    val image = result.result.image
+                    if (image.width > 0 && image.height > 0) {
+                        bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                    }
                     if (effectiveArtworkModel == manga) {
-                        val image = result.result.image
                         coverRatio.floatValue = image.height.toFloat() / image.width
                     }
                 },
                 modifier = Modifier
                     .matchParentSize()
-                    .padding(top = topBannerPadding)
                     .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
                     .alpha(backdropAlpha),
             )
 
-            // Layer 3: Solid Scrims & Smooth Vertical Dissolve
+            // Layer 3: Solid Scrims & Dynamic Bottom Dissolve
             Canvas(
                 modifier = Modifier.matchParentSize(),
             ) {
                 // Top scrim for status bar and navigation action readability
+                val topScrimEnd = (appBarPadding.toPx() + 32.dp.toPx()).coerceAtLeast(180f)
                 drawRect(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.70f),
-                            Color.Black.copy(alpha = 0.25f),
+                            Color.Black.copy(alpha = 0.75f),
+                            Color.Black.copy(alpha = 0.35f),
                             Color.Transparent,
                         ),
-                        endY = size.height * 0.40f,
+                        endY = topScrimEnd,
                     ),
                 )
-                // Bottom vertical dissolve: seamlessly ramps to 100% solid backgroundColor
+
+                // Bottom vertical dissolve: dynamically anchored to the bottom edge of the banner
+                val effectiveBannerHeight = if (isFillWidth && bannerAspectRatio > 0f) {
+                    size.width / bannerAspectRatio
+                } else {
+                    size.height * 0.70f
+                }
+
+                val fadeStart = (effectiveBannerHeight * 0.35f).coerceAtLeast(40f)
+                val fadeEnd = effectiveBannerHeight.coerceAtMost(size.height)
+
                 drawRect(
                     brush = Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            backgroundColor.copy(alpha = 0.40f),
-                            backgroundColor.copy(alpha = 0.85f),
+                            backgroundColor.copy(alpha = 0.30f),
+                            backgroundColor.copy(alpha = 0.75f),
                             backgroundColor,
                         ),
-                        startY = size.height * 0.45f,
-                        endY = size.height,
+                        startY = fadeStart,
+                        endY = fadeEnd,
                     ),
                 )
+
+                // Fill with solid backgroundColor below the banner edge so nothing peeks through
+                if (fadeEnd < size.height) {
+                    drawRect(
+                        color = backgroundColor,
+                        topLeft = Offset(0f, fadeEnd),
+                        size = Size(size.width, size.height - fadeEnd),
+                    )
+                }
 
                 if (!isWideBanner) {
                     when (ambientCanvasStyle) {
@@ -1292,7 +1320,7 @@ internal fun RowScope.MangaActionButton(
     }
 }
 
-// EaZy Nuvio+ / Chimanew: Community Rating Badges
+// EaZy Nuvio+ / Chimanew: Nuvio-Style Community Rating Badges with Authentic Logos
 @Composable
 fun CommunityRatingBadge(
     ratings: List<CommunityRating>,
@@ -1303,52 +1331,119 @@ fun CommunityRatingBadge(
 
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (format == 4) {
-            ratings.forEach { r ->
-                SingleRatingChip(
-                    text = "★ ${String.format(java.util.Locale.US, "%.1f", r.score10)} ${r.source.take(2).uppercase()}",
-                    isAmber = true,
-                )
+            ratings.forEach { rating ->
+                NuvioRatingBadgeItem(rating = rating, format = format)
             }
         } else {
-            val r = ratings.first()
-            val text = when (format) {
-                0 -> "★ ${String.format(java.util.Locale.US, "%.1f", r.score10)}"
-                1 -> "${r.score100}%"
-                2 -> "★ ${String.format(java.util.Locale.US, "%.1f", r.score10)} • ${r.source}"
-                3 -> "${r.score100}% • ${r.source}"
-                else -> "★ ${String.format(java.util.Locale.US, "%.1f", r.score10)}"
-            }
-            SingleRatingChip(
-                text = text,
-                isAmber = format != 1 && format != 3,
-            )
+            val rating = ratings.first()
+            NuvioRatingBadgeItem(rating = rating, format = format)
         }
     }
 }
 
 @Composable
-private fun SingleRatingChip(
-    text: String,
-    isAmber: Boolean,
+private fun NuvioRatingBadgeItem(
+    rating: CommunityRating,
+    format: Int,
 ) {
-    val bgColor = if (isAmber) Color(0xFFF59E0B).copy(alpha = 0.20f) else Color(0xFF06B6D4).copy(alpha = 0.20f)
-    val textColor = if (isAmber) Color(0xFFFCD34D) else Color(0xFF67E8F9)
-    val borderColor = if (isAmber) Color(0xFFF59E0B).copy(alpha = 0.45f) else Color(0xFF06B6D4).copy(alpha = 0.45f)
+    val src = rating.source.uppercase()
+    val isPercentage = (format == 1 || format == 3)
+    val scoreText = if (isPercentage) {
+        "${rating.score100}%"
+    } else {
+        String.format(java.util.Locale.US, "%.1f", rating.score10)
+    }
 
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = bgColor,
-        border = BorderStroke(1.dp, borderColor),
+    val (badgeBg, badgeBorder, badgeText, badgeTextColor, scoreColor) = when {
+        src.contains("ANILIST") -> {
+            BrandStyle(
+                bg = Color(0xFF0B1622),
+                border = Color(0xFF02A9FF).copy(alpha = 0.50f),
+                text = "AL",
+                textColor = Color(0xFF02A9FF),
+                scoreColor = Color(0xFF38BDF8),
+            )
+        }
+        src.contains("MAL") || src.contains("MYANIMELIST") -> {
+            BrandStyle(
+                bg = Color(0xFF2E51A2),
+                border = Color(0xFF4E72C4).copy(alpha = 0.50f),
+                text = "MAL",
+                textColor = Color.White,
+                scoreColor = Color(0xFF93C5FD),
+            )
+        }
+        src.contains("KITSU") -> {
+            BrandStyle(
+                bg = Color(0xFFFD755C),
+                border = Color(0xFFFF8B73).copy(alpha = 0.50f),
+                text = "kitsu",
+                textColor = Color.White,
+                scoreColor = Color(0xFFFCA5A5),
+            )
+        }
+        src.contains("MANGADEX") -> {
+            BrandStyle(
+                bg = Color(0xFFFF6740),
+                border = Color(0xFFFF8B73).copy(alpha = 0.50f),
+                text = "MD",
+                textColor = Color.White,
+                scoreColor = Color(0xFFFDBA74),
+            )
+        }
+        else -> {
+            BrandStyle(
+                bg = Color(0xFF374151),
+                border = Color(0xFF6B7280).copy(alpha = 0.50f),
+                text = rating.source.take(3).uppercase(),
+                textColor = Color.White,
+                scoreColor = Color(0xFFF3F4F6),
+            )
+        }
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
+        Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = badgeBg,
+            border = BorderStroke(1.dp, badgeBorder),
+            modifier = Modifier.height(18.dp),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            ) {
+                Text(
+                    text = badgeText,
+                    color = badgeTextColor,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 10.sp,
+                    ),
+                )
+            }
+        }
         Text(
-            text = text,
-            color = textColor,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            text = scoreText,
+            color = scoreColor,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.Bold,
+            ),
         )
     }
 }
+
+private data class BrandStyle(
+    val bg: Color,
+    val border: Color,
+    val text: String,
+    val textColor: Color,
+    val scoreColor: Color,
+)
