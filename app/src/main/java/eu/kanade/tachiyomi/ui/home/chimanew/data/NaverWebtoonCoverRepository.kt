@@ -194,7 +194,8 @@ class NaverWebtoonCoverRepository(
             val seriesHtml = seriesResp.body.string()
 
             val bannerUrl = WEBTOONS_BG_REGEX.find(seriesHtml)?.groupValues?.get(1)
-            val coverUrl = WEBTOONS_COVER_REGEX.find(seriesHtml)?.groupValues?.get(1)
+            val rawCoverUrl = WEBTOONS_COVER_REGEX.find(seriesHtml)?.groupValues?.get(1)
+            val coverUrl = rawCoverUrl?.replace(Regex("""\?type=crop\d+_\d+"""), "?type=q90")
 
             if (bannerUrl != null || coverUrl != null) {
                 NaverWebtoonArtwork(
@@ -218,8 +219,8 @@ class NaverWebtoonCoverRepository(
         private val BACK_IMAGE_REGEX = Regex("""src=["'](https://[^"']*backImage_[^"']+)["']""")
         private val OG_IMAGE_REGEX = Regex("""<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']""")
         private val WEBTOONS_CARD_LINK_REGEX = Regex("""<a\s+href=["'](https://www\.webtoons\.com/en/[^"']+/list\?title_no=\d+)["']""")
-        private val WEBTOONS_BG_REGEX = Regex("""class=["']detail_bg["']\s+style=["']background:url\('([^']+)'\)""")
-        private val WEBTOONS_COVER_REGEX = Regex("""<span\s+class=["']thmb["']><img\s+src=["']([^"']+)["']""")
+        private val WEBTOONS_BG_REGEX = Regex("""class=["']detail_bg["']\s+style=["'][^"']*url\(['"]?([^'"\)]+)['"]?\)""")
+        private val WEBTOONS_COVER_REGEX = Regex("""<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']""")
 
         fun normalizeKey(query: String): String {
             return query.trim().lowercase()

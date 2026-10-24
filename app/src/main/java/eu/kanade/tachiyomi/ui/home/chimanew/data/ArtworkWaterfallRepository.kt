@@ -279,6 +279,17 @@ class ArtworkWaterfallRepository(
             alArt = anilistRepo.getCachedByTitle(title) ?: anilistRepo.fetchByTitle(title)
         }
 
+        if (alArt != null && alArt.countryOfOrigin == null) {
+            val refreshed = if (effectiveAniListId != null && effectiveAniListId > 0) {
+                anilistRepo.fetchBatch(listOf(effectiveAniListId))[effectiveAniListId]
+            } else if (effectiveMalId != null && effectiveMalId > 0) {
+                anilistRepo.fetchByMalId(effectiveMalId)
+            } else {
+                anilistRepo.fetchByTitle(title)
+            }
+            if (refreshed != null) alArt = refreshed
+        }
+
         alArt?.bannerUrl?.let {
             if (it.isNotBlank()) {
                 banners.add(it)
@@ -295,15 +306,12 @@ class ArtworkWaterfallRepository(
         }
 
         // 2. NAVER WEBTOON (Native Korean Manhwa & LINE Webtoon Global)
-        val isKorean = alArt?.countryOfOrigin == "KR" ||
-            containsHangul(title) ||
-            (alArt?.nativeTitle != null && containsHangul(alArt.nativeTitle))
-
+        val isNotJapanese = alArt?.countryOfOrigin != "JP" && !containsJapanese(title)
         val koreanQuery = listOfNotNull(
             alArt?.nativeTitle?.takeIf { containsHangul(it) },
             alArt?.synonyms?.firstOrNull { containsHangul(it) },
             title.takeIf { containsHangul(it) },
-        ).firstOrNull() ?: if (isKorean) title else null
+        ).firstOrNull() ?: if (isNotJapanese) title else null
 
         if (koreanQuery != null) {
             val naverArt = naverRepo.getCached(koreanQuery) ?: naverRepo.fetchArtwork(koreanQuery)
