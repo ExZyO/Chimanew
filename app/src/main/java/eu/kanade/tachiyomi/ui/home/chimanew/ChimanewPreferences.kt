@@ -71,17 +71,17 @@ class ChimanewPreferences(
 
     fun artworkWaterfallOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_waterfall_order",
-        "anilist:true,kitsu:true,mangadex:true",
+        "naver:true,kuaikan:true,anilist:true,kitsu:true,mangadex:true",
     )
 
     fun artworkBannerOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_banner_order",
-        "anilist:true,kitsu:true",
+        "naver:true,kuaikan:true,anilist:true,kitsu:true",
     )
 
     fun artworkCoverOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_cover_order",
-        "mangadex:true,anilist:true,kitsu:true",
+        "mangadex:true,anilist:true,naver:true,kuaikan:true,kitsu:true",
     )
 
     fun showCommunityRatings() = preferenceStore.getBoolean("pref_chimanew_show_community_ratings", true)

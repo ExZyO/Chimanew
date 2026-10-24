@@ -132,8 +132,12 @@
     <string name="pref_chimanew_navbar_autohide_summary">Smoothly collapse navbar when scrolling down and expand when scrolling up</string>
     <string name="pref_chimanew_artwork_category">Artwork Sources &amp; Priorities</string>
     <string name="pref_chimanew_artwork_waterfall">Artwork Sources &amp; Priority</string>
-    <string name="pref_chimanew_artwork_waterfall_summary">Reorder or disable artwork providers (AniList, Kitsu, MangaDex)</string>
+    <string name="pref_chimanew_artwork_waterfall_summary">Reorder or disable artwork providers (Naver, Kuaikan, AniList, Kitsu, MangaDex)</string>
     <string name="pref_chimanew_artwork_priority_screen_title">Artwork Sources &amp; Priority</string>
+    <string name="pref_chimanew_artwork_provider_naver">Naver Webtoon</string>
+    <string name="pref_chimanew_artwork_provider_naver_desc">Authentic Korean banners &amp; official webtoon key visuals</string>
+    <string name="pref_chimanew_artwork_provider_kuaikan">Kuaikan Manhua</string>
+    <string name="pref_chimanew_artwork_provider_kuaikan_desc">Studio widescreen banners &amp; official manhua covers</string>
     <string name="pref_chimanew_artwork_provider_anilist">AniList</string>
     <string name="pref_chimanew_artwork_provider_anilist_desc">Official wide landscape banners &amp; extra-large manga covers</string>
     <string name="pref_chimanew_artwork_provider_kitsu">Kitsu</string>

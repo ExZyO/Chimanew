@@ -84,6 +84,8 @@ class ArtworkWaterfallRepository(
     private val trackRepository: TrackRepository = Injekt.get(),
     private val json: Json = Injekt.get(),
     private val context: Application = Injekt.get(),
+    private val naverRepo: NaverWebtoonCoverRepository = Injekt.get(),
+    private val kuaikanRepo: KuaikanCoverRepository = Injekt.get(),
 ) {
     private val cache = ConcurrentHashMap<String, UnifiedArtwork>()
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -113,6 +115,8 @@ class ArtworkWaterfallRepository(
                             entry.allBanners.map { url ->
                                 val inferredSource = when {
                                     url.contains("kitsu", ignoreCase = true) -> "KITSU"
+                                    url.contains("pstatic", ignoreCase = true) || url.contains("naver", ignoreCase = true) -> "NAVER"
+                                    url.contains("kkmh", ignoreCase = true) || url.contains("kuaikan", ignoreCase = true) -> "KUAIKAN"
                                     url.contains("anilist", ignoreCase = true) -> "ANILIST"
                                     else -> "ANILIST"
                                 }
@@ -163,17 +167,19 @@ class ArtworkWaterfallRepository(
     fun getEffectiveArtwork(raw: UnifiedArtwork): UnifiedArtwork {
         val bannerOrder = parsePriorityOrder(
             preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("ANILIST", "KITSU"),
+            allowed = listOf("NAVER", "KUAIKAN", "ANILIST", "KITSU"),
         )
         val coverOrder = parsePriorityOrder(
             preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("MANGADEX", "ANILIST", "KITSU"),
+            allowed = listOf("MANGADEX", "ANILIST", "NAVER", "KUAIKAN", "KITSU"),
         )
 
         var effectiveBanner: String? = null
         for (provider in bannerOrder) {
             val banner = raw.bannerOptions.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
                 ?: when (provider) {
+                    "NAVER" -> raw.allAvailableBanners.firstOrNull { it.contains("pstatic", ignoreCase = true) || it.contains("naver", ignoreCase = true) }
+                    "KUAIKAN" -> raw.allAvailableBanners.firstOrNull { it.contains("kkmh", ignoreCase = true) || it.contains("kuaikan", ignoreCase = true) }
                     "ANILIST" -> raw.allAvailableBanners.firstOrNull { it.contains("anilist", ignoreCase = true) }
                     "KITSU" -> raw.allAvailableBanners.firstOrNull { it.contains("kitsu", ignoreCase = true) }
                     else -> null
@@ -187,6 +193,11 @@ class ArtworkWaterfallRepository(
         var effectivePoster: String? = null
         for (provider in coverOrder) {
             val cover = raw.allAvailableCovers.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
+                ?: when (provider) {
+                    "NAVER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("pstatic", ignoreCase = true) || it.url.contains("naver", ignoreCase = true) }?.url
+                    "KUAIKAN" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kkmh", ignoreCase = true) || it.url.contains("kuaikan", ignoreCase = true) }?.url
+                    else -> null
+                }
             if (!cover.isNullOrBlank()) {
                 effectivePoster = cover
                 break
@@ -242,73 +253,119 @@ class ArtworkWaterfallRepository(
             } catch (_: Exception) {}
         }
 
-        val allProviders = listOf("ANILIST", "KITSU", "MANGADEX")
         val banners = mutableListOf<String>()
         val bannerOptions = mutableListOf<ArtworkBannerOption>()
         val covers = mutableListOf<ArtworkCoverOption>()
         val ratings = mutableListOf<CommunityRating>()
 
-        for (provider in allProviders) {
-            when (provider) {
-                "ANILIST" -> {
-                    var alArt = if (effectiveAniListId != null && effectiveAniListId > 0) {
-                        anilistRepo.getCached(effectiveAniListId) ?: anilistRepo.fetchBatch(listOf(effectiveAniListId))[effectiveAniListId]
-                    } else null
+        // 1. ANILIST (Primary metadata & Rosetta Stone bridge for native Hangul/Hanzi names)
+        var alArt = if (effectiveAniListId != null && effectiveAniListId > 0) {
+            anilistRepo.getCached(effectiveAniListId) ?: anilistRepo.fetchBatch(listOf(effectiveAniListId))[effectiveAniListId]
+        } else null
 
-                    if ((alArt == null || (alArt.bannerUrl == null && alArt.extraLargeCoverUrl == null)) && effectiveMalId != null && effectiveMalId > 0) {
-                        alArt = anilistRepo.getCachedByMalId(effectiveMalId) ?: anilistRepo.fetchByMalId(effectiveMalId)
-                    }
+        if ((alArt == null || (alArt.bannerUrl == null && alArt.extraLargeCoverUrl == null)) && effectiveMalId != null && effectiveMalId > 0) {
+            alArt = anilistRepo.getCachedByMalId(effectiveMalId) ?: anilistRepo.fetchByMalId(effectiveMalId)
+        }
 
-                    if (alArt == null || (alArt.bannerUrl == null && alArt.extraLargeCoverUrl == null)) {
-                        alArt = anilistRepo.getCachedByTitle(title) ?: anilistRepo.fetchByTitle(title)
-                    }
+        if (alArt == null || (alArt.bannerUrl == null && alArt.extraLargeCoverUrl == null)) {
+            alArt = anilistRepo.getCachedByTitle(title) ?: anilistRepo.fetchByTitle(title)
+        }
 
-                    alArt?.bannerUrl?.let {
-                        if (it.isNotBlank()) {
-                            banners.add(it)
-                            bannerOptions.add(ArtworkBannerOption(it, "ANILIST"))
-                        }
-                    }
-                    alArt?.extraLargeCoverUrl?.let {
-                        if (it.isNotBlank()) {
-                            covers.add(ArtworkCoverOption(url = it, source = "AniList", subtitle = "HD Poster"))
-                        }
-                    }
-                    if (alArt?.score10 != null && alArt.score100 != null) {
-                        ratings.add(CommunityRating(score10 = alArt.score10, score100 = alArt.score100, source = "AniList"))
-                    }
+        alArt?.bannerUrl?.let {
+            if (it.isNotBlank()) {
+                banners.add(it)
+                bannerOptions.add(ArtworkBannerOption(it, "ANILIST"))
+            }
+        }
+        alArt?.extraLargeCoverUrl?.let {
+            if (it.isNotBlank()) {
+                covers.add(ArtworkCoverOption(url = it, source = "AniList", subtitle = "HD Poster"))
+            }
+        }
+        if (alArt?.score10 != null && alArt.score100 != null) {
+            ratings.add(CommunityRating(score10 = alArt.score10, score100 = alArt.score100, source = "AniList"))
+        }
+
+        // 2. NAVER WEBTOON (Native Korean Manhwa & LINE Webtoon Global)
+        val isKorean = alArt?.countryOfOrigin == "KR" ||
+            containsHangul(title) ||
+            (alArt?.nativeTitle != null && containsHangul(alArt.nativeTitle))
+
+        val koreanQuery = listOfNotNull(
+            alArt?.nativeTitle?.takeIf { containsHangul(it) },
+            alArt?.synonyms?.firstOrNull { containsHangul(it) },
+            title.takeIf { containsHangul(it) },
+        ).firstOrNull() ?: if (isKorean) title else null
+
+        if (koreanQuery != null) {
+            val naverArt = naverRepo.getCached(koreanQuery) ?: naverRepo.fetchArtwork(koreanQuery)
+            naverArt?.bannerUrl?.let {
+                if (it.isNotBlank()) {
+                    banners.add(it)
+                    bannerOptions.add(ArtworkBannerOption(it, "NAVER"))
                 }
-                "KITSU" -> {
-                    val kitsuArt = if (effectiveKitsuId != null && effectiveKitsuId > 0) {
-                        kitsuRepo.getCached(effectiveKitsuId) ?: kitsuRepo.fetchByKitsuId(effectiveKitsuId)
-                    } else {
-                        kitsuRepo.getCachedByTitle(title) ?: kitsuRepo.fetchByTitle(title)
-                    }
+            }
+            naverArt?.coverUrl?.let {
+                if (it.isNotBlank()) {
+                    covers.add(ArtworkCoverOption(url = it, source = "Naver", subtitle = "Official Korean Art"))
+                }
+            }
+        }
 
-                    kitsuArt?.bannerUrl?.let {
-                        if (it.isNotBlank()) {
-                            banners.add(it)
-                            bannerOptions.add(ArtworkBannerOption(it, "KITSU"))
-                        }
-                    }
-                    kitsuArt?.posterUrl?.let {
-                        if (it.isNotBlank()) {
-                            covers.add(ArtworkCoverOption(url = it, source = "Kitsu", subtitle = "Official Poster"))
-                        }
-                    }
-                    if (kitsuArt?.score10 != null && kitsuArt.score100 != null) {
-                        ratings.add(CommunityRating(score10 = kitsuArt.score10, score100 = kitsuArt.score100, source = "Kitsu"))
-                    }
+        // 3. KUAIKAN MANHUA (Native Chinese Manhua)
+        val isChinese = alArt?.countryOfOrigin == "CN" ||
+            containsHanzi(title) ||
+            (alArt?.nativeTitle != null && containsHanzi(alArt.nativeTitle))
+
+        val chineseQuery = listOfNotNull(
+            alArt?.nativeTitle?.takeIf { containsHanzi(it) },
+            alArt?.synonyms?.firstOrNull { containsHanzi(it) },
+            title.takeIf { containsHanzi(it) },
+        ).firstOrNull() ?: if (isChinese) title else null
+
+        if (chineseQuery != null) {
+            val kkArt = kuaikanRepo.getCached(chineseQuery) ?: kuaikanRepo.fetchArtwork(chineseQuery)
+            kkArt?.bannerUrl?.let {
+                if (it.isNotBlank()) {
+                    banners.add(it)
+                    bannerOptions.add(ArtworkBannerOption(it, "KUAIKAN"))
                 }
-                "MANGADEX" -> {
-                    val mdArt = mangadexRepo.getCachedByTitle(title) ?: mangadexRepo.fetchCoversByTitle(title)
-                    mdArt?.covers?.let { mdCovers ->
-                        mdCovers.forEach { c ->
-                            val sub = listOfNotNull(c.volume?.let { "Vol. $it" }, c.locale).joinToString(" ").ifBlank { null }
-                            covers.add(ArtworkCoverOption(url = c.url, source = "MangaDex", subtitle = sub))
-                        }
-                    }
+            }
+            kkArt?.coverUrl?.let {
+                if (it.isNotBlank()) {
+                    covers.add(ArtworkCoverOption(url = it, source = "Kuaikan", subtitle = "Official Chinese Art"))
                 }
+            }
+        }
+
+        // 4. KITSU
+        val kitsuArt = if (effectiveKitsuId != null && effectiveKitsuId > 0) {
+            kitsuRepo.getCached(effectiveKitsuId) ?: kitsuRepo.fetchByKitsuId(effectiveKitsuId)
+        } else {
+            kitsuRepo.getCachedByTitle(title) ?: kitsuRepo.fetchByTitle(title)
+        }
+
+        kitsuArt?.bannerUrl?.let {
+            if (it.isNotBlank()) {
+                banners.add(it)
+                bannerOptions.add(ArtworkBannerOption(it, "KITSU"))
+            }
+        }
+        kitsuArt?.posterUrl?.let {
+            if (it.isNotBlank()) {
+                covers.add(ArtworkCoverOption(url = it, source = "Kitsu", subtitle = "Official Poster"))
+            }
+        }
+        if (kitsuArt?.score10 != null && kitsuArt.score100 != null) {
+            ratings.add(CommunityRating(score10 = kitsuArt.score10, score100 = kitsuArt.score100, source = "Kitsu"))
+        }
+
+        // 5. MANGADEX
+        val mdArt = mangadexRepo.getCachedByTitle(title) ?: mangadexRepo.fetchCoversByTitle(title)
+        mdArt?.covers?.let { mdCovers ->
+            mdCovers.forEach { c ->
+                val sub = listOfNotNull(c.volume?.let { "Vol. $it" }, c.locale).joinToString(" ").ifBlank { null }
+                covers.add(ArtworkCoverOption(url = c.url, source = "MangaDex", subtitle = sub))
             }
         }
 
@@ -328,6 +385,12 @@ class ArtworkWaterfallRepository(
     }
 
     companion object {
+        private val HANGUL_REGEX = Regex("""[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]""")
+        private val HANZI_REGEX = Regex("""[\u4E00-\u9FFF\u3400-\u4DBF]""")
+
+        fun containsHangul(text: String): Boolean = HANGUL_REGEX.containsMatchIn(text)
+        fun containsHanzi(text: String): Boolean = HANZI_REGEX.containsMatchIn(text)
+
         fun cleanTitle(title: String): String {
             val cleaned = title
                 .replace(Regex("""\s*[\(\[\{].*?[\)\]\}]"""), " ")
@@ -340,7 +403,7 @@ class ArtworkWaterfallRepository(
 
         fun parsePriorityOrder(
             raw: String,
-            allowed: List<String> = listOf("ANILIST", "KITSU", "MANGADEX"),
+            allowed: List<String> = listOf("NAVER", "KUAIKAN", "ANILIST", "KITSU", "MANGADEX"),
         ): List<String> {
             if (raw.isBlank()) return allowed
             val result = mutableListOf<String>()

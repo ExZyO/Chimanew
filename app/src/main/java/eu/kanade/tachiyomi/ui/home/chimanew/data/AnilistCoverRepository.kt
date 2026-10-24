@@ -8,6 +8,9 @@ import eu.kanade.tachiyomi.network.jsonMime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -28,6 +31,11 @@ data class AnilistMediaArtwork(
     val extraLargeCoverUrl: String? = null,
     val score10: Float? = null,
     val score100: Int? = null,
+    val countryOfOrigin: String? = null,
+    val nativeTitle: String? = null,
+    val romajiTitle: String? = null,
+    val englishTitle: String? = null,
+    val synonyms: List<String> = emptyList(),
 )
 
 class AnilistCoverRepository(
@@ -55,6 +63,11 @@ class AnilistCoverRepository(
         }
     }
 
+    private fun JsonElement?.asStringOrNull(): String? {
+        if (this == null || this is JsonNull) return null
+        return (this as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
+    }
+
     fun getCached(remoteId: Long): AnilistMediaArtwork? = cache[remoteId]
 
     fun getCachedByMalId(malId: Long): AnilistMediaArtwork? = malCache[malId]
@@ -73,6 +86,13 @@ class AnilistCoverRepository(
                         Media(idMal: ${'$'}idMal, type: MANGA) {
                             id
                             idMal
+                            countryOfOrigin
+                            title {
+                                english
+                                romaji
+                                native
+                            }
+                            synonyms
                             bannerImage
                             coverImage {
                                 extraLarge
@@ -103,20 +123,31 @@ class AnilistCoverRepository(
 
                 if (media != null) {
                     val id = media["id"]?.jsonPrimitive?.content?.toLongOrNull()
-                    val banner = media["bannerImage"]?.jsonPrimitive?.content
+                    val country = media["countryOfOrigin"].asStringOrNull()
+                    val titleObj = media["title"]?.jsonObject
+                    val english = titleObj?.get("english").asStringOrNull()
+                    val romaji = titleObj?.get("romaji").asStringOrNull()
+                    val native = titleObj?.get("native").asStringOrNull()
+                    val synonymsList = media["synonyms"]?.jsonArray?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                    val banner = media["bannerImage"].asStringOrNull()
                     val coverObj = media["coverImage"]?.jsonObject
-                    val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
-                        ?: coverObj?.get("large")?.jsonPrimitive?.content
+                    val extraLarge = coverObj?.get("extraLarge").asStringOrNull()
+                        ?: coverObj?.get("large").asStringOrNull()
                     val avgScore = media["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
                     val meanScore = media["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
                     val score100 = avgScore ?: meanScore
                     val score10 = score100?.let { it / 10f }
 
                     val artwork = AnilistMediaArtwork(
-                        bannerUrl = banner?.ifBlank { null },
-                        extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                        bannerUrl = banner,
+                        extraLargeCoverUrl = extraLarge,
                         score10 = score10,
                         score100 = score100,
+                        countryOfOrigin = country,
+                        nativeTitle = native,
+                        romajiTitle = romaji,
+                        englishTitle = english,
+                        synonyms = synonymsList,
                     )
                     malCache[malId] = artwork
                     if (id != null) {
@@ -148,6 +179,13 @@ class AnilistCoverRepository(
                                     media(idMal_in: ${'$'}ids, type: MANGA) {
                                         id
                                         idMal
+                                        countryOfOrigin
+                                        title {
+                                            english
+                                            romaji
+                                            native
+                                        }
+                                        synonyms
                                         bannerImage
                                         coverImage {
                                             extraLarge
@@ -183,20 +221,31 @@ class AnilistCoverRepository(
                             val obj = element.jsonObject
                             val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull()
                             val idMal = obj["idMal"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@forEach
-                            val banner = obj["bannerImage"]?.jsonPrimitive?.content
+                            val country = obj["countryOfOrigin"].asStringOrNull()
+                            val titleObj = obj["title"]?.jsonObject
+                            val english = titleObj?.get("english").asStringOrNull()
+                            val romaji = titleObj?.get("romaji").asStringOrNull()
+                            val native = titleObj?.get("native").asStringOrNull()
+                            val synonymsList = obj["synonyms"]?.jsonArray?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                            val banner = obj["bannerImage"].asStringOrNull()
                             val coverObj = obj["coverImage"]?.jsonObject
-                            val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
-                                ?: coverObj?.get("large")?.jsonPrimitive?.content
+                            val extraLarge = coverObj?.get("extraLarge").asStringOrNull()
+                                ?: coverObj?.get("large").asStringOrNull()
                             val avgScore = obj["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
                             val meanScore = obj["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
                             val score100 = avgScore ?: meanScore
                             val score10 = score100?.let { it / 10f }
 
                             val art = AnilistMediaArtwork(
-                                bannerUrl = banner?.ifBlank { null },
-                                extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                                bannerUrl = banner,
+                                extraLargeCoverUrl = extraLarge,
                                 score10 = score10,
                                 score100 = score100,
+                                countryOfOrigin = country,
+                                nativeTitle = native,
+                                romajiTitle = romaji,
+                                englishTitle = english,
+                                synonyms = synonymsList,
                             )
                             malCache[idMal] = art
                             if (id != null) {
@@ -230,6 +279,13 @@ class AnilistCoverRepository(
                                 Page(perPage: 50) {
                                     media(id_in: ${'$'}ids, type: MANGA) {
                                         id
+                                        countryOfOrigin
+                                        title {
+                                            english
+                                            romaji
+                                            native
+                                        }
+                                        synonyms
                                         bannerImage
                                         coverImage {
                                             extraLarge
@@ -264,20 +320,31 @@ class AnilistCoverRepository(
                         mediaList?.forEach { element ->
                             val obj = element.jsonObject
                             val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@forEach
-                            val banner = obj["bannerImage"]?.jsonPrimitive?.content
+                            val country = obj["countryOfOrigin"].asStringOrNull()
+                            val titleObj = obj["title"]?.jsonObject
+                            val english = titleObj?.get("english").asStringOrNull()
+                            val romaji = titleObj?.get("romaji").asStringOrNull()
+                            val native = titleObj?.get("native").asStringOrNull()
+                            val synonymsList = obj["synonyms"]?.jsonArray?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                            val banner = obj["bannerImage"].asStringOrNull()
                             val coverObj = obj["coverImage"]?.jsonObject
-                            val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
-                                ?: coverObj?.get("large")?.jsonPrimitive?.content
+                            val extraLarge = coverObj?.get("extraLarge").asStringOrNull()
+                                ?: coverObj?.get("large").asStringOrNull()
                             val avgScore = obj["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
                             val meanScore = obj["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
                             val score100 = avgScore ?: meanScore
                             val score10 = score100?.let { it / 10f }
 
                             cache[id] = AnilistMediaArtwork(
-                                bannerUrl = banner?.ifBlank { null },
-                                extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                                bannerUrl = banner,
+                                extraLargeCoverUrl = extraLarge,
                                 score10 = score10,
                                 score100 = score100,
+                                countryOfOrigin = country,
+                                nativeTitle = native,
+                                romajiTitle = romaji,
+                                englishTitle = english,
+                                synonyms = synonymsList,
                             )
                         }
 
@@ -308,6 +375,13 @@ class AnilistCoverRepository(
                     query (${'$'}title: String) {
                         Media(search: ${'$'}title, type: MANGA) {
                             id
+                            countryOfOrigin
+                            title {
+                                english
+                                romaji
+                                native
+                            }
+                            synonyms
                             bannerImage
                             coverImage {
                                 extraLarge
@@ -338,20 +412,31 @@ class AnilistCoverRepository(
 
                 if (media != null) {
                     val id = media["id"]?.jsonPrimitive?.content?.toLongOrNull()
-                    val banner = media["bannerImage"]?.jsonPrimitive?.content
+                    val country = media["countryOfOrigin"].asStringOrNull()
+                    val titleObj = media["title"]?.jsonObject
+                    val english = titleObj?.get("english").asStringOrNull()
+                    val romaji = titleObj?.get("romaji").asStringOrNull()
+                    val native = titleObj?.get("native").asStringOrNull()
+                    val synonymsList = media["synonyms"]?.jsonArray?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                    val banner = media["bannerImage"].asStringOrNull()
                     val coverObj = media["coverImage"]?.jsonObject
-                    val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
-                        ?: coverObj?.get("large")?.jsonPrimitive?.content
+                    val extraLarge = coverObj?.get("extraLarge").asStringOrNull()
+                        ?: coverObj?.get("large").asStringOrNull()
                     val avgScore = media["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
                     val meanScore = media["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
                     val score100 = avgScore ?: meanScore
                     val score10 = score100?.let { it / 10f }
 
                     val artwork = AnilistMediaArtwork(
-                        bannerUrl = banner?.ifBlank { null },
-                        extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                        bannerUrl = banner,
+                        extraLargeCoverUrl = extraLarge,
                         score10 = score10,
                         score100 = score100,
+                        countryOfOrigin = country,
+                        nativeTitle = native,
+                        romajiTitle = romaji,
+                        englishTitle = english,
+                        synonyms = synonymsList,
                     )
                     titleCache[title] = artwork
                     if (id != null) {

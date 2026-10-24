@@ -371,6 +371,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository(get<NetworkHelper>().client, get()) }
         addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.KitsuCoverRepository(get<NetworkHelper>().client, get()) }
         addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.MangadexCoverRepository(get<NetworkHelper>().client, get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.NaverWebtoonCoverRepository(get<NetworkHelper>().client, get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.KuaikanCoverRepository(get<NetworkHelper>().client, get()) }
         addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository(get(), get(), get(), get()) }
 
         addSingletonFactory { chimahon.novel.sync.ttu.TtuOAuthManager(app) }

@@ -59,6 +59,20 @@ import kotlin.random.Random
             )
             .addInterceptor(UncaughtExceptionInterceptor())
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
+            // EaZy Nuvio+ / Chimanew: Auto-attach required referers for Korean/Chinese CDN assets
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val host = request.url.host
+                val newRequest = when {
+                    host.contains("pstatic.net") -> {
+                        request.newBuilder()
+                            .header("Referer", if (host.contains("webtoon-phinf")) "https://www.webtoons.com" else "https://comic.naver.com/webtoon")
+                            .build()
+                    }
+                    else -> request
+                }
+                chain.proceed(newRequest)
+            }
 
         // KMK -->
         if (EHLogLevel.isExtraLogging()) {
