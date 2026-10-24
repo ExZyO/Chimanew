@@ -263,8 +263,8 @@ class LibraryScreenModel(
                                 }
 
                                 // Populate waterfall cache in background
-                                libraryData.favorites.forEach { libManga ->
-                                    val m = libManga.manga
+                                libraryData.favorites.forEach { libItem ->
+                                    val m = libItem.libraryManga.manga
                                     val mTitle = m.ogTitle ?: m.title
                                     if (waterfallRepo.getCached(mTitle) == null) {
                                         val mTracks = libraryData.tracksMap[m.id]
