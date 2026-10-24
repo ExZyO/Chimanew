@@ -48,6 +48,8 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TabText
 import tachiyomi.presentation.core.components.material.padding
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -74,7 +76,7 @@ class CategoryScreen(
         val animeScreenModel = rememberScreenModel { AnimeCategoryScreenModel() }
         val novelScreenModel = rememberScreenModel { NovelCategoryScreenModel() }
 
-        val chimanewPreferences = remember { uy.kohesive.injekt.Injekt.get<ChimanewPreferences>() }
+        val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
         val enableAnime = chimanewPreferences.enableAnimeModule().get()
         val enableNovels = chimanewPreferences.enableNovelModule().get()
 

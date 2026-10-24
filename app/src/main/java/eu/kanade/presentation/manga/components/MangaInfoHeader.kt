@@ -366,9 +366,53 @@ fun MangaInfoBox(
                 }
 
                 1 -> {
-                    // MODE 1: Feathered Cinema Vignette (Soft top and bottom fade below status bar)
+                    // MODE 1: Feathered Cinema Vignette (Soft top and bottom fade below status bar with ambient blur)
                     val topVignetteStart = (appBarPadding * 0.55f).coerceAtLeast(16.dp)
 
+                    // Layer 1: Ambient Glow Underlay behind everything (including status bar)
+                    if (effectiveArtworkModel != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(effectiveArtworkModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            modifier = Modifier
+                                .matchParentSize()
+                                .blur(32.dp)
+                                .alpha(0.40f)
+                                .background(surfaceTintColor.copy(alpha = 0.15f)),
+                        )
+                    }
+
+                    // Scrims for status bar and background dissolve
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.70f),
+                                    Color.Black.copy(alpha = 0.20f),
+                                    Color.Transparent,
+                                ),
+                                endY = (appBarPadding.toPx() + 20.dp.toPx()).coerceAtLeast(140f),
+                            ),
+                        )
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    backgroundColor.copy(alpha = 0.50f),
+                                    backgroundColor,
+                                ),
+                                startY = size.height * 0.45f,
+                                endY = size.height,
+                            ),
+                        )
+                    }
+
+                    // Layer 2: Crisp Foreground Banner
                     if (effectiveArtworkModel != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
@@ -398,15 +442,15 @@ fun MangaInfoBox(
                         )
                     }
 
+                    // Layer 3: Soft feathered blending gradients
                     Canvas(modifier = Modifier.matchParentSize()) {
                         val topFadeEnd = (appBarPadding.toPx() + 28.dp.toPx()).coerceAtLeast(150f)
-                        // Top feather dissolve so status bar and buttons sit on clean dark background
+                        // Top feather dissolve so status bar and buttons sit on clean darkened background
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    backgroundColor,
-                                    backgroundColor.copy(alpha = 0.85f),
-                                    backgroundColor.copy(alpha = 0.30f),
+                                    Color.Black.copy(alpha = 0.60f),
+                                    Color.Black.copy(alpha = 0.25f),
                                     Color.Transparent,
                                 ),
                                 startY = 0f,
@@ -435,14 +479,6 @@ fun MangaInfoBox(
                                 endY = fadeEnd,
                             ),
                         )
-
-                        if (fadeEnd < size.height) {
-                            drawRect(
-                                color = backgroundColor,
-                                topLeft = Offset(0f, fadeEnd),
-                                size = Size(size.width, size.height - fadeEnd),
-                            )
-                        }
                     }
                 }
 
