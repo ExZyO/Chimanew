@@ -270,13 +270,17 @@ class ChimanewHomeScreenModel(
                                 cachedAniList.bannerUrl?.let { eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkBannerOption(it, "ANILIST") },
                             ),
                             ratings = listOfNotNull(
-                                if (cachedAniList.score10 != null || cachedAniList.score100 != null) {
-                                    CommunityRating(
-                                        score10 = cachedAniList.score10,
-                                        score100 = cachedAniList.score100,
-                                        source = "AniList",
-                                    )
-                                } else null,
+                                run {
+                                    val s10 = cachedAniList.score10 ?: cachedAniList.score100?.let { it / 10f }
+                                    val s100 = cachedAniList.score100 ?: cachedAniList.score10?.let { (it * 10).toInt() }
+                                    if (s10 != null && s100 != null) {
+                                        CommunityRating(
+                                            score10 = s10,
+                                            score100 = s100,
+                                            source = "AniList",
+                                        )
+                                    } else null
+                                },
                             ),
                         )
                         return artworkWaterfallRepository.getEffectiveArtwork(alArtwork)
