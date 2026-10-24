@@ -106,10 +106,12 @@
     <string name="pref_chimanew_details_backdrop_artwork_local">Default Library Cover</string>
     <string name="pref_chimanew_details_backdrop_scale">Banner Sizing</string>
     <string name="pref_chimanew_details_backdrop_scale_summary">Choose how the banner fills the header area on the details page</string>
-    <string name="pref_chimanew_details_backdrop_scale_ambient">Dual Layer (Uncropped banner + glow)</string>
-    <string name="pref_chimanew_details_backdrop_scale_natural">Natural Fit (Full width, no zoom)</string>
+    <string name="pref_chimanew_details_backdrop_scale_card">Cinema Showcase Card (Widescreen + Ambient Aura)</string>
+    <string name="pref_chimanew_details_backdrop_scale_vignette">Feathered Cinema Vignette (Soft Fade Below Status Bar)</string>
+    <string name="pref_chimanew_details_backdrop_scale_crop">Deep Scrim Bleed (Fill Screen with Status Bar Shadow)</string>
+    <string name="pref_chimanew_details_backdrop_scale_natural">Natural Fit (Full Width, No Zoom)</string>
+    <string name="pref_chimanew_details_backdrop_scale_ambient">Cinema Showcase Card (Widescreen + Ambient Aura)</string>
     <string name="pref_chimanew_details_backdrop_scale_fit">Full Art / No Zoom (Fill Width)</string>
-    <string name="pref_chimanew_details_backdrop_scale_crop">Fill Screen (Recommended)</string>
     <string name="pref_nuvio_hero_show_unread_badges">Show Unread Badges on Hero Banner</string>
     <string name="pref_nuvio_hero_show_unread_badges_summary">Display the unread chapter pill beside progress in the top hero carousel</string>
     <string name="pref_nuvio_use_anilist_artwork_in_library">Show HD Artwork in Library</string>

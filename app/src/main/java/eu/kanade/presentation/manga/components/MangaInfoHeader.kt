@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -264,105 +265,316 @@ fun MangaInfoBox(
         var bannerAspectRatio by remember(effectiveArtworkModel) { mutableFloatStateOf(0f) }
 
         key(effectiveArtworkModel, detailsBackdropStyle, detailsBackdropScale, detailsBackdropArtwork, activeStyle) {
-            // Layer 1: Ambient Blurred Underlay (Rendered in Dual Layer mode or when glowing atmosphere is active)
-            if (detailsBackdropScale == 0 || activeStyle == 1 || !isWideBanner) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(effectiveArtworkModel)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.Center,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .blur(32.dp)
-                        .alpha(0.35f)
-                        .background(surfaceTintColor.copy(alpha = 0.15f)),
-                )
+            when (detailsBackdropScale) {
+                0 -> {
+                    // MODE 0: Cinema Showcase Card (Widescreen Card + Ambient Aura)
+                    // Layer 1: Ambient Glow Underlay behind everything (including status bar)
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(effectiveArtworkModel)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .blur(32.dp)
+                            .alpha(0.40f)
+                            .background(surfaceTintColor.copy(alpha = 0.15f)),
+                    )
+
+                    // Scrims for status bar and background dissolve
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.70f),
+                                    Color.Black.copy(alpha = 0.20f),
+                                    Color.Transparent,
+                                ),
+                                endY = (appBarPadding.toPx() + 20.dp.toPx()).coerceAtLeast(140f),
+                            ),
+                        )
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    backgroundColor.copy(alpha = 0.50f),
+                                    backgroundColor,
+                                ),
+                                startY = size.height * 0.45f,
+                                endY = size.height,
+                            ),
+                        )
+                    }
+
+                    // Layer 2: Floating Cinema Card
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = 14.dp,
+                                end = 14.dp,
+                                top = appBarPadding + 6.dp,
+                            )
+                            .height(136.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.Black.copy(alpha = 0.40f))
+                            .border(
+                                BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                                RoundedCornerShape(16.dp),
+                            ),
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(effectiveArtworkModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            onError = {
+                                if (chosenArtworkModel != manga) artworkLoadFailed = true
+                            },
+                            onSuccess = { result ->
+                                val image = result.result.image
+                                if (image.width > 0 && image.height > 0) {
+                                    bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                                }
+                                if (effectiveArtworkModel == manga) {
+                                    coverRatio.floatValue = image.height.toFloat() / image.width
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                                .alpha(backdropAlpha),
+                        )
+                    }
+                }
+
+                1 -> {
+                    // MODE 1: Feathered Cinema Vignette (Soft top and bottom fade below status bar)
+                    val topVignetteStart = (appBarPadding * 0.55f).coerceAtLeast(16.dp)
+
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(effectiveArtworkModel)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        alignment = Alignment.TopCenter,
+                        onError = {
+                            if (chosenArtworkModel != manga) artworkLoadFailed = true
+                        },
+                        onSuccess = { result ->
+                            val image = result.result.image
+                            if (image.width > 0 && image.height > 0) {
+                                bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                            }
+                            if (effectiveArtworkModel == manga) {
+                                coverRatio.floatValue = image.height.toFloat() / image.width
+                            }
+                        },
+                        modifier = Modifier
+                            .matchParentSize()
+                            .padding(top = topVignetteStart)
+                            .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                            .alpha(backdropAlpha),
+                    )
+
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        val topFadeEnd = (appBarPadding.toPx() + 28.dp.toPx()).coerceAtLeast(150f)
+                        // Top feather dissolve so status bar and buttons sit on clean dark background
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    backgroundColor,
+                                    backgroundColor.copy(alpha = 0.85f),
+                                    backgroundColor.copy(alpha = 0.30f),
+                                    Color.Transparent,
+                                ),
+                                startY = 0f,
+                                endY = topFadeEnd,
+                            ),
+                        )
+
+                        val effectiveBannerHeight: Float = if (bannerAspectRatio > 0f) {
+                            (size.width / bannerAspectRatio) + topVignetteStart.toPx()
+                        } else {
+                            size.height * 0.65f
+                        }
+
+                        val fadeStart: Float = (effectiveBannerHeight * 0.45f).coerceAtLeast(topFadeEnd)
+                        val fadeEnd: Float = effectiveBannerHeight.coerceAtMost(size.height)
+
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    backgroundColor.copy(alpha = 0.35f),
+                                    backgroundColor.copy(alpha = 0.80f),
+                                    backgroundColor,
+                                ),
+                                startY = fadeStart,
+                                endY = fadeEnd,
+                            ),
+                        )
+
+                        if (fadeEnd < size.height) {
+                            drawRect(
+                                color = backgroundColor,
+                                topLeft = Offset(0f, fadeEnd),
+                                size = Size(size.width, size.height - fadeEnd),
+                            )
+                        }
+                    }
+                }
+
+                2 -> {
+                    // MODE 2: Deep Scrim Bleed (Fill Screen with Deep Top Shadow)
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(effectiveArtworkModel)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        onError = {
+                            if (chosenArtworkModel != manga) artworkLoadFailed = true
+                        },
+                        onSuccess = { result ->
+                            val image = result.result.image
+                            if (image.width > 0 && image.height > 0) {
+                                bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                            }
+                            if (effectiveArtworkModel == manga) {
+                                coverRatio.floatValue = image.height.toFloat() / image.width
+                            }
+                        },
+                        modifier = Modifier
+                            .matchParentSize()
+                            .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                            .alpha(backdropAlpha),
+                    )
+
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        // Deep top shadow for phone UI legibility
+                        val topScrimEnd = (appBarPadding.toPx() + 40.dp.toPx()).coerceAtLeast(200f)
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.85f),
+                                    Color.Black.copy(alpha = 0.50f),
+                                    Color.Black.copy(alpha = 0.15f),
+                                    Color.Transparent,
+                                ),
+                                endY = topScrimEnd,
+                            ),
+                        )
+
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    backgroundColor.copy(alpha = 0.40f),
+                                    backgroundColor.copy(alpha = 0.85f),
+                                    backgroundColor,
+                                ),
+                                startY = size.height * 0.35f,
+                                endY = size.height * 0.80f,
+                            ),
+                        )
+
+                        if (size.height * 0.80f < size.height) {
+                            drawRect(
+                                color = backgroundColor,
+                                topLeft = Offset(0f, size.height * 0.80f),
+                                size = Size(size.width, size.height * 0.20f),
+                            )
+                        }
+                    }
+                }
+
+                else -> {
+                    // MODE 3: Natural Fit (Full width edge-to-edge)
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(effectiveArtworkModel)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        alignment = Alignment.TopCenter,
+                        onError = {
+                            if (chosenArtworkModel != manga) artworkLoadFailed = true
+                        },
+                        onSuccess = { result ->
+                            val image = result.result.image
+                            if (image.width > 0 && image.height > 0) {
+                                bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                            }
+                            if (effectiveArtworkModel == manga) {
+                                coverRatio.floatValue = image.height.toFloat() / image.width
+                            }
+                        },
+                        modifier = Modifier
+                            .matchParentSize()
+                            .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                            .alpha(backdropAlpha),
+                    )
+
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        val topScrimEnd = (appBarPadding.toPx() + 32.dp.toPx()).coerceAtLeast(180f)
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.75f),
+                                    Color.Black.copy(alpha = 0.35f),
+                                    Color.Transparent,
+                                ),
+                                endY = topScrimEnd,
+                            ),
+                        )
+
+                        val effectiveBannerHeight: Float = if (bannerAspectRatio > 0f) {
+                            size.width / bannerAspectRatio
+                        } else {
+                            size.height * 0.70f
+                        }
+
+                        val fadeStart: Float = (effectiveBannerHeight * 0.35f).coerceAtLeast(40f)
+                        val fadeEnd: Float = effectiveBannerHeight.coerceAtMost(size.height)
+
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    backgroundColor.copy(alpha = 0.30f),
+                                    backgroundColor.copy(alpha = 0.75f),
+                                    backgroundColor,
+                                ),
+                                startY = fadeStart,
+                                endY = fadeEnd,
+                            ),
+                        )
+
+                        if (fadeEnd < size.height) {
+                            drawRect(
+                                color = backgroundColor,
+                                topLeft = Offset(0f, fadeEnd),
+                                size = Size(size.width, size.height - fadeEnd),
+                            )
+                        }
+                    }
+                }
             }
 
-            // Layer 2: Main Artwork Layer - ALL THE WAY TO THE TOP (0.dp top padding)
-            val isFillWidth = (detailsBackdropScale == 0 || detailsBackdropScale == 1)
-
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(effectiveArtworkModel)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = if (isFillWidth) ContentScale.FillWidth else ContentScale.Crop,
-                alignment = Alignment.TopCenter,
-                onError = {
-                    if (chosenArtworkModel != manga) {
-                        artworkLoadFailed = true
-                    }
-                },
-                onSuccess = { result ->
-                    val image = result.result.image
-                    if (image.width > 0 && image.height > 0) {
-                        bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
-                    }
-                    if (effectiveArtworkModel == manga) {
-                        coverRatio.floatValue = image.height.toFloat() / image.width
-                    }
-                },
-                modifier = Modifier
-                    .matchParentSize()
-                    .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                    .alpha(backdropAlpha),
-            )
-
-            // Layer 3: Solid Scrims & Dynamic Bottom Dissolve
-            Canvas(
-                modifier = Modifier.matchParentSize(),
-            ) {
-                // Top scrim for status bar and navigation action readability
-                val topScrimEnd = (appBarPadding.toPx() + 32.dp.toPx()).coerceAtLeast(180f)
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.75f),
-                            Color.Black.copy(alpha = 0.35f),
-                            Color.Transparent,
-                        ),
-                        endY = topScrimEnd,
-                    ),
-                )
-
-                // Bottom vertical dissolve: dynamically anchored to the bottom edge of the banner
-                val effectiveBannerHeight: Float = if (isFillWidth && bannerAspectRatio > 0f) {
-                    size.width / bannerAspectRatio
-                } else {
-                    size.height * 0.70f
-                }
-
-                val fadeStart: Float = (effectiveBannerHeight * 0.35f).coerceAtLeast(40f)
-                val fadeEnd: Float = effectiveBannerHeight.coerceAtMost(size.height)
-
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            backgroundColor.copy(alpha = 0.30f),
-                            backgroundColor.copy(alpha = 0.75f),
-                            backgroundColor,
-                        ),
-                        startY = fadeStart,
-                        endY = fadeEnd,
-                    ),
-                )
-
-                // Fill with solid backgroundColor below the banner edge so nothing peeks through
-                if (fadeEnd < size.height) {
-                    drawRect(
-                        color = backgroundColor,
-                        topLeft = Offset(0f, fadeEnd),
-                        size = Size(size.width, size.height - fadeEnd),
-                    )
-                }
-
-                if (!isWideBanner) {
+            if (!isWideBanner) {
+                Canvas(modifier = Modifier.matchParentSize()) {
                     when (ambientCanvasStyle) {
                         1 -> {
                             // Option B: Dynamic Palette Mesh

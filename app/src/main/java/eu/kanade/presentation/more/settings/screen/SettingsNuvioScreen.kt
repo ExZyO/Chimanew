@@ -241,9 +241,10 @@ object SettingsNuvioScreen : SearchableSettings {
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.detailsBackdropScale(),
                     entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_ambient),
-                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_natural),
+                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_card),
+                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_vignette),
                         2 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_crop),
+                        3 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_natural),
                     ),
                     title = stringResource(MR.strings.pref_chimanew_details_backdrop_scale),
                     subtitle = stringResource(MR.strings.pref_chimanew_details_backdrop_scale_summary),
