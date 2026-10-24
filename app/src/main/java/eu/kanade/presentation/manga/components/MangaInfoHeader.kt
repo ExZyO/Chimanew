@@ -89,6 +89,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -293,9 +296,9 @@ fun MangaInfoBox(
                         alignment = Alignment.Center,
                         modifier = Modifier
                             .matchParentSize()
-                            .blur(32.dp)
-                            .alpha(0.40f)
-                            .background(surfaceTintColor.copy(alpha = 0.15f)),
+                            .blur(36.dp)
+                            .alpha(0.50f)
+                            .background(surfaceTintColor.copy(alpha = 0.12f)),
                     )
 
                     // Scrims for status bar and background dissolve
@@ -335,11 +338,7 @@ fun MangaInfoBox(
                                 )
                                 .height(136.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color.Black.copy(alpha = 0.40f))
-                                .border(
-                                    BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                                    RoundedCornerShape(16.dp),
-                                ),
+                                .background(Color.Black.copy(alpha = 0.35f)),
                         ) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
@@ -371,9 +370,7 @@ fun MangaInfoBox(
                 }
 
                 1 -> {
-                    // MODE 1: Feathered Cinema Vignette (Soft top and bottom fade below status bar with ambient blur)
-                    val topVignetteStart = (appBarPadding * 0.55f).coerceAtLeast(16.dp)
-
+                    // MODE 1: Feathered Cinema Vignette (Full Widescreen Banner with Ambient Halo & Seamless Dissolve)
                     // Layer 1: Ambient Glow Underlay behind everything (including status bar)
                     val underlayModel = effectiveArtworkModel ?: ambientArtworkModel
                     AsyncImage(
@@ -386,37 +383,28 @@ fun MangaInfoBox(
                         alignment = Alignment.Center,
                         modifier = Modifier
                             .matchParentSize()
-                            .blur(32.dp)
-                            .alpha(0.40f)
-                            .background(surfaceTintColor.copy(alpha = 0.15f)),
+                            .blur(36.dp)
+                            .alpha(0.55f)
+                            .background(surfaceTintColor.copy(alpha = 0.12f)),
                     )
 
-                    // Scrims for status bar and background dissolve
+                    // Scrims for underlay halo dissolve into background
                     Canvas(modifier = Modifier.matchParentSize()) {
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.70f),
-                                    Color.Black.copy(alpha = 0.20f),
                                     Color.Transparent,
-                                ),
-                                endY = (appBarPadding.toPx() + 20.dp.toPx()).coerceAtLeast(140f),
-                            ),
-                        )
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    backgroundColor.copy(alpha = 0.50f),
+                                    backgroundColor.copy(alpha = 0.45f),
+                                    backgroundColor.copy(alpha = 0.85f),
                                     backgroundColor,
                                 ),
-                                startY = size.height * 0.45f,
+                                startY = size.height * 0.40f,
                                 endY = size.height,
                             ),
                         )
                     }
 
-                    // Layer 2: Crisp Foreground Banner
+                    // Layer 2: Full Widescreen Foreground Banner with Feathered Dissolve
                     if (effectiveArtworkModel != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
@@ -440,47 +428,47 @@ fun MangaInfoBox(
                             },
                             modifier = Modifier
                                 .matchParentSize()
-                                .padding(top = topVignetteStart)
+                                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                .drawWithContent {
+                                    drawContent()
+                                    val bannerHeightPx = if (bannerAspectRatio > 0f) {
+                                        size.width / bannerAspectRatio
+                                    } else {
+                                        size.height * 0.65f
+                                    }
+                                    val fadeStart = (bannerHeightPx * 0.45f).coerceAtLeast(appBarPadding.toPx())
+                                    val fadeEnd = bannerHeightPx.coerceAtMost(size.height)
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Black,
+                                                Color.Black.copy(alpha = 0.65f),
+                                                Color.Black.copy(alpha = 0.20f),
+                                                Color.Transparent,
+                                            ),
+                                            startY = fadeStart,
+                                            endY = fadeEnd,
+                                        ),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                }
                                 .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                                .alpha(backdropAlpha),
+                                .alpha(if (activeStyle == 1) 0.50f else 0.95f),
                         )
                     }
 
-                    // Layer 3: Soft feathered blending gradients
+                    // Layer 3: Top Status Bar Scrim for UI legibility
                     Canvas(modifier = Modifier.matchParentSize()) {
-                        val topFadeEnd = (appBarPadding.toPx() + 28.dp.toPx()).coerceAtLeast(150f)
-                        // Top feather dissolve so status bar and buttons sit on clean darkened background
+                        val topScrimEnd = (appBarPadding.toPx() + 24.dp.toPx()).coerceAtLeast(140f)
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.60f),
-                                    Color.Black.copy(alpha = 0.25f),
+                                    Color.Black.copy(alpha = 0.65f),
+                                    Color.Black.copy(alpha = 0.20f),
                                     Color.Transparent,
                                 ),
                                 startY = 0f,
-                                endY = topFadeEnd,
-                            ),
-                        )
-
-                        val effectiveBannerHeight: Float = if (bannerAspectRatio > 0f) {
-                            (size.width / bannerAspectRatio) + topVignetteStart.toPx()
-                        } else {
-                            size.height * 0.65f
-                        }
-
-                        val fadeStart: Float = (effectiveBannerHeight * 0.45f).coerceAtLeast(topFadeEnd)
-                        val fadeEnd: Float = effectiveBannerHeight.coerceAtMost(size.height)
-
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    backgroundColor.copy(alpha = 0.35f),
-                                    backgroundColor.copy(alpha = 0.80f),
-                                    backgroundColor,
-                                ),
-                                startY = fadeStart,
-                                endY = fadeEnd,
+                                endY = topScrimEnd,
                             ),
                         )
                     }

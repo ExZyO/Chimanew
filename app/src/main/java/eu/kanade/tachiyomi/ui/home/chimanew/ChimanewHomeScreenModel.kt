@@ -71,10 +71,19 @@ private data class DataBundle(
 )
 
 @Immutable
+private data class CoreHeroPrefs(
+    val showHero: Boolean,
+    val heroSource: Int,
+    val heroStyle: Int,
+    val heroRequireSelectedArtwork: Boolean,
+)
+
+@Immutable
 private data class HeroPrefs(
     val showHero: Boolean,
     val heroSource: Int,
     val heroStyle: Int,
+    val heroRequireSelectedArtwork: Boolean,
     val useAnilistArtwork: Boolean,
     val heroArtworkSources: Set<String>,
     val heroTrackerStatuses: Set<String>,
@@ -104,6 +113,7 @@ private data class NuvioHomePrefs(
     val showHero: Boolean,
     val heroSource: Int,
     val heroStyle: Int,
+    val heroRequireSelectedArtwork: Boolean,
     val useAnilistArtwork: Boolean,
     val heroArtworkSources: Set<String>,
     val heroCategories: Set<String>,
@@ -165,13 +175,23 @@ class ChimanewHomeScreenModel(
                     preferences.showHeroCarousel().changes(),
                     preferences.heroSource().changes(),
                     preferences.heroStyle().changes(),
-                ) { show, source, style -> Triple(show, source, style) },
+                    preferences.heroRequireSelectedArtwork().changes(),
+                ) { show, source, style, requireArt -> CoreHeroPrefs(show, source, style, requireArt) },
                 preferences.useAnilistArtwork().changes(),
                 preferences.heroArtworkSources().changes(),
                 preferences.heroTrackerStatuses().changes(),
                 preferences.artworkWaterfallOrder().changes(),
-            ) { (showHero, heroSource, heroStyle), useAnilist, artworkSources, trackerStatuses, waterfallOrder ->
-                HeroPrefs(showHero, heroSource, heroStyle, useAnilist, artworkSources, trackerStatuses, waterfallOrder)
+            ) { core, useAnilist, artworkSources, trackerStatuses, waterfallOrder ->
+                HeroPrefs(
+                    showHero = core.showHero,
+                    heroSource = core.heroSource,
+                    heroStyle = core.heroStyle,
+                    heroRequireSelectedArtwork = core.heroRequireSelectedArtwork,
+                    useAnilistArtwork = useAnilist,
+                    heroArtworkSources = artworkSources,
+                    heroTrackerStatuses = trackerStatuses,
+                    artworkWaterfallOrder = waterfallOrder,
+                )
             }
 
             val shelvesPrefsFlow = combine(
@@ -199,6 +219,7 @@ class ChimanewHomeScreenModel(
                     showHero = heroPrefs.showHero,
                     heroSource = heroPrefs.heroSource,
                     heroStyle = heroPrefs.heroStyle,
+                    heroRequireSelectedArtwork = heroPrefs.heroRequireSelectedArtwork,
                     useAnilistArtwork = heroPrefs.useAnilistArtwork,
                     heroArtworkSources = heroPrefs.heroArtworkSources,
                     heroCategories = cardPrefs.heroCategories,
@@ -391,6 +412,18 @@ class ChimanewHomeScreenModel(
                     }
                 }
 
+                fun hasRequiredHeroArtwork(mangaId: Long, title: String, heroStyle: Int): Boolean {
+                    val artwork = getArtwork(mangaId, title) ?: return false
+                    val hasBanner = !artwork.bannerUrl.isNullOrBlank()
+                    val hasCover = !artwork.posterUrl.isNullOrBlank()
+                    return when (heroStyle) {
+                        2 -> hasBanner && hasCover // Cover and Banner style (both required)
+                        1 -> hasBanner             // Banner alone style (wide banner required)
+                        0 -> hasCover              // Cover alone style (high-res cover required)
+                        else -> hasCover
+                    }
+                }
+
                 val heroItems = if (!prefs.showHero) {
                     emptyList()
                 } else if (prefs.heroSource == 1) {
@@ -401,7 +434,15 @@ class ChimanewHomeScreenModel(
                     } else {
                         data.libraryList.filter { it.manga.favorite }
                     }
-                    candidateList
+                    val filteredCandidates = if (prefs.heroRequireSelectedArtwork) {
+                        candidateList.filter { lib ->
+                            val mTitle = lib.manga.ogTitle ?: lib.manga.title
+                            hasRequiredHeroArtwork(lib.manga.id, mTitle, prefs.heroStyle)
+                        }
+                    } else {
+                        candidateList
+                    }
+                    filteredCandidates
                         .shuffled()
                         .take(7)
                         .map { lib ->
@@ -444,10 +485,24 @@ class ChimanewHomeScreenModel(
                             }
                         }
                     }
-                    candidateList.shuffled().take(7)
+                    val filteredCandidates = if (prefs.heroRequireSelectedArtwork) {
+                        candidateList.filter { item ->
+                            hasRequiredHeroArtwork(item.mangaId, item.title, prefs.heroStyle)
+                        }
+                    } else {
+                        candidateList
+                    }
+                    filteredCandidates.shuffled().take(7)
                 } else {
                     // Default: in-progress history with library fallback
-                    val heroFromHistory = distinctHistory.take(7).map { h ->
+                    val eligibleHistory = if (prefs.heroRequireSelectedArtwork) {
+                        distinctHistory.filter { h ->
+                            hasRequiredHeroArtwork(h.mangaId, h.title, prefs.heroStyle)
+                        }
+                    } else {
+                        distinctHistory
+                    }
+                    val heroFromHistory = eligibleHistory.take(7).map { h ->
                         val libManga = libraryByMangaId[h.mangaId]
                         createHomeItem(
                             mangaId = h.mangaId,
@@ -466,7 +521,10 @@ class ChimanewHomeScreenModel(
                     }
                     if (heroFromHistory.size < 5 && data.libraryList.isNotEmpty()) {
                         val additional = data.libraryList
-                            .filter { it.id !in heroFromHistory.map { item -> item.mangaId } }
+                            .filter { lib ->
+                                lib.id !in heroFromHistory.map { item -> item.mangaId } &&
+                                (!prefs.heroRequireSelectedArtwork || hasRequiredHeroArtwork(lib.manga.id, lib.manga.ogTitle ?: lib.manga.title, prefs.heroStyle))
+                            }
                             .shuffled()
                             .take(7 - heroFromHistory.size)
                             .map { lib ->

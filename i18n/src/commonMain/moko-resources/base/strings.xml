@@ -62,6 +62,8 @@
     <string name="pref_nuvio_hero_dim_banner_summary">Softens background banner brightness to make cover artwork and text stand out</string>
     <string name="pref_nuvio_hero_allow_cropped_fallback">Allow artwork aspect fallback</string>
     <string name="pref_nuvio_hero_allow_cropped_fallback_summary">Zoom vertical covers to fill widescreen banner when no official banner is available</string>
+    <string name="pref_chimanew_hero_require_selected_artwork">Strict Hero Artwork Requirements</string>
+    <string name="pref_chimanew_hero_require_selected_artwork_summary">Only showcase titles on the hero carousel if official artwork matches your chosen layout</string>
     <string name="pref_nuvio_use_anilist_artwork">HD Artwork &amp; Banners</string>
     <string name="pref_nuvio_use_anilist_artwork_summary">Fetch high-resolution landscape banners and covers from your artwork sources</string>
     <string name="pref_chimanew_hero_artwork_sources">Hero Artwork Sources</string>

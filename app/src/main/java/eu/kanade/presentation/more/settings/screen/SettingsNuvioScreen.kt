@@ -58,6 +58,7 @@ object SettingsNuvioScreen : SearchableSettings {
         val heroSource by preferences.heroSource().collectPrefAsState()
         val heroStyle by preferences.heroStyle().collectPrefAsState()
         val useAnilistArtwork by preferences.useAnilistArtwork().collectPrefAsState()
+        val showHero by preferences.showHeroCarousel().collectPrefAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_nuvio_hero_section),
@@ -115,6 +116,12 @@ object SettingsNuvioScreen : SearchableSettings {
                     preference = preferences.heroAllowCroppedFallback(),
                     title = stringResource(MR.strings.pref_nuvio_hero_allow_cropped_fallback),
                     subtitle = stringResource(MR.strings.pref_nuvio_hero_allow_cropped_fallback_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.heroRequireSelectedArtwork(),
+                    title = stringResource(MR.strings.pref_chimanew_hero_require_selected_artwork),
+                    subtitle = stringResource(MR.strings.pref_chimanew_hero_require_selected_artwork_summary),
+                    enabled = showHero && useAnilistArtwork,
                 ),
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.heroArtworkPairing(),

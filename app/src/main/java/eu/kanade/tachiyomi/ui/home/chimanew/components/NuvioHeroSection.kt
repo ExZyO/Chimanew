@@ -73,12 +73,32 @@ fun NuvioHeroSection(
 ) {
     if (items.isEmpty()) return
 
+    val preferences = remember { Injekt.get<ChimanewPreferences>() }
+    val heroRequireSelectedArtwork by preferences.heroRequireSelectedArtwork().collectPrefAsState()
+    val displayItems = remember(items, heroStyle, heroRequireSelectedArtwork) {
+        if (!heroRequireSelectedArtwork) {
+            items
+        } else {
+            items.filter { item ->
+                val hasBanner = !item.highResBannerUrl.isNullOrBlank()
+                val hasCover = !item.highResCoverUrl.isNullOrBlank()
+                when (heroStyle) {
+                    2 -> hasBanner && hasCover
+                    1 -> hasBanner
+                    0 -> hasCover
+                    else -> hasCover
+                }
+            }
+        }
+    }
+    if (displayItems.isEmpty()) return
+
     // EaZy Nuvio+ / Chimanew: Virtual infinite loop in both directions
-    val isLooping = items.size > 1
-    val virtualCount = if (isLooping) 100_000 else items.size
+    val isLooping = displayItems.size > 1
+    val virtualCount = if (isLooping) 100_000 else displayItems.size
     val startIndex = if (isLooping) {
         val middle = 50_000
-        middle - (middle % items.size)
+        middle - (middle % displayItems.size)
     } else 0
 
     val pagerState = rememberPagerState(
@@ -87,7 +107,7 @@ fun NuvioHeroSection(
     )
 
     // Auto-advance carousel smoothly forward every 6 seconds unless user is scrolling
-    LaunchedEffect(items.size, isLooping) {
+    LaunchedEffect(displayItems.size, isLooping) {
         if (!isLooping) return@LaunchedEffect
         while (isActive) {
             delay(6000L)
@@ -108,14 +128,13 @@ fun NuvioHeroSection(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
-            val actualIndex = if (isLooping) page % items.size else page
-            val item = items[actualIndex]
+            val actualIndex = if (isLooping) page % displayItems.size else page
+            val item = displayItems[actualIndex]
             val accentColor = item.coverData.vibrantCoverColor?.let { Color(it) }
                 ?: item.coverData.dominantCoverColors?.first?.let { Color(it) }
                 ?: MaterialTheme.colorScheme.primary
             val surfaceColor = MaterialTheme.colorScheme.background
 
-            val preferences = remember { Injekt.get<ChimanewPreferences>() }
             val heroArtworkPairing by preferences.heroArtworkPairing().collectPrefAsState()
             val heroShowUnreadBadge by preferences.heroShowUnreadBadges().collectPrefAsState()
             val showCommunityRatings by preferences.showCommunityRatings().collectPrefAsState()
