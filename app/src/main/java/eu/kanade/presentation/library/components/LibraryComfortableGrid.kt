@@ -55,10 +55,10 @@ internal fun LibraryComfortableGrid(
                     val mTitle = manga.ogTitle ?: manga.title
                     waterfallRepo.getCached(mTitle)?.posterUrl
                 } else null,
-                key1 = manga.id,
-                key2 = useAnilistArtwork,
-                key3 = artworkCoverOrder,
-                key4 = artworkWaterfallOrder,
+                manga.id,
+                useAnilistArtwork,
+                artworkCoverOrder,
+                artworkWaterfallOrder,
             ) {
                 if (useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title
