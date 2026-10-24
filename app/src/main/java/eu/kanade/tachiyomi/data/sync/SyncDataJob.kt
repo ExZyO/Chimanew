@@ -15,6 +15,7 @@ import androidx.work.WorkerParameters
 import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.SyncStatus
 import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.isOnline
 import eu.kanade.tachiyomi.util.system.isRunning
 import eu.kanade.tachiyomi.util.system.setForegroundSafely

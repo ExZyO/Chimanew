@@ -221,20 +221,26 @@ fun MangaInfoBox(
             Color.Transparent,
             MaterialTheme.colorScheme.background,
         )
-        // EaZy Nuvio+ / Chimanew: fallback to local manga cover if AniList banner/artwork fails to load
+        // EaZy Nuvio+ / Chimanew: resilient fallback to local manga cover if AniList banner/artwork fails to load
+        var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
+        val effectiveArtworkModel = if (artworkLoadFailed) manga else chosenArtworkModel
+
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(chosenArtworkModel)
+                .data(effectiveArtworkModel)
                 .crossfade(true)
-                .error(manga)
-                .fallback(manga)
                 .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             alignment = Alignment.TopCenter,
+            onError = {
+                if (chosenArtworkModel != manga) {
+                    artworkLoadFailed = true
+                }
+            },
             // KMK -->
             onSuccess = { result ->
-                if (chosenArtworkModel == manga) {
+                if (effectiveArtworkModel == manga) {
                     val image = result.result.image
                     coverRatio.floatValue = image.height.toFloat() / image.width
                 }
