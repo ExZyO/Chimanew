@@ -43,6 +43,7 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.runtime.key
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -249,113 +250,186 @@ fun MangaInfoBox(
         var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
         val effectiveArtworkModel = if (artworkLoadFailed) manga else chosenArtworkModel
 
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(effectiveArtworkModel)
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            contentScale = if (isWideBanner && detailsBackdropScale == 0) ContentScale.FillWidth else ContentScale.Crop,
-            alignment = Alignment.TopCenter,
-            onError = {
-                if (chosenArtworkModel != manga) {
-                    artworkLoadFailed = true
-                }
-            },
-            // KMK -->
-            onSuccess = { result ->
-                if (effectiveArtworkModel == manga) {
-                    val image = result.result.image
-                    coverRatio.floatValue = image.height.toFloat() / image.width
-                }
-            },
-            // KMK <--
-            modifier = Modifier
-                .matchParentSize()
-                .drawWithContent {
-                    drawContent()
-                    if (isWideBanner) {
-                        if (activeStyle == 2) {
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.70f),
-                                        Color.Transparent,
-                                    ),
-                                    endY = size.height * 0.35f,
-                                ),
-                            )
+        key(effectiveArtworkModel) {
+            if (isWideBanner && detailsBackdropScale == 0) {
+                // Mode 0: Dual-Layer Ambient Backdrop
+                // 1. Full-bleed ambient blurred underlay
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(effectiveArtworkModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.Center,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .blur(28.dp)
+                        .alpha(0.40f)
+                        .background(surfaceTintColor.copy(alpha = 0.20f)),
+                )
+                // 2. Crisp uncropped wide banner shifted down below status bar
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(effectiveArtworkModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillWidth,
+                    alignment = Alignment.TopCenter,
+                    onError = {
+                        if (chosenArtworkModel != manga) {
+                            artworkLoadFailed = true
                         }
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = backdropGradientColors,
-                                startY = if (activeStyle == 0 || activeStyle == 2) size.height * 0.30f else size.height / 2,
-                            ),
-                        )
-                    } else {
-                        // Tier 4 Ambient Canvas Fallback Styles
-                        when (ambientCanvasStyle) {
-                            1 -> {
-                                // Option B: Dynamic Palette Mesh
-                                drawRect(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            primaryColor.copy(alpha = 0.30f),
-                                            Color.Transparent,
-                                        ),
-                                        center = Offset(size.width * 0.85f, size.height * 0.15f),
-                                        radius = size.width * 0.85f,
-                                    ),
-                                )
-                                drawRect(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            tertiaryColor.copy(alpha = 0.22f),
-                                            Color.Transparent,
-                                        ),
-                                        center = Offset(size.width * 0.10f, size.height * 0.65f),
-                                        radius = size.width * 0.75f,
-                                    ),
-                                )
-                            }
-                            2 -> {
-                                // Option C: Hybrid Ambient Texture - Specular Top Sheen
+                    },
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding(top = (appBarPadding * 0.65f).coerceAtLeast(18.dp))
+                        .drawWithContent {
+                            drawContent()
+                            if (activeStyle == 2) {
                                 drawRect(
                                     brush = Brush.verticalGradient(
                                         colors = listOf(
-                                            Color.White.copy(alpha = 0.18f),
-                                            Color.Transparent,
-                                        ),
-                                        endY = 48f,
-                                    ),
-                                )
-                            }
-                            else -> {
-                                // Option A: Cinematic Ambient Blur - Deep Top Scrim
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.65f),
+                                            Color.Black.copy(alpha = 0.70f),
                                             Color.Transparent,
                                         ),
                                         endY = size.height * 0.35f,
                                     ),
                                 )
                             }
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = backdropGradientColors,
+                                    startY = size.height * 0.35f,
+                                ),
+                            )
                         }
-                        // Bottom fade to background
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = backdropGradientColors,
-                                startY = size.height * 0.25f,
-                            ),
-                        )
-                    }
+                        .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                        .alpha(backdropAlpha),
+                )
+            } else {
+                // Mode 1: Natural Header Fit (ContentScale.FillWidth shifted down)
+                // Mode 2: Fill Screen (ContentScale.Crop full bleed)
+                // Fallback: Ambient canvas
+                val scale = when {
+                    isWideBanner && detailsBackdropScale == 1 -> ContentScale.FillWidth
+                    else -> ContentScale.Crop
                 }
-                .background(surfaceTintColor.copy(alpha = if (isWideBanner && activeStyle == 1) 0.35f else 0.15f))
-                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                .alpha(backdropAlpha),
-        )
+                val topBannerPadding = if (isWideBanner && detailsBackdropScale == 1) {
+                    (appBarPadding * 0.65f).coerceAtLeast(18.dp)
+                } else {
+                    0.dp
+                }
+
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(effectiveArtworkModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = scale,
+                    alignment = Alignment.TopCenter,
+                    onError = {
+                        if (chosenArtworkModel != manga) {
+                            artworkLoadFailed = true
+                        }
+                    },
+                    onSuccess = { result ->
+                        if (effectiveArtworkModel == manga) {
+                            val image = result.result.image
+                            coverRatio.floatValue = image.height.toFloat() / image.width
+                        }
+                    },
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding(top = topBannerPadding)
+                        .drawWithContent {
+                            drawContent()
+                            if (isWideBanner) {
+                                if (activeStyle == 2) {
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Black.copy(alpha = 0.70f),
+                                                Color.Transparent,
+                                            ),
+                                            endY = size.height * 0.35f,
+                                        ),
+                                    )
+                                }
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = backdropGradientColors,
+                                        startY = if (activeStyle == 0 || activeStyle == 2) size.height * 0.30f else size.height / 2,
+                                    ),
+                                )
+                            } else {
+                                // Tier 4 Ambient Canvas Fallback Styles
+                                when (ambientCanvasStyle) {
+                                    1 -> {
+                                        // Option B: Dynamic Palette Mesh
+                                        drawRect(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    primaryColor.copy(alpha = 0.30f),
+                                                    Color.Transparent,
+                                                ),
+                                                center = Offset(size.width * 0.85f, size.height * 0.15f),
+                                                radius = size.width * 0.85f,
+                                            ),
+                                        )
+                                        drawRect(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    tertiaryColor.copy(alpha = 0.22f),
+                                                    Color.Transparent,
+                                                ),
+                                                center = Offset(size.width * 0.10f, size.height * 0.65f),
+                                                radius = size.width * 0.75f,
+                                            ),
+                                        )
+                                    }
+                                    2 -> {
+                                        // Option C: Hybrid Ambient Texture - Specular Top Sheen
+                                        drawRect(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.White.copy(alpha = 0.18f),
+                                                    Color.Transparent,
+                                                ),
+                                                endY = 48f,
+                                            ),
+                                        )
+                                    }
+                                    else -> {
+                                        // Option A: Cinematic Ambient Blur - Deep Top Scrim
+                                        drawRect(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.Black.copy(alpha = 0.65f),
+                                                    Color.Transparent,
+                                                ),
+                                                endY = size.height * 0.35f,
+                                            ),
+                                        )
+                                    }
+                                }
+                                // Bottom fade to background
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = backdropGradientColors,
+                                        startY = size.height * 0.25f,
+                                    ),
+                                )
+                            }
+                        }
+                        .background(surfaceTintColor.copy(alpha = if (isWideBanner && activeStyle == 1) 0.35f else 0.15f))
+                        .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                        .alpha(backdropAlpha),
+                )
+            }
+        }
 
         // Manga & source info
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {

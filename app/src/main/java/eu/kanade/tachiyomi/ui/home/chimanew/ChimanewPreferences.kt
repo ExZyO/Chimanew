@@ -55,13 +55,15 @@ class ChimanewPreferences(
 
     fun detailsBackdropArtwork() = preferenceStore.getInt("pref_chimanew_details_backdrop_artwork", 0)
 
-    fun detailsBackdropScale() = preferenceStore.getInt("pref_chimanew_details_backdrop_scale", 0) // 0 = Full Art / No Zoom (FillWidth), 1 = Fill Screen (Crop)
-
     fun heroArtworkPairing() = preferenceStore.getInt("pref_nuvio_hero_artwork_pairing", 0) // 0 = Separate with fallback, 1 = Unified
+
+    fun heroShowUnreadBadges() = preferenceStore.getBoolean("pref_nuvio_hero_show_unread_badges", true)
+
+    fun detailsBackdropScale() = preferenceStore.getInt("pref_chimanew_details_backdrop_scale", 0) // 0 = Ambient Backdrop (Full Art + Blur), 1 = Natural Fit (Compact), 2 = Fill Screen (Crop)
 
     fun artworkWaterfallOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_waterfall_order",
-        "ANILIST,KITSU,MANGADEX",
+        "anilist:true,kitsu:true,mangadex:true",
     )
 
     fun ambientCanvasStyle() = preferenceStore.getInt(

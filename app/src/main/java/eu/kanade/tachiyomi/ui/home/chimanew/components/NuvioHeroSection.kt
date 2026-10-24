@@ -114,6 +114,7 @@ fun NuvioHeroSection(
 
             val preferences = remember { Injekt.get<ChimanewPreferences>() }
             val heroArtworkPairing by preferences.heroArtworkPairing().collectPrefAsState()
+            val heroShowUnreadBadge by preferences.heroShowUnreadBadges().collectPrefAsState()
 
             val posterImageModel: Any = when {
                 "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
@@ -522,10 +523,11 @@ fun NuvioHeroSection(
                             val progressText = buildString {
                                 if (item.lastChapterNumber != null) {
                                     append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
-                                }
-                                if (item.totalChapters > 0) {
-                                    if (isNotEmpty()) append(" / ")
-                                    append("${item.totalChapters}")
+                                    if (item.totalChapters > 0) {
+                                        append(" / ${item.totalChapters}")
+                                    }
+                                } else if (item.totalChapters > 0) {
+                                    append("${item.totalChapters} Chapters")
                                 }
                             }
                             if (progressText.isNotBlank()) {
@@ -543,7 +545,9 @@ fun NuvioHeroSection(
                                 )
                             }
 
-                            if (item.unreadCount > 0) {
+                            val showUnread = heroShowUnreadBadge && item.unreadCount > 0 &&
+                                (item.lastChapterNumber != null || item.unreadCount != item.totalChapters)
+                            if (showUnread) {
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
                                     color = accentColor.copy(alpha = 0.25f),
@@ -713,9 +717,11 @@ private fun HeroAmbientForegroundContent(
                 val progressText = buildString {
                     if (item.lastChapterNumber != null) {
                         append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
-                    }
-                    if (item.totalChapters > 0) {
-                        append(" / ${item.totalChapters}")
+                        if (item.totalChapters > 0) {
+                            append(" / ${item.totalChapters}")
+                        }
+                    } else if (item.totalChapters > 0) {
+                        append("${item.totalChapters} Chapters")
                     }
                 }
                 if (progressText.isNotBlank()) {
@@ -731,7 +737,9 @@ private fun HeroAmbientForegroundContent(
                     )
                 }
 
-                if (item.unreadCount > 0) {
+                val showUnread = heroShowUnreadBadge && item.unreadCount > 0 &&
+                    (item.lastChapterNumber != null || item.unreadCount != item.totalChapters)
+                if (showUnread) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = accentColor.copy(alpha = 0.25f),

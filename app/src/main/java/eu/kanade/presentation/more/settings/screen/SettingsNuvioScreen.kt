@@ -10,6 +10,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.presentation.more.settings.screen.chimanew.ArtworkPriorityCustomizerScreen
 import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import kotlinx.collections.immutable.persistentListOf
@@ -39,7 +40,7 @@ object SettingsNuvioScreen : SearchableSettings {
             getHeroGroup(chimanewPreferences),
             getShelvesGroup(chimanewPreferences, navigator),
             getCardsGroup(chimanewPreferences),
-            getArtworkGroup(chimanewPreferences),
+            getArtworkGroup(chimanewPreferences, navigator),
             getDetailsPageGroup(chimanewPreferences),
             getNavbarGroup(chimanewPreferences),
         )
@@ -109,6 +110,11 @@ object SettingsNuvioScreen : SearchableSettings {
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_artwork_pairing),
                     subtitle = stringResource(MR.strings.pref_nuvio_hero_artwork_pairing_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.heroShowUnreadBadges(),
+                    title = stringResource(MR.strings.pref_nuvio_hero_show_unread_badges),
+                    subtitle = stringResource(MR.strings.pref_nuvio_hero_show_unread_badges_summary),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.useAnilistArtwork(),
@@ -234,8 +240,9 @@ object SettingsNuvioScreen : SearchableSettings {
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.detailsBackdropScale(),
                     entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_fit),
-                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_crop),
+                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_ambient),
+                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_natural),
+                        2 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_crop),
                     ),
                     title = stringResource(MR.strings.pref_chimanew_details_backdrop_scale),
                     subtitle = stringResource(MR.strings.pref_chimanew_details_backdrop_scale_summary),
@@ -260,22 +267,16 @@ object SettingsNuvioScreen : SearchableSettings {
     }
 
     @Composable
-    private fun getArtworkGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
+    private fun getArtworkGroup(preferences: ChimanewPreferences, navigator: Navigator): Preference.PreferenceGroup {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_chimanew_artwork_category),
             preferenceItems = persistentListOf(
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.artworkWaterfallOrder(),
-                    entries = persistentMapOf(
-                        "ANILIST,KITSU,MANGADEX" to stringResource(MR.strings.pref_chimanew_artwork_priority_anilist_kitsu_mangadex),
-                        "KITSU,ANILIST,MANGADEX" to stringResource(MR.strings.pref_chimanew_artwork_priority_kitsu_anilist_mangadex),
-                        "MANGADEX,ANILIST,KITSU" to stringResource(MR.strings.pref_chimanew_artwork_priority_mangadex_anilist_kitsu),
-                        "ANILIST" to "AniList Only",
-                        "KITSU" to "Kitsu Only",
-                        "MANGADEX" to "MangaDex Only",
-                    ),
+                Preference.PreferenceItem.TextPreference(
                     title = stringResource(MR.strings.pref_chimanew_artwork_waterfall),
                     subtitle = stringResource(MR.strings.pref_chimanew_artwork_waterfall_summary),
+                    onClick = {
+                        navigator.push(ArtworkPriorityCustomizerScreen())
+                    },
                 ),
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.ambientCanvasStyle(),
