@@ -30,6 +30,7 @@ import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.track.model.Track
 import tachiyomi.domain.track.repository.TrackRepository
+import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -40,7 +41,7 @@ data class HomeMangaItem(
     val coverData: MangaCover,
     val highResBannerUrl: String? = null,
     val highResCoverUrl: String? = null,
-    val communityRatings: List<eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.CommunityRating> = emptyList(),
+    val communityRatings: List<CommunityRating> = emptyList(),
     val lastChapterNumber: Double? = null,
     val lastChapterId: Long? = null,
     val totalChapters: Long = 0,
@@ -270,7 +271,7 @@ class ChimanewHomeScreenModel(
                             ),
                             ratings = listOfNotNull(
                                 if (cachedAniList.score10 != null || cachedAniList.score100 != null) {
-                                    eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.CommunityRating(
+                                    CommunityRating(
                                         score10 = cachedAniList.score10,
                                         score100 = cachedAniList.score100,
                                         source = "AniList",

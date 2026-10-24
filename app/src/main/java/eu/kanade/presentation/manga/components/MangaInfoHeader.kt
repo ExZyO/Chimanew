@@ -11,6 +11,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
+import androidx.compose.ui.text.font.FontWeight
 import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box

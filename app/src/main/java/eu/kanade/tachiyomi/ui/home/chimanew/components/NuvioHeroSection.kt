@@ -54,6 +54,7 @@ import eu.kanade.presentation.manga.components.CommunityRatingBadge
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
+import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
