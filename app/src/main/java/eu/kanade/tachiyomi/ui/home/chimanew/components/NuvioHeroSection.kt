@@ -518,6 +518,7 @@ fun NuvioHeroSection(
                 }
             }
         }
+    }
 
         // EaZy Nuvio+ / Chimanew: Netflix-style morphing active pill indicator
         if (items.size > 1) {

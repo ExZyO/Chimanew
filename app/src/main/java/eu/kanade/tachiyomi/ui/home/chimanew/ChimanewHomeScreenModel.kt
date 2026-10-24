@@ -150,13 +150,15 @@ class ChimanewHomeScreenModel(
             }
 
             val heroPrefsFlow = combine(
-                preferences.showHeroCarousel().changes(),
-                preferences.heroSource().changes(),
-                preferences.heroStyle().changes(),
+                combine(
+                    preferences.showHeroCarousel().changes(),
+                    preferences.heroSource().changes(),
+                    preferences.heroStyle().changes(),
+                ) { show, source, style -> Triple(show, source, style) },
                 preferences.useAnilistArtwork().changes(),
                 preferences.heroArtworkSources().changes(),
                 preferences.heroTrackerStatuses().changes(),
-            ) { showHero: Boolean, heroSource: Int, heroStyle: Int, useAnilist: Boolean, artworkSources: Set<String>, trackerStatuses: Set<String> ->
+            ) { (showHero, heroSource, heroStyle), useAnilist, artworkSources, trackerStatuses ->
                 HeroPrefs(showHero, heroSource, heroStyle, useAnilist, artworkSources, trackerStatuses)
             }
 
