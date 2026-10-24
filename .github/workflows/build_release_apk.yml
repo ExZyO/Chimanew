@@ -63,7 +63,7 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v2.5.5"
+          tag="v2.5.6"
           echo "Publishing or updating release for $tag..."
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "Release $tag already exists, updating assets..."
@@ -71,16 +71,13 @@ jobs:
           else
             echo "Creating release $tag..."
             printf '%s\n' \
-              "### What's New in v2.5.5" \
-              "- **Fix Kotlin 2.0 ConcurrentHashMap Compilation**: Resolved KT-18053 compilation error in AniList cover cache by replacing ambiguous in-operator with containsKey." \
-              "- **Hero Artwork Sources (Dartotsu Multi-Select)**: Choose and mix which artwork types appear in the Hero carousel: Official Wide Banners, High-Res Manga Covers (portrait), and Default Library Covers." \
-              "- **Google Drive OAuth & Sync Fix**: Dynamic OAuth callback scheme injection supporting Google Cloud Desktop Application credentials and custom scheme redirects without Error 400." \
-              "- **1:1 Option 1 Hero Banner**: Official widescreen artwork from publisher via AniList GraphQL, format/genre pill badge, drop-shadow typography, 2-line clean synopsis, and white Netflix capsule resume button." \
-              "- **Dual Tap Action Settings**: Independent tap behaviors for Continue Reading (default: Open reader) vs Library & Shelves (default: Open details page)." \
-              "- **Dynamic Live Reactivity**: All preferences subscribe to flow updates—toggling settings takes effect immediately across Home without restarting the app." \
-              "- **Active Chapter Reading Progress**: Real-time progress bar tracking the current chapter in progress, ensuring non-zero visual progress while reading." \
-              "- **Hero Category Picker**: Multi-select dialog allowing you to choose which specific library categories appear in the Hero carousel." \
-              "- **Upstream Merge (Chimahon v2.4.9)**: Fully synchronized with latest Chimahon (OPDS novels, MPV player updates, reader re-OCR, dictionary deduplication)." \
+              "### What's New in v2.5.6" \
+              "- **Nuvio Liquid Glass Navbar with Auto-Hide on Scroll**: Real-time frosted blur navbar that smoothly collapses down on scroll down and expands on scroll up, matching Nuvio Mobile with a 0.5dp hairline divider, transparent indicator pills, and animated accent highlights." \
+              "- **Third Hero Banner Style (Netflix Ambient with Crisp Banner)**: Crisp unblurred widescreen publisher banner backdrop + sharp 2:3 portrait book cover card with metadata and white resume button in foreground (Option 3)." \
+              "- **Hero Banner Poster Alignment & Blur Fix**: Landscape posters and covers are now top-center aligned so character faces/heads are never cropped, with dark background placeholders to prevent empty blurs while loading." \
+              "- **Tracker Categories for Hero Carousel**: Select which tracking lists (Reading, Plan to Read, On Hold, Completed, Dropped) populate the Hero carousel, with multi-select support in Settings." \
+              "- **AniList Artwork on Manga Details Page**: Customizable manga details header backdrop with choices for artwork source (Wide Banner, High-Res Cover, Default Library Cover) and visual style (Cinematic Fade, Soft Atmospheric Blur, Full Opacity + Scrims, Standard Local Cover)." \
+              "- **Google Drive OAuth 403 Clarification**: Reiterate test user registration protocol in Google Cloud Console for OAuth 'Testing' mode." \
               > release_notes.md
             gh release create "$tag" \
               app/build/outputs/apk/release/*.apk \

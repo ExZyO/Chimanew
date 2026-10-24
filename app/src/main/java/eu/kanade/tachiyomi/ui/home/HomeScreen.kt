@@ -3,24 +3,32 @@ package eu.kanade.tachiyomi.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,12 +39,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -56,6 +71,7 @@ import eu.kanade.tachiyomi.ui.download.DownloadQueueScreen
 import eu.kanade.tachiyomi.ui.history.HistoryTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeTab
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeTab
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.library.LibraryViewMode
 import eu.kanade.tachiyomi.ui.library.novels.NovelsTab
@@ -133,9 +149,40 @@ object HomeScreen : Screen() {
             tab = startTab,
             key = TAB_NAVIGATOR_KEY,
         ) { tabNavigator ->
+            // EaZy Nuvio+ / Chimanew: Auto-hide NavigationBar on scroll matching Nuvio Mobile
+            val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
+            val navbarAutoHideOnScroll by chimanewPreferences.navbarAutoHideOnScroll().collectAsState()
+            var scrollVisible by rememberSaveable { mutableStateOf(true) }
+
+            LaunchedEffect(tabNavigator.current) {
+                scrollVisible = true
+            }
+
+            val autoHideScrollConnection = remember(navbarAutoHideOnScroll) {
+                object : NestedScrollConnection {
+                    override fun onPostScroll(
+                        consumed: Offset,
+                        available: Offset,
+                        source: NestedScrollSource,
+                    ): Offset {
+                        if (!navbarAutoHideOnScroll) {
+                            if (!scrollVisible) scrollVisible = true
+                            return Offset.Zero
+                        }
+                        val scrollDeltaY = consumed.y + available.y
+                        when {
+                            scrollDeltaY < -12f -> if (scrollVisible) scrollVisible = false
+                            scrollDeltaY > 12f -> if (!scrollVisible) scrollVisible = true
+                        }
+                        return Offset.Zero
+                    }
+                }
+            }
+
             // Provide usable navigator to content screen
             CompositionLocalProvider(LocalNavigator provides navigator) {
                 Scaffold(
+                    modifier = Modifier.nestedScroll(autoHideScrollConnection),
                     startBar = {
                         if (isTabletUi()) {
                             NavigationRail {
@@ -151,20 +198,36 @@ object HomeScreen : Screen() {
                             val bottomNavVisible by produceState(initialValue = true) {
                                 showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
                             }
+                            val isVisible = bottomNavVisible && (!navbarAutoHideOnScroll || scrollVisible)
                             AnimatedVisibility(
-                                visible = bottomNavVisible,
-                                enter = expandVertically(),
-                                exit = shrinkVertically(),
+                                visible = isVisible,
+                                enter = slideInVertically(
+                                    initialOffsetY = { it },
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                ) + expandVertically(),
+                                exit = slideOutVertically(
+                                    targetOffsetY = { it },
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                ) + shrinkVertically(),
                             ) {
-                                NavigationBar {
-                                    navbarTabs
-                                        .fastForEach {
-                                            NavigationBarItem(
-                                                it/* SY --> */,
-                                                alwaysShowLabel/* SY <-- */,
-                                                useConsolidatedLibrary,
-                                            )
-                                        }
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    // EaZy Nuvio+ / Chimanew: Nuvio-style hairline divider
+                                    HorizontalDivider(
+                                        thickness = 0.5.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                    )
+                                    NavigationBar(
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                                    ) {
+                                        navbarTabs
+                                            .fastForEach {
+                                                NavigationBarItem(
+                                                    it/* SY --> */,
+                                                    alwaysShowLabel/* SY <-- */,
+                                                    useConsolidatedLibrary,
+                                                )
+                                            }
+                                    }
                                 }
                             }
                         }
@@ -298,6 +361,13 @@ object HomeScreen : Screen() {
                 )
             },
             alwaysShowLabel = /* SY --> */alwaysShowLabel, /* SY <-- */
+            colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent,
+                selectedIconColor = MaterialTheme.colorScheme.primary,
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f),
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f),
+            ),
         )
     }
 

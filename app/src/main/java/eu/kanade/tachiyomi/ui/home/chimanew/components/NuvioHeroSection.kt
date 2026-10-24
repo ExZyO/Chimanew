@@ -90,7 +90,7 @@ fun NuvioHeroSection(
         }
     }
 
-    val bannerHeight = if (heroStyle == 0) 380.dp else 400.dp
+    val bannerHeight = if (heroStyle == 0 || heroStyle == 2) 380.dp else 400.dp
 
     Box(
         modifier = modifier
@@ -130,226 +130,189 @@ fun NuvioHeroSection(
                         onClick = { onItemClick(item) },
                     ),
             ) {
-                if (heroStyle == 0) {
-                    // -------------------------------------------------------------
-                    // Style 0: Netflix / Nuvio Ambient Backdrop (Sharp 2:3 Poster)
-                    // -------------------------------------------------------------
+                when (heroStyle) {
+                    0 -> {
+                        // -------------------------------------------------------------
+                        // Style 0: Netflix / Nuvio Ambient Backdrop (Sharp 2:3 Poster)
+                        // -------------------------------------------------------------
 
-                    // 1. Atmospheric Heavily Blurred Cover Backdrop
-                    SubcomposeAsyncImage(
-                        model = bannerImageModel,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .blur(22.dp)
-                            .alpha(0.35f),
-                    )
-
-                    // 2. Radial Accent Ambient Glow
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        accentColor.copy(alpha = 0.35f),
-                                        Color.Transparent,
-                                    ),
-                                    radius = 800f,
-                                ),
-                            ),
-                    )
-
-                    // 3. Top Scrim for Status Bar
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(90.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.60f),
-                                        Color.Transparent,
-                                    ),
-                                ),
-                            ),
-                    )
-
-                    // 4. Bottom Vignette Fade into Theme Surface
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    0.0f to Color.Transparent,
-                                    0.45f to Color.Transparent,
-                                    0.82f to surfaceColor.copy(alpha = 0.85f),
-                                    1.0f to surfaceColor,
-                                ),
-                            ),
-                    )
-
-                    // 5. Foreground Content: Sharp Portrait Cover Card + Metadata
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 20.dp),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        // Sharp 2:3 Uncropped Portrait Poster
-                        Surface(
+                        // 1. Atmospheric Heavily Blurred Cover Backdrop
+                        SubcomposeAsyncImage(
+                            model = bannerImageModel,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.TopCenter,
                             modifier = Modifier
-                                .width(116.dp)
-                                .height(172.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            shadowElevation = 8.dp,
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
-                            color = Color.Black.copy(alpha = 0.40f),
-                        ) {
-                            SubcomposeAsyncImage(
-                                model = posterImageModel,
-                                contentDescription = item.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
+                                .fillMaxSize()
+                                .blur(22.dp)
+                                .alpha(0.35f),
+                            loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
+                            error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
+                        )
 
-                        // Right details Column
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            // Genres chips
-                            if (item.genres.isNotEmpty()) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.padding(bottom = 2.dp),
-                                ) {
-                                    item.genres.take(2).forEach { genre ->
-                                        Surface(
-                                            shape = RoundedCornerShape(4.dp),
-                                            color = Color.Black.copy(alpha = 0.55f),
-                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                                        ) {
-                                            Text(
-                                                text = genre,
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = Color.White.copy(alpha = 0.90f),
-                                                ),
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Title
-                            Text(
-                                text = item.title,
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                ),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-
-                            // Progress & Unread
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                val progressText = buildString {
-                                    if (item.lastChapterNumber != null) {
-                                        append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
-                                    }
-                                    if (item.totalChapters > 0) {
-                                        append(" / ${item.totalChapters}")
-                                    }
-                                }
-                                if (progressText.isNotBlank()) {
-                                    Text(
-                                        text = progressText,
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = Color.White.copy(alpha = 0.75f),
+                        // 2. Radial Accent Ambient Glow
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            accentColor.copy(alpha = 0.35f),
+                                            Color.Transparent,
                                         ),
-                                    )
-                                }
-
-                                if (item.unreadCount > 0) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = accentColor.copy(alpha = 0.25f),
-                                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f)),
-                                    ) {
-                                        Text(
-                                            text = "+${item.unreadCount}",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 10.sp,
-                                                color = accentColor,
-                                            ),
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            // 1-Tap Resume Button
-                            val buttonText = if (item.lastChapterNumber != null) {
-                                "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
-                            } else {
-                                "Start Reading"
-                            }
-
-                            Button(
-                                onClick = { onResumeClick(item) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.White,
-                                    contentColor = Color.Black,
-                                ),
-                                shape = RoundedCornerShape(20.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color.Black,
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = buttonText,
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.Black,
+                                        radius = 800f,
                                     ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
+                                ),
+                        )
+
+                        // 3. Top Scrim for Status Bar
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(90.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.60f),
+                                            Color.Transparent,
+                                        ),
+                                    ),
+                                ),
+                        )
+
+                        // 4. Bottom Vignette Fade into Theme Surface
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.0f to Color.Transparent,
+                                        0.45f to Color.Transparent,
+                                        0.82f to surfaceColor.copy(alpha = 0.85f),
+                                        1.0f to surfaceColor,
+                                    ),
+                                ),
+                        )
+
+                        // 5. Foreground Content: Sharp Portrait Cover Card + Metadata
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth(),
+                        ) {
+                            HeroAmbientForegroundContent(
+                                item = item,
+                                posterImageModel = posterImageModel,
+                                accentColor = accentColor,
+                                onResumeClick = onResumeClick,
+                            )
                         }
                     }
 
-                } else {
-                    // -------------------------------------------------------------
-                    // Style 1: Option 1 1:1 Match (Official Wide Banner / High-Res)
-                    // -------------------------------------------------------------
+                    2 -> {
+                        // -------------------------------------------------------------------------
+                        // Style 2: Option 3 - Netflix Ambient with Crisp Widescreen Banner Backdrop
+                        // -------------------------------------------------------------------------
 
-                    // 1. Cover / Wide Artwork
-                    SubcomposeAsyncImage(
-                        model = bannerImageModel,
-                        contentDescription = item.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                        // 1. Crisp Unblurred Widescreen Banner Backdrop
+                        SubcomposeAsyncImage(
+                            model = bannerImageModel,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.TopCenter,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .alpha(0.55f),
+                            loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
+                            error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
+                        )
+
+                        // 2. Radial Accent Ambient Glow
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            accentColor.copy(alpha = 0.25f),
+                                            Color.Transparent,
+                                        ),
+                                        radius = 800f,
+                                    ),
+                                ),
+                        )
+
+                        // 3. Top Scrim for Status Bar
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(90.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.70f),
+                                            Color.Transparent,
+                                        ),
+                                    ),
+                                ),
+                        )
+
+                        // 4. Bottom Vignette Fade into Theme Surface
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.0f to Color.Transparent,
+                                        0.35f to Color.Transparent,
+                                        0.72f to surfaceColor.copy(alpha = 0.88f),
+                                        1.0f to surfaceColor,
+                                    ),
+                                ),
+                        )
+
+                        // 5. Foreground Content: Sharp Portrait Cover Card + Metadata
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth(),
+                        ) {
+                            HeroAmbientForegroundContent(
+                                item = item,
+                                posterImageModel = posterImageModel,
+                                accentColor = accentColor,
+                                onResumeClick = onResumeClick,
+                            )
+                        }
+                    }
+
+                    else -> {
+                        // -------------------------------------------------------------
+                        // Style 1: Option 1 1:1 Match (Official Wide Banner / High-Res)
+                        // -------------------------------------------------------------
+
+                        // 1. Cover / Wide Artwork
+                        SubcomposeAsyncImage(
+                            model = bannerImageModel,
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.TopCenter,
+                            modifier = Modifier.fillMaxSize(),
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color(0xFF1E1E1E)),
+                                )
+                            },
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color(0xFF1E1E1E)),
+                                )
+                            },
+                        )
 
                     // 2. Ambient Radial Accent Glow
                     Box(
@@ -586,6 +549,183 @@ fun NuvioHeroSection(
                             ),
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroAmbientForegroundContent(
+    item: HomeMangaItem,
+    posterImageModel: Any,
+    accentColor: Color,
+    onResumeClick: (HomeMangaItem) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 20.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Sharp 2:3 Uncropped Portrait Poster
+        Surface(
+            modifier = Modifier
+                .width(116.dp)
+                .height(172.dp),
+            shape = RoundedCornerShape(12.dp),
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
+            color = Color.Black.copy(alpha = 0.40f),
+        ) {
+            SubcomposeAsyncImage(
+                model = posterImageModel,
+                contentDescription = item.title,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
+                modifier = Modifier.fillMaxSize(),
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF2A2A2A)),
+                    )
+                },
+                error = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF2A2A2A)),
+                    )
+                },
+            )
+        }
+
+        // Right details Column
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Genres chips
+            if (item.genres.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(bottom = 2.dp),
+                ) {
+                    item.genres.take(2).forEach { genre ->
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color.Black.copy(alpha = 0.55f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                        ) {
+                            Text(
+                                text = genre,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White.copy(alpha = 0.90f),
+                                ),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Title
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    shadow = Shadow(
+                        color = Color.Black.copy(alpha = 0.85f),
+                        blurRadius = 6f,
+                    ),
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            // Progress & Unread
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val progressText = buildString {
+                    if (item.lastChapterNumber != null) {
+                        append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
+                    }
+                    if (item.totalChapters > 0) {
+                        append(" / ${item.totalChapters}")
+                    }
+                }
+                if (progressText.isNotBlank()) {
+                    Text(
+                        text = progressText,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color.White.copy(alpha = 0.75f),
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.80f),
+                                blurRadius = 4f,
+                            ),
+                        ),
+                    )
+                }
+
+                if (item.unreadCount > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = accentColor.copy(alpha = 0.25f),
+                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f)),
+                    ) {
+                        Text(
+                            text = "+${item.unreadCount}",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                color = accentColor,
+                            ),
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // 1-Tap Resume Button
+            val buttonText = if (item.lastChapterNumber != null) {
+                "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
+            } else {
+                "Start Reading"
+            }
+
+            Button(
+                onClick = { onResumeClick(item) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                ),
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color.Black,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = buttonText,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

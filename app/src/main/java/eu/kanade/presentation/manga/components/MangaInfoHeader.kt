@@ -57,9 +57,17 @@ import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
+import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistMediaArtwork
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import tachiyomi.domain.track.interactor.GetTracks
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -145,6 +153,62 @@ fun MangaInfoBox(
     val usePanoramaCover by Injekt.get<UiPreferences>().usePanoramaCoverMangaInfo().collectAsState()
     val topAlignCover by Injekt.get<UiPreferences>().topAlignCover().collectAsState()
     // KMK <--
+
+    // EaZy Nuvio+ / Chimanew: Settings-controlled AniList artwork & backdrop styling
+    val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
+    val useAnilistArtwork by chimanewPreferences.useAnilistArtworkInDetails().collectAsState()
+    val detailsBackdropStyle by chimanewPreferences.detailsBackdropStyle().collectAsState()
+    val detailsBackdropArtwork by chimanewPreferences.detailsBackdropArtwork().collectAsState()
+
+    val anilistArtwork by produceState<AnilistMediaArtwork?>(initialValue = null, manga.id, useAnilistArtwork) {
+        if (!useAnilistArtwork) {
+            value = null
+            return@produceState
+        }
+        withContext(Dispatchers.IO) {
+            val trackerManager = Injekt.get<TrackerManager>()
+            val getTracks = Injekt.get<GetTracks>()
+            val anilistCoverRepo = Injekt.get<AnilistCoverRepository>()
+            val tracks = getTracks.await(manga.id)
+            val anilistTrack = tracks.firstOrNull { it.trackerId == trackerManager.aniList.id }
+            if (anilistTrack != null && anilistTrack.remoteId > 0) {
+                val cached = anilistCoverRepo.getCached(anilistTrack.remoteId)
+                if (cached != null) {
+                    value = cached
+                } else {
+                    val fetched = anilistCoverRepo.fetchBatch(listOf(anilistTrack.remoteId))
+                    value = fetched[anilistTrack.remoteId]
+                }
+            } else {
+                value = null
+            }
+        }
+    }
+
+    val chosenArtworkModel: Any = when {
+        !useAnilistArtwork || anilistArtwork == null -> manga
+        detailsBackdropArtwork == 0 && !anilistArtwork?.bannerUrl.isNullOrBlank() -> anilistArtwork!!.bannerUrl!!
+        detailsBackdropArtwork == 1 && !anilistArtwork?.extraLargeCoverUrl.isNullOrBlank() -> anilistArtwork!!.extraLargeCoverUrl!!
+        detailsBackdropArtwork == 2 -> manga
+        !anilistArtwork?.bannerUrl.isNullOrBlank() -> anilistArtwork!!.bannerUrl!!
+        !anilistArtwork?.extraLargeCoverUrl.isNullOrBlank() -> anilistArtwork!!.extraLargeCoverUrl!!
+        else -> manga
+    }
+
+    val activeStyle = if (useAnilistArtwork && anilistArtwork != null) detailsBackdropStyle else 3
+    val backdropAlpha = when (activeStyle) {
+        0 -> 0.55f // Cinematic Fade
+        1 -> 0.35f // Soft Blur
+        2 -> 0.85f // Full Opacity + Scrims
+        else -> 0.20f // Standard Local Cover
+    }
+    val backdropBlur = when (activeStyle) {
+        0 -> 0.dp // Cinematic Fade - Crisp
+        1 -> 18.dp // Soft Atmospheric Blur
+        2 -> 0.dp // Full Opacity - Crisp
+        else -> 7.dp // Standard Local Cover
+    }
+
     Box(modifier = modifier) {
         // Backdrop
         val backdropGradientColors = listOf(
@@ -153,11 +217,12 @@ fun MangaInfoBox(
         )
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(manga)
+                .data(chosenArtworkModel)
                 .crossfade(true)
                 .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            alignment = Alignment.TopCenter,
             // KMK -->
             onSuccess = { result ->
                 val image = result.result.image
@@ -168,21 +233,27 @@ fun MangaInfoBox(
                 .matchParentSize()
                 .drawWithContent {
                     drawContent()
+                    if (activeStyle == 2) {
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.70f),
+                                    Color.Transparent,
+                                ),
+                                endY = size.height * 0.35f,
+                            ),
+                        )
+                    }
                     drawRect(
                         brush = Brush.verticalGradient(
                             colors = backdropGradientColors,
-                            // KMK -->
-                            startY = size.height / 2,
-                            // KMK <--
+                            startY = if (activeStyle == 0 || activeStyle == 2) size.height * 0.30f else size.height / 2,
                         ),
                     )
                 }
-                // KMK -->
-                .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.4f))
-                .blur(7.dp)
-                // .blur(4.dp)
-                // KMK <--
-                .alpha(0.2f),
+                .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = if (activeStyle == 1) 0.35f else 0.15f))
+                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                .alpha(backdropAlpha),
         )
 
         // Manga & source info

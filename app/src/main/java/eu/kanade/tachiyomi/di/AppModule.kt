@@ -367,6 +367,9 @@ class AppModule(val app: Application) : InjektModule {
 
         addSingletonFactory { GoogleDriveService(app) }
 
+        // EaZy Nuvio+ / Chimanew
+        addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository(get<NetworkHelper>().client, get()) }
+
         addSingletonFactory { chimahon.novel.sync.ttu.TtuOAuthManager(app) }
         addSingletonFactory { chimahon.novel.sync.ttu.SyncSettingsRepository(app) }
         addSingletonFactory { chimahon.novel.sync.ttu.TtuFolderNames(app) }

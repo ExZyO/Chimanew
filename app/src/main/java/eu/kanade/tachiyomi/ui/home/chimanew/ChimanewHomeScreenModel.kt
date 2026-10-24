@@ -72,6 +72,7 @@ private data class HeroPrefs(
     val heroStyle: Int,
     val useAnilistArtwork: Boolean,
     val heroArtworkSources: Set<String>,
+    val heroTrackerStatuses: Set<String>,
 )
 
 @Immutable
@@ -100,6 +101,7 @@ private data class NuvioHomePrefs(
     val useAnilistArtwork: Boolean,
     val heroArtworkSources: Set<String>,
     val heroCategories: Set<String>,
+    val heroTrackerStatuses: Set<String>,
     val showContinue: Boolean,
     val showUpdated: Boolean,
     val showCategoryShelves: Boolean,
@@ -153,8 +155,9 @@ class ChimanewHomeScreenModel(
                 preferences.heroStyle().changes(),
                 preferences.useAnilistArtwork().changes(),
                 preferences.heroArtworkSources().changes(),
-            ) { showHero: Boolean, heroSource: Int, heroStyle: Int, useAnilist: Boolean, artworkSources: Set<String> ->
-                HeroPrefs(showHero, heroSource, heroStyle, useAnilist, artworkSources)
+                preferences.heroTrackerStatuses().changes(),
+            ) { showHero: Boolean, heroSource: Int, heroStyle: Int, useAnilist: Boolean, artworkSources: Set<String>, trackerStatuses: Set<String> ->
+                HeroPrefs(showHero, heroSource, heroStyle, useAnilist, artworkSources, trackerStatuses)
             }
 
             val shelvesPrefsFlow = combine(
@@ -185,6 +188,7 @@ class ChimanewHomeScreenModel(
                     useAnilistArtwork = heroPrefs.useAnilistArtwork,
                     heroArtworkSources = heroPrefs.heroArtworkSources,
                     heroCategories = cardPrefs.heroCategories,
+                    heroTrackerStatuses = heroPrefs.heroTrackerStatuses,
                     showContinue = shelvesPrefs.showContinue,
                     showUpdated = shelvesPrefs.showUpdated,
                     showCategoryShelves = shelvesPrefs.showCategoryShelves,
@@ -278,6 +282,47 @@ class ChimanewHomeScreenModel(
                     emptyList()
                 }
 
+                // Pre-calculate tracker lists so both Hero and Shelves can use them
+                val readingList = mutableListOf<HomeMangaItem>()
+                val planToReadList = mutableListOf<HomeMangaItem>()
+                val onHoldList = mutableListOf<HomeMangaItem>()
+                val completedList = mutableListOf<HomeMangaItem>()
+                val droppedList = mutableListOf<HomeMangaItem>()
+                val notTrackedList = mutableListOf<HomeMangaItem>()
+
+                if ((prefs.showTrackingShelves || prefs.heroSource == 2) && data.libraryList.isNotEmpty()) {
+                    for (lib in data.libraryList) {
+                        val mangaTracks = tracksByManga[lib.manga.id]
+                        val activeTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                            ?: mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
+                            ?: mangaTracks?.firstOrNull()
+
+                        val item = createHomeItem(
+                            mangaId = lib.manga.id,
+                            title = lib.manga.title,
+                            coverData = lib.manga.asMangaCover(),
+                            totalChapters = lib.totalChapters,
+                            readChapters = lib.readCount,
+                            unreadCount = lib.unreadCount,
+                            genres = lib.manga.ogGenre ?: emptyList(),
+                            description = lib.manga.ogDescription,
+                        )
+
+                        if (activeTrack == null) {
+                            notTrackedList.add(item)
+                        } else {
+                            when (TrackStatus.parseTrackerStatus(trackerManager, activeTrack.trackerId, activeTrack.status)) {
+                                TrackStatus.READING, TrackStatus.REPEATING -> readingList.add(item)
+                                TrackStatus.PLAN_TO_READ -> planToReadList.add(item)
+                                TrackStatus.PAUSED -> onHoldList.add(item)
+                                TrackStatus.COMPLETED -> completedList.add(item)
+                                TrackStatus.DROPPED -> droppedList.add(item)
+                                else -> notTrackedList.add(item)
+                            }
+                        }
+                    }
+                }
+
                 val heroItems = if (!prefs.showHero) {
                     emptyList()
                 } else if (prefs.heroSource == 1) {
@@ -303,6 +348,35 @@ class ChimanewHomeScreenModel(
                                 description = lib.manga.ogDescription,
                             )
                         }
+                } else if (prefs.heroSource == 2) {
+                    // Selected Tracker Statuses
+                    val chosenStatuses = prefs.heroTrackerStatuses
+                    val trackerCandidates = mutableListOf<HomeMangaItem>()
+                    if ("reading" in chosenStatuses) trackerCandidates.addAll(readingList)
+                    if ("plan_to_read" in chosenStatuses) trackerCandidates.addAll(planToReadList)
+                    if ("on_hold" in chosenStatuses) trackerCandidates.addAll(onHoldList)
+                    if ("completed" in chosenStatuses) trackerCandidates.addAll(completedList)
+                    if ("dropped" in chosenStatuses) trackerCandidates.addAll(droppedList)
+
+                    val candidateList = if (trackerCandidates.isNotEmpty()) {
+                        trackerCandidates.distinctBy { it.mangaId }
+                    } else {
+                        readingList.ifEmpty {
+                            data.libraryList.map { lib ->
+                                createHomeItem(
+                                    mangaId = lib.manga.id,
+                                    title = lib.manga.title,
+                                    coverData = lib.manga.asMangaCover(),
+                                    totalChapters = lib.totalChapters,
+                                    readChapters = lib.readCount,
+                                    unreadCount = lib.unreadCount,
+                                    genres = lib.manga.ogGenre ?: emptyList(),
+                                    description = lib.manga.ogDescription,
+                                )
+                            }
+                        }
+                    }
+                    candidateList.shuffled().take(7)
                 } else {
                     // Default: in-progress history with library fallback
                     val heroFromHistory = distinctHistory.take(7).map { h ->
@@ -391,46 +465,6 @@ class ChimanewHomeScreenModel(
                     }
                 } else {
                     emptyList()
-                }
-
-                val readingList = mutableListOf<HomeMangaItem>()
-                val planToReadList = mutableListOf<HomeMangaItem>()
-                val onHoldList = mutableListOf<HomeMangaItem>()
-                val completedList = mutableListOf<HomeMangaItem>()
-                val droppedList = mutableListOf<HomeMangaItem>()
-                val notTrackedList = mutableListOf<HomeMangaItem>()
-
-                if (prefs.showTrackingShelves && data.libraryList.isNotEmpty()) {
-                    for (lib in data.libraryList) {
-                        val mangaTracks = tracksByManga[lib.manga.id]
-                        val activeTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
-                            ?: mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
-                            ?: mangaTracks?.firstOrNull()
-
-                        val item = createHomeItem(
-                            mangaId = lib.manga.id,
-                            title = lib.manga.title,
-                            coverData = lib.manga.asMangaCover(),
-                            totalChapters = lib.totalChapters,
-                            readChapters = lib.readCount,
-                            unreadCount = lib.unreadCount,
-                            genres = lib.manga.ogGenre ?: emptyList(),
-                            description = lib.manga.ogDescription,
-                        )
-
-                        if (activeTrack == null) {
-                            notTrackedList.add(item)
-                        } else {
-                            when (TrackStatus.parseTrackerStatus(trackerManager, activeTrack.trackerId, activeTrack.status)) {
-                                TrackStatus.READING, TrackStatus.REPEATING -> readingList.add(item)
-                                TrackStatus.PLAN_TO_READ -> planToReadList.add(item)
-                                TrackStatus.PAUSED -> onHoldList.add(item)
-                                TrackStatus.COMPLETED -> completedList.add(item)
-                                TrackStatus.DROPPED -> droppedList.add(item)
-                                else -> notTrackedList.add(item)
-                            }
-                        }
-                    }
                 }
 
                 // Assemble shelves strictly according to user custom order & visibility

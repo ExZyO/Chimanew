@@ -41,4 +41,17 @@ class ChimanewPreferences(
         "pref_chimanew_hero_artwork_sources",
         setOf("banner", "cover", "default"),
     )
+
+    fun heroTrackerStatuses() = preferenceStore.getStringSet(
+        "pref_chimanew_hero_tracker_statuses",
+        setOf("reading"),
+    )
+
+    fun navbarAutoHideOnScroll() = preferenceStore.getBoolean("pref_chimanew_navbar_autohide", true)
+
+    fun useAnilistArtworkInDetails() = preferenceStore.getBoolean("pref_chimanew_details_use_anilist", true)
+
+    fun detailsBackdropStyle() = preferenceStore.getInt("pref_chimanew_details_backdrop_style", 0)
+
+    fun detailsBackdropArtwork() = preferenceStore.getInt("pref_chimanew_details_backdrop_artwork", 0)
 }

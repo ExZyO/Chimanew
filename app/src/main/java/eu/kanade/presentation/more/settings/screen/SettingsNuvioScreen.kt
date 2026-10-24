@@ -39,6 +39,8 @@ object SettingsNuvioScreen : SearchableSettings {
             getHeroGroup(chimanewPreferences),
             getShelvesGroup(chimanewPreferences, navigator),
             getCardsGroup(chimanewPreferences),
+            getDetailsPageGroup(chimanewPreferences),
+            getNavbarGroup(chimanewPreferences),
         )
     }
 
@@ -65,6 +67,7 @@ object SettingsNuvioScreen : SearchableSettings {
                     entries = persistentMapOf(
                         0 to stringResource(MR.strings.pref_nuvio_hero_source_history),
                         1 to stringResource(MR.strings.pref_nuvio_hero_source_favorites),
+                        2 to stringResource(MR.strings.pref_nuvio_hero_source_trackers),
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_source),
                 ),
@@ -75,11 +78,25 @@ object SettingsNuvioScreen : SearchableSettings {
                     subtitle = stringResource(MR.strings.pref_chimanew_hero_categories_summary),
                     enabled = heroSource == 1,
                 ),
+                Preference.PreferenceItem.MultiSelectListPreference(
+                    preference = preferences.heroTrackerStatuses(),
+                    entries = persistentMapOf(
+                        "reading" to stringResource(MR.strings.pref_tracker_reading),
+                        "plan_to_read" to stringResource(MR.strings.pref_tracker_plan_to_read),
+                        "on_hold" to stringResource(MR.strings.pref_tracker_on_hold),
+                        "completed" to stringResource(MR.strings.pref_tracker_completed),
+                        "dropped" to stringResource(MR.strings.pref_tracker_dropped),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_hero_tracker_statuses),
+                    subtitle = stringResource(MR.strings.pref_chimanew_hero_tracker_statuses_summary),
+                    enabled = heroSource == 2,
+                ),
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.heroStyle(),
                     entries = persistentMapOf(
                         0 to stringResource(MR.strings.pref_nuvio_hero_style_ambient),
                         1 to stringResource(MR.strings.pref_nuvio_hero_style_fullbleed),
+                        2 to stringResource(MR.strings.pref_nuvio_hero_style_crisp_ambient),
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_style),
                 ),
@@ -166,6 +183,57 @@ object SettingsNuvioScreen : SearchableSettings {
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.showUnreadBadges(),
                     title = stringResource(MR.strings.pref_nuvio_show_unread_badge),
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getDetailsPageGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
+        val useAnilistInDetails by preferences.useAnilistArtworkInDetails().collectPrefAsState()
+
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_chimanew_details_category),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.useAnilistArtworkInDetails(),
+                    title = stringResource(MR.strings.pref_chimanew_details_use_anilist),
+                    subtitle = stringResource(MR.strings.pref_chimanew_details_use_anilist_summary),
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.detailsBackdropStyle(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_fade),
+                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_blur),
+                        2 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_crisp),
+                        3 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_local),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_details_backdrop_style),
+                    enabled = useAnilistInDetails,
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.detailsBackdropArtwork(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_artwork_banner),
+                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_artwork_cover),
+                        2 to stringResource(MR.strings.pref_chimanew_details_backdrop_artwork_local),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_details_backdrop_artwork),
+                    enabled = useAnilistInDetails,
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getNavbarGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_chimanew_navbar_category),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.navbarAutoHideOnScroll(),
+                    title = stringResource(MR.strings.pref_chimanew_navbar_autohide),
+                    subtitle = stringResource(MR.strings.pref_chimanew_navbar_autohide_summary),
                 ),
             ),
         )
