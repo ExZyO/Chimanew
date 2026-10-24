@@ -3,22 +3,41 @@ package eu.kanade.tachiyomi.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
@@ -30,6 +49,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -41,8 +61,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -52,6 +76,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -149,13 +174,13 @@ object HomeScreen : Screen() {
             tab = startTab,
             key = TAB_NAVIGATOR_KEY,
         ) { tabNavigator ->
-            // EaZy Nuvio+ / Chimanew: Auto-hide NavigationBar on scroll matching Nuvio Mobile
+            // EaZy Nuvio+ / Chimanew: Nuvio Dynamic Island & iOS Liquid Sliding Glass Dock
             val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
             val navbarAutoHideOnScroll by chimanewPreferences.navbarAutoHideOnScroll().collectAsState()
-            var scrollVisible by rememberSaveable { mutableStateOf(true) }
+            var isDockCollapsed by rememberSaveable { mutableStateOf(false) }
 
             LaunchedEffect(tabNavigator.current) {
-                scrollVisible = true
+                isDockCollapsed = false
             }
 
             val autoHideScrollConnection = remember(navbarAutoHideOnScroll) {
@@ -166,13 +191,13 @@ object HomeScreen : Screen() {
                         source: NestedScrollSource,
                     ): Offset {
                         if (!navbarAutoHideOnScroll) {
-                            if (!scrollVisible) scrollVisible = true
+                            if (isDockCollapsed) isDockCollapsed = false
                             return Offset.Zero
                         }
                         val scrollDeltaY = consumed.y + available.y
                         when {
-                            scrollDeltaY < -12f -> if (scrollVisible) scrollVisible = false
-                            scrollDeltaY > 12f -> if (!scrollVisible) scrollVisible = true
+                            scrollDeltaY < -15f -> if (!isDockCollapsed) isDockCollapsed = true
+                            scrollDeltaY > 15f -> if (isDockCollapsed) isDockCollapsed = false
                         }
                         return Offset.Zero
                     }
@@ -198,36 +223,30 @@ object HomeScreen : Screen() {
                             val bottomNavVisible by produceState(initialValue = true) {
                                 showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
                             }
-                            val isVisible = bottomNavVisible && (!navbarAutoHideOnScroll || scrollVisible)
                             AnimatedVisibility(
-                                visible = isVisible,
+                                visible = bottomNavVisible,
                                 enter = slideInVertically(
                                     initialOffsetY = { it },
                                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                ) + expandVertically(),
+                                ) + fadeIn(),
                                 exit = slideOutVertically(
                                     targetOffsetY = { it },
                                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                ) + shrinkVertically(),
+                                ) + fadeOut(),
                             ) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    // EaZy Nuvio+ / Chimanew: Nuvio-style hairline divider
-                                    HorizontalDivider(
-                                        thickness = 0.5.dp,
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                // EaZy Nuvio+ / Chimanew: Nuvio Dynamic Island & iOS Liquid Sliding Glass Dock
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .navigationBarsPadding()
+                                        .padding(bottom = 12.dp, start = 16.dp, end = 16.dp),
+                                    contentAlignment = Alignment.BottomCenter,
+                                ) {
+                                    NuvioLiquidGlassDock(
+                                        tabs = navbarTabs,
+                                        isCollapsed = isDockCollapsed,
+                                        useConsolidatedLibrary = useConsolidatedLibrary,
                                     )
-                                    NavigationBar(
-                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                                    ) {
-                                        navbarTabs
-                                            .fastForEach {
-                                                NavigationBarItem(
-                                                    it/* SY --> */,
-                                                    alwaysShowLabel/* SY <-- */,
-                                                    useConsolidatedLibrary,
-                                                )
-                                            }
-                                    }
                                 }
                             }
                         }
@@ -308,67 +327,178 @@ object HomeScreen : Screen() {
         }
     }
 
+    // EaZy Nuvio+ / Chimanew: Nuvio Dynamic Island & iOS Liquid Sliding Glass Dock
     @Composable
-    private fun RowScope.NavigationBarItem(
-        tab: eu.kanade.presentation.util.Tab,
-        // SY -->
-        alwaysShowLabel: Boolean,
-        // SY <--
+    private fun NuvioLiquidGlassDock(
+        tabs: List<eu.kanade.presentation.util.Tab>,
+        isCollapsed: Boolean,
         useConsolidatedLibrary: Boolean,
     ) {
         val tabNavigator = LocalTabNavigator.current
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
-        val selected = tabNavigator.current::class == tab::class
-        val onClickTab: () -> Unit = {
-            if (!selected) {
-                tabNavigator.current = tab
-            } else {
-                scope.launch { tab.onReselect(navigator) }
-            }
-            Unit
-        }
-        NavigationBarItem(
-            selected = selected,
-            onClick = onClickTab,
-            icon = {
-                if (tab == LibraryTab && useConsolidatedLibrary) {
-                    LibraryNavigationIcon(
-                        onClick = onClickTab,
-                        onModeSelected = { mode ->
-                            if (!selected) tabNavigator.current = LibraryTab
-                            scope.launch { LibraryTab.selectLibraryMode(mode) }
-                        },
-                    )
-                } else if (tab == BrowseTab) {
-                    BrowseNavigationIcon(
-                        onClick = onClickTab,
-                        onModeSelected = { mode ->
-                            if (!selected) tabNavigator.current = BrowseTab
-                            scope.launch { BrowseTab.selectBrowseMode(mode) }
-                        },
-                    )
-                } else {
-                    NavigationIconItem(tab)
-                }
-            },
-            label = {
-                Text(
-                    text = tab.options.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            alwaysShowLabel = /* SY --> */alwaysShowLabel, /* SY <-- */
-            colors = NavigationBarItemDefaults.colors(
-                indicatorColor = Color.Transparent,
-                selectedIconColor = MaterialTheme.colorScheme.primary,
-                selectedTextColor = MaterialTheme.colorScheme.primary,
-                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f),
-                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f),
+
+        val dockWidth by animateDpAsState(
+            targetValue = if (isCollapsed) 300.dp else 420.dp,
+            animationSpec = spring(
+                dampingRatio = 0.85f,
+                stiffness = Spring.StiffnessMediumLow,
             ),
+            label = "nuvio_dock_width",
         )
+        val dockHeight by animateDpAsState(
+            targetValue = if (isCollapsed) 50.dp else 62.dp,
+            animationSpec = spring(
+                dampingRatio = 0.85f,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+            label = "nuvio_dock_height",
+        )
+
+        Surface(
+            modifier = Modifier
+                .width(dockWidth)
+                .height(dockHeight)
+                .shadow(
+                    elevation = 18.dp,
+                    shape = RoundedCornerShape(999.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.60f),
+                    spotColor = Color.Black.copy(alpha = 0.85f),
+                ),
+            shape = RoundedCornerShape(999.dp),
+            color = Color(0xEE0B0D18),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        ) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                val tabCount = tabs.size.coerceAtLeast(1)
+                val activeIdx = tabs.indexOfFirst { it::class == tabNavigator.current::class }.coerceAtLeast(0)
+
+                val animatedIndex by animateFloatAsState(
+                    targetValue = activeIdx.toFloat(),
+                    animationSpec = spring(
+                        dampingRatio = 0.82f,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    label = "sliding_pill_index",
+                )
+
+                val tabWidth = maxWidth / tabCount
+
+                // Sliding Liquid Glass Pill Indicator
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(tabWidth)
+                        .offset(x = tabWidth * animatedIndex)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.14f))
+                        .border(
+                            BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
+                            shape = RoundedCornerShape(999.dp),
+                        ),
+                ) {
+                    // Top hairline specular sheen highlight
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 1.dp)
+                            .fillMaxWidth(0.65f)
+                            .height(1.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = 0.70f),
+                                        Color.Transparent,
+                                    ),
+                                ),
+                            ),
+                    )
+                }
+
+                // Tabs Row
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    tabs.fastForEach { tab ->
+                        val selected = tabNavigator.current::class == tab::class
+                        val onClickTab: () -> Unit = {
+                            if (!selected) {
+                                tabNavigator.current = tab
+                            } else {
+                                scope.launch { tab.onReselect(navigator) }
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(999.dp))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onClickTab,
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                val itemTint = if (selected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    Color.White.copy(alpha = 0.60f)
+                                }
+
+                                CompositionLocalProvider(LocalContentColor provides itemTint) {
+                                    if (tab == LibraryTab && useConsolidatedLibrary) {
+                                        LibraryNavigationIcon(
+                                            onClick = onClickTab,
+                                            onModeSelected = { mode ->
+                                                if (!selected) tabNavigator.current = LibraryTab
+                                                scope.launch { LibraryTab.selectLibraryMode(mode) }
+                                            },
+                                        )
+                                    } else if (tab == BrowseTab) {
+                                        BrowseNavigationIcon(
+                                            onClick = onClickTab,
+                                            onModeSelected = { mode ->
+                                                if (!selected) tabNavigator.current = BrowseTab
+                                                scope.launch { BrowseTab.selectBrowseMode(mode) }
+                                            },
+                                        )
+                                    } else {
+                                        NavigationIconItem(tab)
+                                    }
+                                }
+
+                                if (!isCollapsed) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = tab.options.title,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 10.sp,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                            color = itemTint,
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @Composable

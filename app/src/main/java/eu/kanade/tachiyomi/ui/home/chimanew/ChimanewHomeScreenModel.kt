@@ -125,6 +125,8 @@ class ChimanewHomeScreenModel(
     private val anilistCoverRepository: AnilistCoverRepository = Injekt.get(),
 ) : StateScreenModel<ChimanewHomeScreenModel.State>(State()) {
 
+    private val artworkRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
+
     @Immutable
     data class State(
         val isLoading: Boolean = true,
@@ -145,7 +147,8 @@ class ChimanewHomeScreenModel(
                 getLibraryManga.subscribe(),
                 getCategories.subscribe(),
                 trackRepository.getTracksAsFlow(),
-            ) { historyList: List<HistoryWithRelations>, libraryList: List<LibraryManga>, categories: List<Category>, tracks: List<Track> ->
+                artworkRefreshTrigger,
+            ) { historyList: List<HistoryWithRelations>, libraryList: List<LibraryManga>, categories: List<Category>, tracks: List<Track>, _ ->
                 DataBundle(historyList, libraryList, categories, tracks)
             }
 
@@ -218,11 +221,15 @@ class ChimanewHomeScreenModel(
                     anilistCoverRepository.fetchBatch(aniListRemoteIds)
                 }
 
-                fun getArtwork(mangaId: Long): AnilistMediaArtwork? {
+                fun getArtwork(mangaId: Long, title: String): AnilistMediaArtwork? {
                     if (!prefs.useAnilistArtwork) return null
-                    val mangaTracks = tracksByManga[mangaId] ?: return null
-                    val aniListTrack = mangaTracks.firstOrNull { it.trackerId == TrackerManager.ANILIST } ?: return null
-                    return anilistCoverRepository.getCached(aniListTrack.remoteId)
+                    val mangaTracks = tracksByManga[mangaId]
+                    val aniListTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                    if (aniListTrack != null && aniListTrack.remoteId > 0) {
+                        val cached = anilistCoverRepository.getCached(aniListTrack.remoteId)
+                        if (cached != null) return cached
+                    }
+                    return anilistCoverRepository.getCachedByTitle(title)
                 }
 
                 fun createHomeItem(
@@ -240,7 +247,7 @@ class ChimanewHomeScreenModel(
                     genres: List<String> = emptyList(),
                     description: String? = null,
                 ): HomeMangaItem {
-                    val artwork = getArtwork(mangaId)
+                    val artwork = getArtwork(mangaId, title)
                     return HomeMangaItem(
                         mangaId = mangaId,
                         title = title,
@@ -418,6 +425,26 @@ class ChimanewHomeScreenModel(
                         heroFromHistory + additional
                     } else {
                         heroFromHistory
+                    }
+                }
+
+                if (prefs.useAnilistArtwork) {
+                    val missingHeroArt = heroItems.filter { item ->
+                        item.highResBannerUrl == null && anilistCoverRepository.getCachedByTitle(item.title) == null
+                    }
+                    if (missingHeroArt.isNotEmpty()) {
+                        screenModelScope.launchIO {
+                            var anyUpdated = false
+                            for (item in missingHeroArt) {
+                                val art = anilistCoverRepository.fetchByTitle(item.title)
+                                if (art != null && (!art.bannerUrl.isNullOrBlank() || !art.extraLargeCoverUrl.isNullOrBlank())) {
+                                    anyUpdated = true
+                                }
+                            }
+                            if (anyUpdated) {
+                                artworkRefreshTrigger.value = System.currentTimeMillis()
+                            }
+                        }
                     }
                 }
 

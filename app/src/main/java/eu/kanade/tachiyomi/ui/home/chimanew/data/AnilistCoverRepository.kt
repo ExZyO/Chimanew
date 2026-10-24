@@ -33,70 +33,152 @@ class AnilistCoverRepository(
     private val json: Json = Injekt.get(),
 ) {
     private val cache = ConcurrentHashMap<Long, AnilistMediaArtwork>()
+    private val titleCache = ConcurrentHashMap<String, AnilistMediaArtwork>()
 
     fun getCached(remoteId: Long): AnilistMediaArtwork? = cache[remoteId]
+
+    fun getCachedByTitle(rawTitle: String): AnilistMediaArtwork? = titleCache[cleanTitle(rawTitle)]
 
     suspend fun fetchBatch(remoteIds: List<Long>): Map<Long, AnilistMediaArtwork> {
         val uncached = remoteIds.distinct().filter { !cache.containsKey(it) }
         if (uncached.isNotEmpty()) {
             withContext(Dispatchers.IO) {
-                try {
-                    val query = """
-                        query (${'$'}ids: [Int]) {
-                            Page(perPage: 50) {
-                                media(id_in: ${'$'}ids, type: MANGA) {
-                                    id
-                                    bannerImage
-                                    coverImage {
-                                        extraLarge
-                                        large
+                uncached.chunked(50).forEach { chunk ->
+                    try {
+                        val query = """
+                            query (${'$'}ids: [Int]) {
+                                Page(perPage: 50) {
+                                    media(id_in: ${'$'}ids, type: MANGA) {
+                                        id
+                                        bannerImage
+                                        coverImage {
+                                            extraLarge
+                                            large
+                                        }
                                     }
                                 }
                             }
-                        }
-                    """.trimIndent()
+                        """.trimIndent()
 
-                    val payload = buildJsonObject {
-                        put("query", query)
-                        putJsonObject("variables") {
-                            putJsonArray("ids") {
-                                uncached.forEach { add(it) }
+                        val payload = buildJsonObject {
+                            put("query", query)
+                            putJsonObject("variables") {
+                                putJsonArray("ids") {
+                                    chunk.forEach { add(it) }
+                                }
                             }
                         }
-                    }
 
-                    val request = POST(
-                        API_URL,
-                        body = payload.toString().toRequestBody(jsonMime),
-                    )
-
-                    val response = client.newCall(request).awaitSuccess()
-                    val bodyString = response.body?.string() ?: return@withContext
-                    val root = json.parseToJsonElement(bodyString).jsonObject
-                    val mediaList = root["data"]?.jsonObject?.get("Page")?.jsonObject?.get("media")?.jsonArray
-
-                    mediaList?.forEach { element ->
-                        val obj = element.jsonObject
-                        val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@forEach
-                        val banner = obj["bannerImage"]?.jsonPrimitive?.content
-                        val coverObj = obj["coverImage"]?.jsonObject
-                        val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
-                            ?: coverObj?.get("large")?.jsonPrimitive?.content
-
-                        cache[id] = AnilistMediaArtwork(
-                            bannerUrl = banner?.ifBlank { null },
-                            extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                        val request = POST(
+                            API_URL,
+                            body = payload.toString().toRequestBody(jsonMime),
                         )
+
+                        val response = client.newCall(request).awaitSuccess()
+                        val bodyString = response.body?.string() ?: return@forEach
+                        val root = json.parseToJsonElement(bodyString).jsonObject
+                        val mediaList = root["data"]?.jsonObject?.get("Page")?.jsonObject?.get("media")?.jsonArray
+
+                        mediaList?.forEach { element ->
+                            val obj = element.jsonObject
+                            val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@forEach
+                            val banner = obj["bannerImage"]?.jsonPrimitive?.content
+                            val coverObj = obj["coverImage"]?.jsonObject
+                            val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
+                                ?: coverObj?.get("large")?.jsonPrimitive?.content
+
+                            cache[id] = AnilistMediaArtwork(
+                                bannerUrl = banner?.ifBlank { null },
+                                extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                            )
+                        }
+
+                        // Mark any unreturned IDs as empty so we don't repeat queries endlessly
+                        chunk.forEach { id ->
+                            cache.putIfAbsent(id, AnilistMediaArtwork())
+                        }
+                    } catch (e: Exception) {
+                        logcat(throwable = e) { "Failed to fetch AniList artwork batch for $chunk" }
                     }
-                } catch (e: Exception) {
-                    logcat(throwable = e) { "Failed to fetch AniList artwork batch for $uncached" }
                 }
             }
         }
         return remoteIds.associateWith { cache[it] ?: AnilistMediaArtwork() }
     }
 
+    suspend fun fetchByTitle(rawTitle: String): AnilistMediaArtwork? {
+        val title = cleanTitle(rawTitle)
+        if (title.isBlank()) return null
+        titleCache[title]?.let { return it }
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val query = """
+                    query (${'$'}title: String) {
+                        Media(search: ${'$'}title, type: MANGA) {
+                            id
+                            bannerImage
+                            coverImage {
+                                extraLarge
+                                large
+                            }
+                        }
+                    }
+                """.trimIndent()
+
+                val payload = buildJsonObject {
+                    put("query", query)
+                    putJsonObject("variables") {
+                        put("title", title)
+                    }
+                }
+
+                val request = POST(
+                    API_URL,
+                    body = payload.toString().toRequestBody(jsonMime),
+                )
+
+                val response = client.newCall(request).awaitSuccess()
+                val bodyString = response.body?.string() ?: return@withContext null
+                val root = json.parseToJsonElement(bodyString).jsonObject
+                val media = root["data"]?.jsonObject?.get("Media")?.jsonObject
+
+                if (media != null) {
+                    val id = media["id"]?.jsonPrimitive?.content?.toLongOrNull()
+                    val banner = media["bannerImage"]?.jsonPrimitive?.content
+                    val coverObj = media["coverImage"]?.jsonObject
+                    val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
+                        ?: coverObj?.get("large")?.jsonPrimitive?.content
+
+                    val artwork = AnilistMediaArtwork(
+                        bannerUrl = banner?.ifBlank { null },
+                        extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                    )
+                    titleCache[title] = artwork
+                    if (id != null) {
+                        cache[id] = artwork
+                    }
+                    artwork
+                } else {
+                    val empty = AnilistMediaArtwork()
+                    titleCache[title] = empty
+                    empty
+                }
+            } catch (e: Exception) {
+                logcat(throwable = e) { "Failed to fetch AniList artwork for title: $title" }
+                null
+            }
+        }
+    }
+
     companion object {
         private const val API_URL = "https://graphql.anilist.co"
+
+        fun cleanTitle(title: String): String {
+            return title
+                .replace(Regex("""\s*[\(\[\{].*?[\)\]\}]"""), "")
+                .replace(Regex("""(?i)\s*-\s*(webtoon|manhwa|manga|comic|scan).*"""), "")
+                .trim()
+        }
     }
 }

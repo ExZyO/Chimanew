@@ -180,7 +180,13 @@ fun MangaInfoBox(
                     value = fetched[anilistTrack.remoteId]
                 }
             } else {
-                value = null
+                val title = manga.ogTitle ?: manga.title
+                val cachedTitle = anilistCoverRepo.getCachedByTitle(title)
+                if (cachedTitle != null) {
+                    value = cachedTitle
+                } else {
+                    value = anilistCoverRepo.fetchByTitle(title)
+                }
             }
         }
     }
@@ -225,8 +231,10 @@ fun MangaInfoBox(
             alignment = Alignment.TopCenter,
             // KMK -->
             onSuccess = { result ->
-                val image = result.result.image
-                coverRatio.floatValue = image.height.toFloat() / image.width
+                if (chosenArtworkModel == manga) {
+                    val image = result.result.image
+                    coverRatio.floatValue = image.height.toFloat() / image.width
+                }
             },
             // KMK <--
             modifier = Modifier
