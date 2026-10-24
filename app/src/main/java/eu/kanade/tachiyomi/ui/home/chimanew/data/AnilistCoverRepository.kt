@@ -48,7 +48,7 @@ class AnilistCoverRepository(
                         val query = """
                             query (${'$'}ids: [Int]) {
                                 Page(perPage: 50) {
-                                    media(id_in: ${'$'}ids, type: MANGA) {
+                                    media(id_in: ${'$'}ids) {
                                         id
                                         bannerImage
                                         coverImage {
@@ -93,9 +93,11 @@ class AnilistCoverRepository(
                             )
                         }
 
-                        // Mark any unreturned IDs as empty so we don't repeat queries endlessly
-                        chunk.forEach { id ->
-                            cache.putIfAbsent(id, AnilistMediaArtwork())
+                        // Mark any unreturned IDs as empty so we don't repeat queries endlessly on successful response
+                        if (mediaList != null) {
+                            chunk.forEach { id ->
+                                cache.putIfAbsent(id, AnilistMediaArtwork())
+                            }
                         }
                     } catch (e: Exception) {
                         logcat(throwable = e) { "Failed to fetch AniList artwork batch for $chunk" }
@@ -115,7 +117,7 @@ class AnilistCoverRepository(
             try {
                 val query = """
                     query (${'$'}title: String) {
-                        Media(search: ${'$'}title, type: MANGA) {
+                        Media(search: ${'$'}title) {
                             id
                             bannerImage
                             coverImage {
@@ -175,10 +177,13 @@ class AnilistCoverRepository(
         private const val API_URL = "https://graphql.anilist.co"
 
         fun cleanTitle(title: String): String {
-            return title
-                .replace(Regex("""\s*[\(\[\{].*?[\)\]\}]"""), "")
-                .replace(Regex("""(?i)\s*-\s*(webtoon|manhwa|manga|comic|scan).*"""), "")
+            val cleaned = title
+                .replace(Regex("""\s*[\(\[\{].*?[\)\]\}]"""), " ")
+                .replace(Regex("""(?i)\s*-\s*(webtoon|manhwa|manga|comic|scanlations?|scan).*"""), " ")
+                .replace(Regex("""(?i)\s+(?:season|s)\s*\d+.*"""), " ")
+                .replace(Regex("""\s+"""), " ")
                 .trim()
+            return cleaned.ifBlank { title.trim() }
         }
     }
 }

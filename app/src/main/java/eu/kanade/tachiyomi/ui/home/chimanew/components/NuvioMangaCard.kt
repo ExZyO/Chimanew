@@ -92,12 +92,23 @@ fun NuvioMangaCard(
             ),
     ) {
         // 1. Cover image: Use high-res AniList cover when available, falling back to local coverData
+        // EaZy Nuvio+ / Chimanew: resilient cover fallback
         val imageModel: Any = item.highResCoverUrl ?: item.coverData
         SubcomposeAsyncImage(
             model = imageModel,
             contentDescription = item.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
+            error = {
+                if (item.highResCoverUrl != null) {
+                    SubcomposeAsyncImage(
+                        model = item.coverData,
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            },
         )
 
         // 2. Unread badge at top-right

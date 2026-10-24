@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Spring
@@ -20,6 +21,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -183,8 +185,12 @@ object HomeScreen : Screen() {
                 isDockCollapsed = false
             }
 
+            // EaZy Nuvio+ / Chimanew: Buffered scroll accumulator to prevent jank & thrashing
             val autoHideScrollConnection = remember(navbarAutoHideOnScroll) {
                 object : NestedScrollConnection {
+                    private var scrollAccumulator = 0f
+                    private val scrollThreshold = 45f
+
                     override fun onPostScroll(
                         consumed: Offset,
                         available: Offset,
@@ -192,12 +198,24 @@ object HomeScreen : Screen() {
                     ): Offset {
                         if (!navbarAutoHideOnScroll) {
                             if (isDockCollapsed) isDockCollapsed = false
+                            scrollAccumulator = 0f
                             return Offset.Zero
                         }
-                        val scrollDeltaY = consumed.y + available.y
-                        when {
-                            scrollDeltaY < -15f -> if (!isDockCollapsed) isDockCollapsed = true
-                            scrollDeltaY > 15f -> if (isDockCollapsed) isDockCollapsed = false
+                        val deltaY = consumed.y + available.y
+                        if (deltaY == 0f) return Offset.Zero
+
+                        // Reset accumulator when user reverses scroll direction
+                        if (deltaY < 0f && scrollAccumulator > 0f) scrollAccumulator = 0f
+                        if (deltaY > 0f && scrollAccumulator < 0f) scrollAccumulator = 0f
+
+                        scrollAccumulator += deltaY
+
+                        if (scrollAccumulator < -scrollThreshold && !isDockCollapsed) {
+                            isDockCollapsed = true
+                            scrollAccumulator = 0f
+                        } else if (scrollAccumulator > scrollThreshold && isDockCollapsed) {
+                            isDockCollapsed = false
+                            scrollAccumulator = 0f
                         }
                         return Offset.Zero
                     }
@@ -238,6 +256,7 @@ object HomeScreen : Screen() {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .height(76.dp)
                                         .navigationBarsPadding()
                                         .padding(bottom = 12.dp, start = 16.dp, end = 16.dp),
                                     contentAlignment = Alignment.BottomCenter,
@@ -337,6 +356,7 @@ object HomeScreen : Screen() {
         val tabNavigator = LocalTabNavigator.current
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
+        val isDark = isSystemInDarkTheme()
 
         val dockWidth by animateDpAsState(
             targetValue = if (isCollapsed) 300.dp else 420.dp,
@@ -355,143 +375,198 @@ object HomeScreen : Screen() {
             label = "nuvio_dock_height",
         )
 
+        // Dynamic surface & border matching Chimanew theme
+        val surfaceColor = MaterialTheme.colorScheme.surface
+        val dockSurfaceColor = if (isDark) {
+            surfaceColor.copy(alpha = 0.82f)
+        } else {
+            surfaceColor.copy(alpha = 0.88f)
+        }
+        val dockBorderColor = if (isDark) {
+            Color.White.copy(alpha = 0.16f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f)
+        }
+
         Surface(
             modifier = Modifier
                 .width(dockWidth)
                 .height(dockHeight)
                 .shadow(
-                    elevation = 18.dp,
+                    elevation = 16.dp,
                     shape = RoundedCornerShape(999.dp),
-                    ambientColor = Color.Black.copy(alpha = 0.60f),
-                    spotColor = Color.Black.copy(alpha = 0.85f),
+                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.50f else 0.15f),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.75f else 0.25f),
                 ),
             shape = RoundedCornerShape(999.dp),
-            color = Color(0xEE0B0D18),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+            color = dockSurfaceColor,
+            border = BorderStroke(1.dp, dockBorderColor),
         ) {
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-            ) {
-                val tabCount = tabs.size.coerceAtLeast(1)
-                val activeIdx = tabs.indexOfFirst { it::class == tabNavigator.current::class }.coerceAtLeast(0)
-
-                val animatedIndex by animateFloatAsState(
-                    targetValue = activeIdx.toFloat(),
-                    animationSpec = spring(
-                        dampingRatio = 0.82f,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                    label = "sliding_pill_index",
-                )
-
-                val tabWidth = maxWidth / tabCount
-
-                // Sliding Liquid Glass Pill Indicator
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Top specular catch-light sheen (Nuvio glass depth effect)
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(tabWidth)
-                        .offset(x = tabWidth * animatedIndex)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Color.White.copy(alpha = 0.14f))
-                        .border(
-                            BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
-                            shape = RoundedCornerShape(999.dp),
-                        ),
-                ) {
-                    // Top hairline specular sheen highlight
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 1.dp)
-                            .fillMaxWidth(0.65f)
-                            .height(1.dp)
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.White.copy(alpha = 0.70f),
-                                        Color.Transparent,
-                                    ),
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth(0.85f)
+                        .height(1.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    (if (isDark) Color.White else MaterialTheme.colorScheme.primary).copy(alpha = 0.35f),
+                                    Color.Transparent,
                                 ),
                             ),
-                    )
-                }
+                        ),
+                )
 
-                // Tabs Row
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically,
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                 ) {
-                    tabs.fastForEach { tab ->
-                        val selected = tabNavigator.current::class == tab::class
-                        val onClickTab: () -> Unit = {
-                            if (!selected) {
-                                tabNavigator.current = tab
-                            } else {
-                                scope.launch { tab.onReselect(navigator) }
-                            }
-                        }
+                    val tabCount = tabs.size.coerceAtLeast(1)
+                    val activeIdx = tabs.indexOfFirst { it::class == tabNavigator.current::class }.coerceAtLeast(0)
 
+                    val animatedIndex by animateFloatAsState(
+                        targetValue = activeIdx.toFloat(),
+                        animationSpec = spring(
+                            dampingRatio = 0.85f,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                        label = "sliding_pill_index",
+                    )
+
+                    val tabWidth = maxWidth / tabCount
+
+                    // Sliding Liquid Glass Pill Indicator
+                    val pillBgColor = if (isDark) {
+                        Color.White.copy(alpha = 0.12f)
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    }
+                    val pillBorderColor = if (isDark) {
+                        Color.White.copy(alpha = 0.22f)
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(tabWidth)
+                            .offset(x = tabWidth * animatedIndex)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(pillBgColor)
+                            .border(
+                                BorderStroke(1.dp, pillBorderColor),
+                                shape = RoundedCornerShape(999.dp),
+                            ),
+                    ) {
+                        // Top hairline specular sheen highlight on the sliding pill
                         Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(999.dp))
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = onClickTab,
+                                .align(Alignment.TopCenter)
+                                .padding(top = 1.dp)
+                                .fillMaxWidth(0.65f)
+                                .height(1.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            (if (isDark) Color.White else MaterialTheme.colorScheme.primary).copy(alpha = 0.70f),
+                                            Color.Transparent,
+                                        ),
+                                    ),
                                 ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxSize(),
-                            ) {
-                                val itemTint = if (selected) {
+                        )
+                    }
+
+                    // Tabs Row
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        tabs.fastForEach { tab ->
+                            val selected = tabNavigator.current::class == tab::class
+                            val onClickTab: () -> Unit = {
+                                if (!selected) {
+                                    tabNavigator.current = tab
+                                } else {
+                                    scope.launch { tab.onReselect(navigator) }
+                                }
+                            }
+
+                            val itemTint by animateColorAsState(
+                                targetValue = if (selected) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
-                                    Color.White.copy(alpha = 0.60f)
-                                }
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.60f)
+                                },
+                                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                label = "dock_item_tint",
+                            )
 
-                                CompositionLocalProvider(LocalContentColor provides itemTint) {
-                                    if (tab == LibraryTab && useConsolidatedLibrary) {
-                                        LibraryNavigationIcon(
-                                            onClick = onClickTab,
-                                            onModeSelected = { mode ->
-                                                if (!selected) tabNavigator.current = LibraryTab
-                                                scope.launch { LibraryTab.selectLibraryMode(mode) }
-                                            },
-                                        )
-                                    } else if (tab == BrowseTab) {
-                                        BrowseNavigationIcon(
-                                            onClick = onClickTab,
-                                            onModeSelected = { mode ->
-                                                if (!selected) tabNavigator.current = BrowseTab
-                                                scope.launch { BrowseTab.selectBrowseMode(mode) }
-                                            },
-                                        )
-                                    } else {
-                                        NavigationIconItem(tab)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = onClickTab,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier.fillMaxSize(),
+                                ) {
+                                    CompositionLocalProvider(LocalContentColor provides itemTint) {
+                                        if (tab == LibraryTab && useConsolidatedLibrary) {
+                                            LibraryNavigationIcon(
+                                                onClick = onClickTab,
+                                                onModeSelected = { mode ->
+                                                    if (!selected) tabNavigator.current = LibraryTab
+                                                    scope.launch { LibraryTab.selectLibraryMode(mode) }
+                                                },
+                                            )
+                                        } else if (tab == BrowseTab) {
+                                            BrowseNavigationIcon(
+                                                onClick = onClickTab,
+                                                onModeSelected = { mode ->
+                                                    if (!selected) tabNavigator.current = BrowseTab
+                                                    scope.launch { BrowseTab.selectBrowseMode(mode) }
+                                                },
+                                            )
+                                        } else {
+                                            NavigationIconItem(tab)
+                                        }
                                     }
-                                }
 
-                                if (!isCollapsed) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = tab.options.title,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 10.sp,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                            color = itemTint,
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                                    AnimatedVisibility(
+                                        visible = !isCollapsed,
+                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                expandVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                               shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = tab.options.title,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 10.sp,
+                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = itemTint,
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

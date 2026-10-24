@@ -221,10 +221,13 @@ fun MangaInfoBox(
             Color.Transparent,
             MaterialTheme.colorScheme.background,
         )
+        // EaZy Nuvio+ / Chimanew: fallback to local manga cover if AniList banner/artwork fails to load
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(chosenArtworkModel)
                 .crossfade(true)
+                .error(manga)
+                .fallback(manga)
                 .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,

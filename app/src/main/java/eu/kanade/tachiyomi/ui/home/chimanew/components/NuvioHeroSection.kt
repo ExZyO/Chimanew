@@ -147,7 +147,22 @@ fun NuvioHeroSection(
                                 .blur(22.dp)
                                 .alpha(0.35f),
                             loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
-                            error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
+                            error = {
+                                if (bannerImageModel != item.coverData) {
+                                    SubcomposeAsyncImage(
+                                        model = item.coverData,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        alignment = Alignment.TopCenter,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .blur(22.dp)
+                                            .alpha(0.35f),
+                                    )
+                                } else {
+                                    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)))
+                                }
+                            },
                         )
 
                         // 2. Radial Accent Ambient Glow
@@ -224,7 +239,21 @@ fun NuvioHeroSection(
                                 .fillMaxSize()
                                 .alpha(0.55f),
                             loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
-                            error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
+                            error = {
+                                if (bannerImageModel != item.coverData) {
+                                    SubcomposeAsyncImage(
+                                        model = item.coverData,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        alignment = Alignment.TopCenter,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .alpha(0.55f),
+                                    )
+                                } else {
+                                    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)))
+                                }
+                            },
                         )
 
                         // 2. Radial Accent Ambient Glow
@@ -306,11 +335,21 @@ fun NuvioHeroSection(
                                 )
                             },
                             error = {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0xFF1E1E1E)),
-                                )
+                                if (bannerImageModel != item.coverData) {
+                                    SubcomposeAsyncImage(
+                                        model = item.coverData,
+                                        contentDescription = item.title,
+                                        contentScale = ContentScale.Crop,
+                                        alignment = Alignment.TopCenter,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color(0xFF1E1E1E)),
+                                    )
+                                }
                             },
                         )
 
@@ -593,11 +632,21 @@ private fun HeroAmbientForegroundContent(
                     )
                 },
                 error = {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF2A2A2A)),
-                    )
+                    if (posterImageModel != item.coverData) {
+                        SubcomposeAsyncImage(
+                            model = item.coverData,
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.TopCenter,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF2A2A2A)),
+                        )
+                    }
                 },
             )
         }

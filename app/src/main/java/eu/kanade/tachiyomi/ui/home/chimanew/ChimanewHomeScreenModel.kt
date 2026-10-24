@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistMediaArtwork
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
@@ -440,6 +441,7 @@ class ChimanewHomeScreenModel(
                                 if (art != null && (!art.bannerUrl.isNullOrBlank() || !art.extraLargeCoverUrl.isNullOrBlank())) {
                                     anyUpdated = true
                                 }
+                                delay(120L)
                             }
                             if (anyUpdated) {
                                 artworkRefreshTrigger.value = System.currentTimeMillis()
