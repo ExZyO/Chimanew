@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.library.LibraryItem
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -33,8 +33,8 @@ internal fun LibraryComfortableGrid(
 ) {
     val preferences = remember { Injekt.get<ChimanewPreferences>() }
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
-    val useAnilistArtwork by preferences.useAnilistArtworkInLibrary().collectAsState()
-    val artworkWaterfallOrder by preferences.artworkWaterfallOrder().collectAsState()
+    val useAnilistArtwork by preferences.useAnilistArtworkInLibrary().collectPrefAsState()
+    val artworkWaterfallOrder by preferences.artworkWaterfallOrder().collectPrefAsState()
 
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
