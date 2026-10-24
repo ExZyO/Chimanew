@@ -51,6 +51,8 @@ class ChimanewPreferences(
 
     fun useAnilistArtworkInDetails() = preferenceStore.getBoolean("pref_chimanew_details_use_anilist", true)
 
+    fun useAnilistArtworkInLibrary() = preferenceStore.getBoolean("pref_chimanew_library_use_anilist", true)
+
     fun detailsBackdropStyle() = preferenceStore.getInt("pref_chimanew_details_backdrop_style", 0)
 
     fun detailsBackdropArtwork() = preferenceStore.getInt("pref_chimanew_details_backdrop_artwork", 0)
@@ -59,7 +61,7 @@ class ChimanewPreferences(
 
     fun heroShowUnreadBadges() = preferenceStore.getBoolean("pref_nuvio_hero_show_unread_badges", true)
 
-    fun detailsBackdropScale() = preferenceStore.getInt("pref_chimanew_details_backdrop_scale", 0) // 0 = Ambient Backdrop (Full Art + Blur), 1 = Natural Fit (Compact), 2 = Fill Screen (Crop)
+    fun detailsBackdropScale() = preferenceStore.getInt("pref_chimanew_details_backdrop_scale", 2) // 0 = Ambient Backdrop (Full Art + Blur), 1 = Natural Fit (Compact), 2 = Fill Screen (Crop)
 
     fun artworkWaterfallOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_waterfall_order",

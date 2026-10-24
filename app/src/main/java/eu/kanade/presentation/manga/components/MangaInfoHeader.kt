@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -165,7 +166,16 @@ fun MangaInfoBox(
     val customBannerUrl by chimanewPreferences.mangaCustomBannerUrl(manga.id).collectAsState()
     val artworkWaterfallOrder by chimanewPreferences.artworkWaterfallOrder().collectAsState()
 
-    val unifiedArtwork by produceState<UnifiedArtwork?>(initialValue = null, manga.id, useAnilistArtwork, artworkWaterfallOrder) {
+    val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
+    val mangaTitle = remember(manga) { manga.ogTitle ?: manga.title }
+    val cachedArtwork = remember(mangaTitle) { waterfallRepo.getCached(mangaTitle) }
+
+    val unifiedArtwork by produceState<UnifiedArtwork?>(
+        initialValue = if (useAnilistArtwork) cachedArtwork else null,
+        manga.id,
+        useAnilistArtwork,
+        artworkWaterfallOrder,
+    ) {
         if (!useAnilistArtwork) {
             value = null
             return@produceState
@@ -173,15 +183,15 @@ fun MangaInfoBox(
         withContext(Dispatchers.IO) {
             val trackerManager = Injekt.get<TrackerManager>()
             val getTracks = Injekt.get<GetTracks>()
-            val waterfallRepo = Injekt.get<ArtworkWaterfallRepository>()
             val tracks = getTracks.await(manga.id)
             val anilistTrack = tracks.firstOrNull { it.trackerId == trackerManager.aniList.id }
+            val malTrack = tracks.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
             val kitsuTrack = tracks.firstOrNull { it.trackerId == trackerManager.kitsu.id }
-            val title = manga.ogTitle ?: manga.title
             val art = waterfallRepo.resolveArtwork(
-                rawTitle = title,
+                rawTitle = mangaTitle,
                 anilistRemoteId = anilistTrack?.remoteId?.takeIf { it > 0 },
                 kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
+                malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
             )
             value = art
         }
@@ -251,184 +261,150 @@ fun MangaInfoBox(
         var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
         val effectiveArtworkModel = if (artworkLoadFailed) manga else chosenArtworkModel
 
-        key(effectiveArtworkModel) {
-            if (isWideBanner && detailsBackdropScale == 0) {
-                // Mode 0: Dual-Layer Ambient Backdrop
-                // 1. Full-bleed ambient blurred underlay
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(effectiveArtworkModel)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.Center,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .blur(28.dp)
-                        .alpha(0.40f)
-                        .background(surfaceTintColor.copy(alpha = 0.20f)),
-                )
-                // 2. Crisp uncropped wide banner shifted down below status bar
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(effectiveArtworkModel)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillWidth,
-                    alignment = Alignment.TopCenter,
-                    onError = {
-                        if (chosenArtworkModel != manga) {
-                            artworkLoadFailed = true
-                        }
-                    },
-                    modifier = Modifier
-                        .matchParentSize()
-                        .padding(top = (appBarPadding * 0.65f).coerceAtLeast(18.dp))
-                        .drawWithContent {
-                            drawContent()
-                            if (activeStyle == 2) {
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.70f),
-                                            Color.Transparent,
-                                        ),
-                                        endY = size.height * 0.35f,
-                                    ),
-                                )
-                            }
+        key(effectiveArtworkModel, detailsBackdropStyle, detailsBackdropScale, detailsBackdropArtwork, activeStyle) {
+            // Layer 1: Ambient Blurred Underlay (guarantees no empty black voids behind the banner)
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(effectiveArtworkModel)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.Center,
+                modifier = Modifier
+                    .matchParentSize()
+                    .blur(32.dp)
+                    .alpha(0.35f)
+                    .background(surfaceTintColor.copy(alpha = 0.15f)),
+            )
+
+            // Layer 2: Main Artwork Layer
+            val isFillWidth = isWideBanner && (detailsBackdropScale == 0 || detailsBackdropScale == 1)
+            val topBannerPadding = if (isFillWidth) {
+                (appBarPadding * 0.65f).coerceAtLeast(18.dp)
+            } else {
+                0.dp
+            }
+
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(effectiveArtworkModel)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = if (isFillWidth) ContentScale.FillWidth else ContentScale.Crop,
+                alignment = Alignment.TopCenter,
+                onError = {
+                    if (chosenArtworkModel != manga) {
+                        artworkLoadFailed = true
+                    }
+                },
+                onSuccess = { result ->
+                    if (effectiveArtworkModel == manga) {
+                        val image = result.result.image
+                        coverRatio.floatValue = image.height.toFloat() / image.width
+                    }
+                },
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(top = topBannerPadding)
+                    .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                    .alpha(backdropAlpha),
+            )
+
+            // Layer 3: Solid Scrims & Smooth Vertical Dissolve
+            Canvas(
+                modifier = Modifier.matchParentSize(),
+            ) {
+                if (isWideBanner) {
+                    // Top scrim for status bar and navigation action readability
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.70f),
+                                Color.Black.copy(alpha = 0.25f),
+                                Color.Transparent,
+                            ),
+                            endY = size.height * 0.40f,
+                        ),
+                    )
+                    // Bottom vertical dissolve: seamlessly ramps to 100% solid backgroundColor
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                backgroundColor.copy(alpha = 0.40f),
+                                backgroundColor.copy(alpha = 0.85f),
+                                backgroundColor,
+                            ),
+                            startY = size.height * 0.45f,
+                            endY = size.height,
+                        ),
+                    )
+                } else {
+                    // Ambient Canvas fallback styles
+                    when (ambientCanvasStyle) {
+                        1 -> {
+                            // Option B: Dynamic Palette Mesh
                             drawRect(
-                                brush = Brush.verticalGradient(
-                                    colors = backdropGradientColors,
-                                    startY = size.height * 0.35f,
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        primaryColor.copy(alpha = 0.30f),
+                                        Color.Transparent,
+                                    ),
+                                    center = Offset(size.width * 0.85f, size.height * 0.15f),
+                                    radius = size.width * 0.85f,
+                                ),
+                            )
+                            drawRect(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        tertiaryColor.copy(alpha = 0.22f),
+                                        Color.Transparent,
+                                    ),
+                                    center = Offset(size.width * 0.10f, size.height * 0.65f),
+                                    radius = size.width * 0.75f,
                                 ),
                             )
                         }
-                        .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                        .alpha(backdropAlpha),
-                )
-            } else {
-                // Mode 1: Natural Header Fit (ContentScale.FillWidth shifted down)
-                // Mode 2: Fill Screen (ContentScale.Crop full bleed)
-                // Fallback: Ambient canvas
-                val scale = when {
-                    isWideBanner && detailsBackdropScale == 1 -> ContentScale.FillWidth
-                    else -> ContentScale.Crop
-                }
-                val topBannerPadding = if (isWideBanner && detailsBackdropScale == 1) {
-                    (appBarPadding * 0.65f).coerceAtLeast(18.dp)
-                } else {
-                    0.dp
-                }
-
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(effectiveArtworkModel)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = scale,
-                    alignment = Alignment.TopCenter,
-                    onError = {
-                        if (chosenArtworkModel != manga) {
-                            artworkLoadFailed = true
-                        }
-                    },
-                    onSuccess = { result ->
-                        if (effectiveArtworkModel == manga) {
-                            val image = result.result.image
-                            coverRatio.floatValue = image.height.toFloat() / image.width
-                        }
-                    },
-                    modifier = Modifier
-                        .matchParentSize()
-                        .padding(top = topBannerPadding)
-                        .drawWithContent {
-                            drawContent()
-                            if (isWideBanner) {
-                                if (activeStyle == 2) {
-                                    drawRect(
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Black.copy(alpha = 0.70f),
-                                                Color.Transparent,
-                                            ),
-                                            endY = size.height * 0.35f,
-                                        ),
-                                    )
-                                }
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        colors = backdropGradientColors,
-                                        startY = if (activeStyle == 0 || activeStyle == 2) size.height * 0.30f else size.height / 2,
+                        2 -> {
+                            // Option C: Hybrid Ambient Texture - Specular Top Sheen
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.18f),
+                                        Color.Transparent,
                                     ),
-                                )
-                            } else {
-                                // Tier 4 Ambient Canvas Fallback Styles
-                                when (ambientCanvasStyle) {
-                                    1 -> {
-                                        // Option B: Dynamic Palette Mesh
-                                        drawRect(
-                                            brush = Brush.radialGradient(
-                                                colors = listOf(
-                                                    primaryColor.copy(alpha = 0.30f),
-                                                    Color.Transparent,
-                                                ),
-                                                center = Offset(size.width * 0.85f, size.height * 0.15f),
-                                                radius = size.width * 0.85f,
-                                            ),
-                                        )
-                                        drawRect(
-                                            brush = Brush.radialGradient(
-                                                colors = listOf(
-                                                    tertiaryColor.copy(alpha = 0.22f),
-                                                    Color.Transparent,
-                                                ),
-                                                center = Offset(size.width * 0.10f, size.height * 0.65f),
-                                                radius = size.width * 0.75f,
-                                            ),
-                                        )
-                                    }
-                                    2 -> {
-                                        // Option C: Hybrid Ambient Texture - Specular Top Sheen
-                                        drawRect(
-                                            brush = Brush.verticalGradient(
-                                                colors = listOf(
-                                                    Color.White.copy(alpha = 0.18f),
-                                                    Color.Transparent,
-                                                ),
-                                                endY = 48f,
-                                            ),
-                                        )
-                                    }
-                                    else -> {
-                                        // Option A: Cinematic Ambient Blur - Deep Top Scrim
-                                        drawRect(
-                                            brush = Brush.verticalGradient(
-                                                colors = listOf(
-                                                    Color.Black.copy(alpha = 0.65f),
-                                                    Color.Transparent,
-                                                ),
-                                                endY = size.height * 0.35f,
-                                            ),
-                                        )
-                                    }
-                                }
-                                // Bottom fade to background
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        colors = backdropGradientColors,
-                                        startY = size.height * 0.25f,
-                                    ),
-                                )
-                            }
+                                    endY = 48f,
+                                ),
+                            )
                         }
-                        .background(surfaceTintColor.copy(alpha = if (isWideBanner && activeStyle == 1) 0.35f else 0.15f))
-                        .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                        .alpha(backdropAlpha),
-                )
+                        else -> {
+                            // Option A: Cinematic Ambient Blur - Deep Top Scrim
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.65f),
+                                        Color.Transparent,
+                                    ),
+                                    endY = size.height * 0.35f,
+                                ),
+                            )
+                        }
+                    }
+                    // Bottom fade to background
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                backgroundColor.copy(alpha = 0.50f),
+                                backgroundColor,
+                            ),
+                            startY = size.height * 0.45f,
+                            endY = size.height,
+                        ),
+                    )
+                }
             }
         }
 

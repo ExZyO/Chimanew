@@ -4,10 +4,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.library.LibraryItem
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.MangaCover
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 internal fun LibraryCompactGrid(
@@ -22,6 +29,11 @@ internal fun LibraryCompactGrid(
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
 ) {
+    val preferences = remember { Injekt.get<ChimanewPreferences>() }
+    val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
+    val useAnilistArtwork by preferences.useAnilistArtworkInLibrary().collectAsState()
+    val artworkWaterfallOrder by preferences.artworkWaterfallOrder().collectAsState()
+
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
         columns = columns,
@@ -34,6 +46,12 @@ internal fun LibraryCompactGrid(
             contentType = { "library_compact_grid_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
+            val highResCover = if (useAnilistArtwork) {
+                val mTitle = manga.ogTitle ?: manga.title
+                waterfallRepo.getCached(mTitle)?.posterUrl
+            } else {
+                null
+            }
             MangaCompactGridItem(
                 isSelected = manga.id in selection,
                 title = manga.title.takeIf { showTitle },
@@ -44,6 +62,7 @@ internal fun LibraryCompactGrid(
                     ogUrl = manga.thumbnailUrl,
                     lastModified = manga.coverLastModified,
                 ),
+                coverModel = highResCover,
                 coverBadgeStart = {
                     DownloadsBadge(count = libraryItem.downloadCount)
                     UnreadBadge(count = libraryItem.unreadCount)

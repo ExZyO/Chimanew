@@ -5,11 +5,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.library.LibraryItem
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.MangaCover
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.util.plus
 
@@ -24,6 +31,11 @@ internal fun LibraryList(
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
 ) {
+    val preferences = remember { Injekt.get<ChimanewPreferences>() }
+    val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
+    val useAnilistArtwork by preferences.useAnilistArtworkInLibrary().collectAsState()
+    val artworkWaterfallOrder by preferences.artworkWaterfallOrder().collectAsState()
+
     FastScrollLazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding + PaddingValues(vertical = 8.dp),
@@ -43,6 +55,12 @@ internal fun LibraryList(
             contentType = { "library_list_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
+            val highResCover = if (useAnilistArtwork) {
+                val mTitle = manga.ogTitle ?: manga.title
+                waterfallRepo.getCached(mTitle)?.posterUrl
+            } else {
+                null
+            }
             MangaListItem(
                 isSelected = manga.id in selection,
                 title = manga.title,
@@ -53,6 +71,7 @@ internal fun LibraryList(
                     ogUrl = manga.thumbnailUrl,
                     lastModified = manga.coverLastModified,
                 ),
+                coverModel = highResCover,
                 badge = {
                     DownloadsBadge(count = libraryItem.downloadCount)
                     UnreadBadge(count = libraryItem.unreadCount)

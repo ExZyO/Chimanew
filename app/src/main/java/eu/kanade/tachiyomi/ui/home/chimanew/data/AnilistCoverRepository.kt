@@ -33,11 +33,153 @@ class AnilistCoverRepository(
     private val json: Json = Injekt.get(),
 ) {
     private val cache = ConcurrentHashMap<Long, AnilistMediaArtwork>()
+    private val malCache = ConcurrentHashMap<Long, AnilistMediaArtwork>()
     private val titleCache = ConcurrentHashMap<String, AnilistMediaArtwork>()
 
     fun getCached(remoteId: Long): AnilistMediaArtwork? = cache[remoteId]
 
+    fun getCachedByMalId(malId: Long): AnilistMediaArtwork? = malCache[malId]
+
     fun getCachedByTitle(rawTitle: String): AnilistMediaArtwork? = titleCache[cleanTitle(rawTitle)]
+
+    suspend fun fetchByMalId(malId: Long): AnilistMediaArtwork? {
+        if (malId <= 0) return null
+        malCache[malId]?.let { return it }
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val query = """
+                    query (${'$'}idMal: Int) {
+                        Media(idMal: ${'$'}idMal, type: MANGA) {
+                            id
+                            idMal
+                            bannerImage
+                            coverImage {
+                                extraLarge
+                                large
+                            }
+                        }
+                    }
+                """.trimIndent()
+
+                val payload = buildJsonObject {
+                    put("query", query)
+                    putJsonObject("variables") {
+                        put("idMal", malId)
+                    }
+                }
+
+                val request = POST(
+                    API_URL,
+                    body = payload.toString().toRequestBody(jsonMime),
+                )
+
+                val response = client.newCall(request).awaitSuccess()
+                val bodyString = response.body.string()
+                val root = json.parseToJsonElement(bodyString).jsonObject
+                val media = root["data"]?.jsonObject?.get("Media")?.jsonObject
+
+                if (media != null) {
+                    val id = media["id"]?.jsonPrimitive?.content?.toLongOrNull()
+                    val banner = media["bannerImage"]?.jsonPrimitive?.content
+                    val coverObj = media["coverImage"]?.jsonObject
+                    val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
+                        ?: coverObj?.get("large")?.jsonPrimitive?.content
+
+                    val artwork = AnilistMediaArtwork(
+                        bannerUrl = banner?.ifBlank { null },
+                        extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                    )
+                    malCache[malId] = artwork
+                    if (id != null) {
+                        cache[id] = artwork
+                    }
+                    artwork
+                } else {
+                    val empty = AnilistMediaArtwork()
+                    malCache[malId] = empty
+                    empty
+                }
+            } catch (e: Exception) {
+                logcat(throwable = e) { "Failed to fetch AniList artwork for MAL ID: $malId" }
+                null
+            }
+        }
+    }
+
+    suspend fun fetchBatchByMalIds(malIds: List<Long>): Map<Long, AnilistMediaArtwork> {
+        val uncached = malIds.distinct().filter { it > 0 && !malCache.containsKey(it) }
+        if (uncached.isNotEmpty()) {
+            withContext(Dispatchers.IO) {
+                uncached.chunked(50).forEach { chunk ->
+                    try {
+                        val query = """
+                            query (${'$'}ids: [Int]) {
+                                Page(perPage: 50) {
+                                    media(idMal_in: ${'$'}ids, type: MANGA) {
+                                        id
+                                        idMal
+                                        bannerImage
+                                        coverImage {
+                                            extraLarge
+                                            large
+                                        }
+                                    }
+                                }
+                            }
+                        """.trimIndent()
+
+                        val payload = buildJsonObject {
+                            put("query", query)
+                            putJsonObject("variables") {
+                                putJsonArray("ids") {
+                                    chunk.forEach { add(it) }
+                                }
+                            }
+                        }
+
+                        val request = POST(
+                            API_URL,
+                            body = payload.toString().toRequestBody(jsonMime),
+                        )
+
+                        val response = client.newCall(request).awaitSuccess()
+                        val bodyString = response.body.string()
+                        val root = json.parseToJsonElement(bodyString).jsonObject
+                        val mediaList = root["data"]?.jsonObject?.get("Page")?.jsonObject?.get("media")?.jsonArray
+
+                        mediaList?.forEach { element ->
+                            val obj = element.jsonObject
+                            val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull()
+                            val idMal = obj["idMal"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@forEach
+                            val banner = obj["bannerImage"]?.jsonPrimitive?.content
+                            val coverObj = obj["coverImage"]?.jsonObject
+                            val extraLarge = coverObj?.get("extraLarge")?.jsonPrimitive?.content
+                                ?: coverObj?.get("large")?.jsonPrimitive?.content
+
+                            val art = AnilistMediaArtwork(
+                                bannerUrl = banner?.ifBlank { null },
+                                extraLargeCoverUrl = extraLarge?.ifBlank { null },
+                            )
+                            malCache[idMal] = art
+                            if (id != null) {
+                                cache[id] = art
+                            }
+                        }
+
+                        if (mediaList != null) {
+                            chunk.forEach { id ->
+                                malCache.putIfAbsent(id, AnilistMediaArtwork())
+                            }
+                        }
+                    } catch (e: Exception) {
+                        logcat(throwable = e) { "Failed to fetch AniList artwork batch for MAL IDs: $chunk" }
+                    }
+                }
+            }
+        }
+        return malIds.associateWith { malCache[it] ?: AnilistMediaArtwork() }
+    }
 
     suspend fun fetchBatch(remoteIds: List<Long>): Map<Long, AnilistMediaArtwork> {
         val uncached = remoteIds.distinct().filter { !cache.containsKey(it) }

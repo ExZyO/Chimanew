@@ -271,6 +271,11 @@ object SettingsNuvioScreen : SearchableSettings {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_chimanew_artwork_category),
             preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.useAnilistArtworkInLibrary(),
+                    title = stringResource(MR.strings.pref_nuvio_use_anilist_artwork_in_library),
+                    subtitle = stringResource(MR.strings.pref_nuvio_use_anilist_artwork_in_library_summary),
+                ),
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(MR.strings.pref_chimanew_artwork_waterfall),
                     subtitle = stringResource(MR.strings.pref_chimanew_artwork_waterfall_summary),

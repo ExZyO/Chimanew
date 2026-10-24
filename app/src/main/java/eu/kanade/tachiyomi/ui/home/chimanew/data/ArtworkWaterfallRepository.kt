@@ -181,6 +181,7 @@ class ArtworkWaterfallRepository(
         rawTitle: String,
         anilistRemoteId: Long? = null,
         kitsuRemoteId: Long? = null,
+        malRemoteId: Long? = null,
     ): UnifiedArtwork {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return UnifiedArtwork()
@@ -194,10 +195,16 @@ class ArtworkWaterfallRepository(
         for (provider in allProviders) {
             when (provider) {
                 "ANILIST" -> {
-                    val alArt = if (anilistRemoteId != null && anilistRemoteId > 0) {
+                    var alArt = if (anilistRemoteId != null && anilistRemoteId > 0) {
                         anilistRepo.getCached(anilistRemoteId) ?: anilistRepo.fetchBatch(listOf(anilistRemoteId))[anilistRemoteId]
-                    } else {
-                        anilistRepo.getCachedByTitle(title) ?: anilistRepo.fetchByTitle(title)
+                    } else null
+
+                    if ((alArt == null || (alArt.bannerUrl == null && alArt.extraLargeCoverUrl == null)) && malRemoteId != null && malRemoteId > 0) {
+                        alArt = anilistRepo.getCachedByMalId(malRemoteId) ?: anilistRepo.fetchByMalId(malRemoteId)
+                    }
+
+                    if (alArt == null || (alArt.bannerUrl == null && alArt.extraLargeCoverUrl == null)) {
+                        alArt = anilistRepo.getCachedByTitle(title) ?: anilistRepo.fetchByTitle(title)
                     }
 
                     alArt?.bannerUrl?.let {

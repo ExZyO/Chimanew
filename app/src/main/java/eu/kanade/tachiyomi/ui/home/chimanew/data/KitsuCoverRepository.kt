@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -75,10 +76,10 @@ class KitsuCoverRepository(
         return withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(title, "UTF-8")
-                val url = "$API_URL/manga?filter[text]=$encoded&page[limit]=1"
+                val url = "$API_URL/manga?filter[text]=$encoded&page[limit]=5"
                 val headers = Headers.Builder()
                     .add("Accept", "application/vnd.api+json")
-                    .add("User-Agent", "Chimanew/2.5.8")
+                    .add("User-Agent", "Chimanew/2.5.9")
                     .build()
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()
@@ -86,17 +87,31 @@ class KitsuCoverRepository(
                 val root = json.parseToJsonElement(body).jsonObject
                 val dataArr = root["data"]?.jsonArray ?: return@withContext null
                 if (dataArr.isEmpty()) {
-                    titleCache[title] = KitsuMediaArtwork()
+                    val empty = KitsuMediaArtwork()
+                    titleCache[title] = empty
                     return@withContext null
                 }
 
-                val first = dataArr[0].jsonObject
-                val attributes = first["attributes"]?.jsonObject ?: return@withContext null
+                val matchedObj = dataArr.firstNotNullOfOrNull { item ->
+                    val attrs = item.jsonObject["attributes"]?.jsonObject ?: return@firstNotNullOfOrNull null
+                    val canonical = attrs["canonicalTitle"]?.jsonPrimitive?.contentOrNull
+                    val titlesList = attrs["titles"]?.jsonObject?.values?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+                    val abbrevList = attrs["abbreviatedTitles"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+                    val candidateTitles = listOfNotNull(canonical) + titlesList + abbrevList
 
-                val bannerUrl = attributes["coverImage"]?.jsonObject?.let {
+                    if (isTitleMatch(title, candidateTitles)) attrs else null
+                }
+
+                if (matchedObj == null) {
+                    val empty = KitsuMediaArtwork()
+                    titleCache[title] = empty
+                    return@withContext null
+                }
+
+                val bannerUrl = matchedObj["coverImage"]?.jsonObject?.let {
                     it["large"]?.jsonPrimitive?.content ?: it["original"]?.jsonPrimitive?.content
                 }
-                val posterUrl = attributes["posterImage"]?.jsonObject?.let {
+                val posterUrl = matchedObj["posterImage"]?.jsonObject?.let {
                     it["large"]?.jsonPrimitive?.content ?: it["original"]?.jsonPrimitive?.content
                 }
 
@@ -121,6 +136,37 @@ class KitsuCoverRepository(
                 .replace(Regex("""\s+"""), " ")
                 .trim()
             return cleaned.ifBlank { title.trim() }
+        }
+
+        fun isTitleMatch(queryTitle: String, candidateTitles: List<String>): Boolean {
+            val qNorm = normalizeForComparison(queryTitle)
+            if (qNorm.isBlank()) return false
+            val qTokens = qNorm.split(" ").filter { it.length > 2 }.toSet()
+
+            for (candidate in candidateTitles) {
+                val cNorm = normalizeForComparison(candidate)
+                if (cNorm.isBlank()) continue
+                if (qNorm == cNorm) return true
+                if (qNorm.contains(cNorm) || cNorm.contains(qNorm)) {
+                    val minLen = minOf(qNorm.length, cNorm.length)
+                    val maxLen = maxOf(qNorm.length, cNorm.length)
+                    if (minLen.toFloat() / maxLen >= 0.55f) return true
+                }
+                val cTokens = cNorm.split(" ").filter { it.length > 2 }.toSet()
+                if (qTokens.isNotEmpty() && cTokens.isNotEmpty()) {
+                    val intersection = qTokens.intersect(cTokens).size
+                    val union = qTokens.union(cTokens).size
+                    if (intersection.toFloat() / union >= 0.5f) return true
+                }
+            }
+            return false
+        }
+
+        private fun normalizeForComparison(s: String): String {
+            return s.lowercase()
+                .replace(Regex("""[^a-z0-9\s]"""), " ")
+                .replace(Regex("""\s+"""), " ")
+                .trim()
         }
     }
 }

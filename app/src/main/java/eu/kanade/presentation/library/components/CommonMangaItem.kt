@@ -88,6 +88,7 @@ fun MangaCompactGridItem(
     // KMK -->
     libraryColored: Boolean = true,
     // KMK <--
+    coverModel: Any? = null,
 ) {
     // KMK -->
     val bgColor = coverData.dominantCoverColors?.first?.let { Color(it) }.takeIf { libraryColored }
@@ -116,7 +117,7 @@ fun MangaCompactGridItem(
                             // .alpha(if (isSelected) GridSelectedCoverAlpha else coverAlpha)
                             // KMK <--
                             .fillMaxWidth(),
-                        data = coverData,
+                        data = coverModel ?: coverData,
                         // KMK -->
                         alpha = if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha,
                         bgColor = bgColor ?: MaterialTheme.colorScheme.surface.takeIf { isSelected },
@@ -222,6 +223,7 @@ fun MangaComfortableGridItem(
     usePanoramaCover: Boolean,
     fitToPanoramaCover: Boolean = false,
     // KMK <--
+    coverModel: Any? = null,
 ) {
     // KMK -->
     val coverIsWide = coverRatio.floatValue <= RatioSwitchToPanorama
@@ -252,7 +254,7 @@ fun MangaComfortableGridItem(
                                     // .alpha(if (isSelected) GridSelectedCoverAlpha else coverAlpha)
                                     // KMK <--
                                     .fillMaxWidth(),
-                                data = coverData,
+                                data = coverModel ?: coverData,
                                 // KMK -->
                                 alpha = if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha,
                                 bgColor = bgColor ?: MaterialTheme.colorScheme.surface.takeIf { isSelected },
@@ -271,7 +273,7 @@ fun MangaComfortableGridItem(
                                     // .alpha(if (isSelected) GridSelectedCoverAlpha else coverAlpha)
                                     // KMK <--
                                     .fillMaxWidth(),
-                                data = coverData,
+                                data = coverModel ?: coverData,
                                 // KMK -->
                                 alpha = if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha,
                                 bgColor = bgColor ?: MaterialTheme.colorScheme.surface.takeIf { isSelected },
@@ -440,6 +442,7 @@ fun MangaListItem(
     // KMK -->
     libraryColored: Boolean = true,
     // KMK <--
+    coverModel: Any? = null,
 ) {
     // KMK -->
     val bgColor = coverData.dominantCoverColors?.first?.let { Color(it) }.takeIf { libraryColored }

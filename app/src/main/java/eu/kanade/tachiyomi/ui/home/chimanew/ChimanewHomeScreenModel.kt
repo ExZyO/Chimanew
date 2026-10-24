@@ -218,15 +218,25 @@ class ChimanewHomeScreenModel(
                 val distinctHistory = data.historyList.distinctBy { it.mangaId }
                 val tracksByManga = data.tracks.groupBy { it.mangaId }
 
-                // Gather AniList IDs for batch artwork query
+                // Gather AniList and MAL IDs for batch artwork query
                 val aniListRemoteIds = if (prefs.useAnilistArtwork) {
                     data.tracks.filter { it.trackerId == TrackerManager.ANILIST }.map { it.remoteId }
                 } else {
                     emptyList()
                 }
 
+                val malRemoteIds = if (prefs.useAnilistArtwork) {
+                    data.tracks.filter { it.trackerId == trackerManager.myAnimeList.id }.map { it.remoteId }
+                } else {
+                    emptyList()
+                }
+
                 if (aniListRemoteIds.isNotEmpty()) {
                     anilistCoverRepository.fetchBatch(aniListRemoteIds)
+                }
+
+                if (malRemoteIds.isNotEmpty()) {
+                    anilistCoverRepository.fetchBatchByMalIds(malRemoteIds)
                 }
 
                 fun getArtwork(mangaId: Long, title: String): UnifiedArtwork? {
@@ -236,8 +246,11 @@ class ChimanewHomeScreenModel(
 
                     val mangaTracks = tracksByManga[mangaId]
                     val aniListTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                    val malTrack = mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
                     val cachedAniList = if (aniListTrack != null && aniListTrack.remoteId > 0) {
                         anilistCoverRepository.getCached(aniListTrack.remoteId)
+                    } else if (malTrack != null && malTrack.remoteId > 0) {
+                        anilistCoverRepository.getCachedByMalId(malTrack.remoteId)
                     } else {
                         anilistCoverRepository.getCachedByTitle(title)
                     }
@@ -466,11 +479,13 @@ class ChimanewHomeScreenModel(
                             for (item in missingHeroArt) {
                                 val mangaTracks = tracksByManga[item.mangaId]
                                 val aniListTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                                val malTrack = mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
                                 val kitsuTrack = mangaTracks?.firstOrNull { it.trackerId == trackerManager.kitsu.id }
                                 val art = artworkWaterfallRepository.resolveArtwork(
                                     rawTitle = item.title,
                                     anilistRemoteId = aniListTrack?.remoteId?.takeIf { it > 0 },
                                     kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
+                                    malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
                                 )
                                 if (!art.bannerUrl.isNullOrBlank() || !art.posterUrl.isNullOrBlank()) {
                                     anyUpdated = true
@@ -479,6 +494,26 @@ class ChimanewHomeScreenModel(
                             }
                             if (anyUpdated) {
                                 artworkRefreshTrigger.value = System.currentTimeMillis()
+                            }
+
+                            // Also resolve high-res covers in background for tracked library items
+                            for (lib in data.libraryList) {
+                                val mTitle = lib.manga.ogTitle ?: lib.manga.title
+                                if (!artworkWaterfallRepository.isCached(mTitle)) {
+                                    val mTracks = tracksByManga[lib.manga.id]
+                                    val alTrack = mTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                                    val malTrack = mTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
+                                    val kitsuTrack = mTracks?.firstOrNull { it.trackerId == trackerManager.kitsu.id }
+                                    if (alTrack != null || malTrack != null || kitsuTrack != null) {
+                                        artworkWaterfallRepository.resolveArtwork(
+                                            rawTitle = mTitle,
+                                            anilistRemoteId = alTrack?.remoteId?.takeIf { it > 0 },
+                                            kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
+                                            malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
+                                        )
+                                        delay(80L)
+                                    }
+                                }
                             }
                         }
                     }

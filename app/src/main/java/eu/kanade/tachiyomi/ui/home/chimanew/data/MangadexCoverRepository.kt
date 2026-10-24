@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -82,9 +83,9 @@ class MangadexCoverRepository(
         return withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(title, "UTF-8")
-                val searchUrl = "$API_URL/manga?title=$encoded&limit=1"
+                val searchUrl = "$API_URL/manga?title=$encoded&limit=5&order[relevance]=desc"
                 val headers = Headers.Builder()
-                    .add("User-Agent", "Chimanew/2.5.8")
+                    .add("User-Agent", "Chimanew/2.5.9")
                     .build()
 
                 val searchResponse = client.newCall(GET(searchUrl, headers)).awaitSuccess()
@@ -92,12 +93,32 @@ class MangadexCoverRepository(
                 val searchRoot = json.parseToJsonElement(searchBody).jsonObject
                 val dataArr = searchRoot["data"]?.jsonArray ?: return@withContext null
                 if (dataArr.isEmpty()) {
-                    titleCache[title] = MangadexMediaArtwork()
+                    val empty = MangadexMediaArtwork()
+                    titleCache[title] = empty
                     return@withContext null
                 }
 
-                val mangaId = dataArr[0].jsonObject["id"]?.jsonPrimitive?.content ?: return@withContext null
-                val result = fetchCoversByMangaId(mangaId) ?: MangadexMediaArtwork(mangaId, emptyList())
+                val matchedMangaId = dataArr.firstNotNullOfOrNull { item ->
+                    val obj = item.jsonObject
+                    val id = obj["id"]?.jsonPrimitive?.content ?: return@firstNotNullOfOrNull null
+                    val attrs = obj["attributes"]?.jsonObject ?: return@firstNotNullOfOrNull null
+                    val titleMap = attrs["title"]?.jsonObject
+                    val mainTitles = titleMap?.values?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+                    val altTitlesList = attrs["altTitles"]?.jsonArray?.flatMap { altObj ->
+                        altObj.jsonObject.values.mapNotNull { it.jsonPrimitive.contentOrNull }
+                    } ?: emptyList()
+
+                    val allCandidateTitles = mainTitles + altTitlesList
+                    if (isTitleMatch(title, allCandidateTitles)) id else null
+                }
+
+                if (matchedMangaId == null) {
+                    val empty = MangadexMediaArtwork()
+                    titleCache[title] = empty
+                    return@withContext null
+                }
+
+                val result = fetchCoversByMangaId(matchedMangaId) ?: MangadexMediaArtwork(matchedMangaId, emptyList())
                 titleCache[title] = result
                 result
             } catch (e: Exception) {
@@ -118,6 +139,37 @@ class MangadexCoverRepository(
                 .replace(Regex("""\s+"""), " ")
                 .trim()
             return cleaned.ifBlank { title.trim() }
+        }
+
+        fun isTitleMatch(queryTitle: String, candidateTitles: List<String>): Boolean {
+            val qNorm = normalizeForComparison(queryTitle)
+            if (qNorm.isBlank()) return false
+            val qTokens = qNorm.split(" ").filter { it.length > 2 }.toSet()
+
+            for (candidate in candidateTitles) {
+                val cNorm = normalizeForComparison(candidate)
+                if (cNorm.isBlank()) continue
+                if (qNorm == cNorm) return true
+                if (qNorm.contains(cNorm) || cNorm.contains(qNorm)) {
+                    val minLen = minOf(qNorm.length, cNorm.length)
+                    val maxLen = maxOf(qNorm.length, cNorm.length)
+                    if (minLen.toFloat() / maxLen >= 0.55f) return true
+                }
+                val cTokens = cNorm.split(" ").filter { it.length > 2 }.toSet()
+                if (qTokens.isNotEmpty() && cTokens.isNotEmpty()) {
+                    val intersection = qTokens.intersect(cTokens).size
+                    val union = qTokens.union(cTokens).size
+                    if (intersection.toFloat() / union >= 0.5f) return true
+                }
+            }
+            return false
+        }
+
+        private fun normalizeForComparison(s: String): String {
+            return s.lowercase()
+                .replace(Regex("""[^a-z0-9\s]"""), " ")
+                .replace(Regex("""\s+"""), " ")
+                .trim()
         }
     }
 }
