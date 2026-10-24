@@ -228,6 +228,7 @@ fun NuvioHeroSection(
                                 item = item,
                                 posterImageModel = posterImageModel,
                                 accentColor = accentColor,
+                                heroShowUnreadBadge = heroShowUnreadBadge,
                                 onResumeClick = onResumeClick,
                             )
                         }
@@ -319,6 +320,7 @@ fun NuvioHeroSection(
                                 item = item,
                                 posterImageModel = posterImageModel,
                                 accentColor = accentColor,
+                                heroShowUnreadBadge = heroShowUnreadBadge,
                                 onResumeClick = onResumeClick,
                             )
                         }
@@ -611,6 +613,7 @@ private fun HeroAmbientForegroundContent(
     item: HomeMangaItem,
     posterImageModel: Any,
     accentColor: Color,
+    heroShowUnreadBadge: Boolean,
     onResumeClick: (HomeMangaItem) -> Unit,
 ) {
     Row(
