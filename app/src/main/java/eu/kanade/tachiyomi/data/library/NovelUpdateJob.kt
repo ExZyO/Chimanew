@@ -73,6 +73,9 @@ class NovelUpdateJob(private val context: Context, workerParams: WorkerParameter
     }
 
     override suspend fun doWork(): Result {
+        val chimanewPreferences = Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences>()
+        if (!chimanewPreferences.enableNovelModule().get()) return Result.success()
+
         val sourcesById = novelSourceManager.getCatalogueSources().associateBy { it.id }
         if (sourcesById.isEmpty()) return Result.success()
 

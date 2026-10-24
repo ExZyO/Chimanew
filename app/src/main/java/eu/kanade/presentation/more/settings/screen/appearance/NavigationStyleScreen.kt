@@ -43,6 +43,7 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.NavSection
 import eu.kanade.domain.ui.model.NavTabEntry
 import eu.kanade.domain.ui.model.NavTabLayout
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.util.Screen
@@ -92,9 +93,18 @@ class NavigationStyleScreen : Screen() {
         // Build flat list: headers + tab entries
         val flatItems = remember(navTabLayoutStr) {
             val layout = NavTabLayout.parse(navTabLayoutStr)
-            val filteredLayout = if (Injekt.get<UiPreferences>().useConsolidatedLibrary().get()) {
-                NavTabLayout(layout.entries.filter { it.key != NavTabLayout.KEY_NOVELS && it.key != NavTabLayout.KEY_ANIME })
-            } else layout
+            val consolidated = Injekt.get<UiPreferences>().useConsolidatedLibrary().get()
+            val chimanewPreferences = Injekt.get<ChimanewPreferences>()
+            val enableAnime = chimanewPreferences.enableAnimeModule().get()
+            val enableNovels = chimanewPreferences.enableNovelModule().get()
+            val filteredLayout = NavTabLayout(
+                layout.entries.filter { e ->
+                    if (consolidated && (e.key == NavTabLayout.KEY_NOVELS || e.key == NavTabLayout.KEY_ANIME)) false
+                    else if (!enableAnime && e.key == NavTabLayout.KEY_ANIME) false
+                    else if (!enableNovels && e.key == NavTabLayout.KEY_NOVELS) false
+                    else true
+                },
+            )
             buildFlatList(filteredLayout, resolvedTabTitles, navbarTitle, moreTitle, disabledTitle)
         }
 
@@ -122,7 +132,8 @@ class NavigationStyleScreen : Screen() {
                 .drop(1) // skip initial value
                 .collectLatest { isDragging ->
                     if (!isDragging) {
-                        val newLayout = rebuildLayoutFromFlatList(listState)
+                        val originalLayout = NavTabLayout.parse(navTabLayoutPref.get())
+                        val newLayout = rebuildLayoutFromFlatList(listState, originalLayout)
                         navTabLayoutPref.set(newLayout.serialize())
 
                         // Auto-fix start screen
@@ -256,7 +267,7 @@ private fun buildFlatList(
     return items
 }
 
-private fun rebuildLayoutFromFlatList(items: List<NavListItem>): NavTabLayout {
+private fun rebuildLayoutFromFlatList(items: List<NavListItem>, originalLayout: NavTabLayout? = null): NavTabLayout {
     var currentSection = NavSection.NAVBAR
     val entries = mutableListOf<NavTabEntry>()
 
@@ -264,6 +275,14 @@ private fun rebuildLayoutFromFlatList(items: List<NavListItem>): NavTabLayout {
         when (item) {
             is NavListItem.Header -> currentSection = item.section
             is NavListItem.TabEntry -> entries.add(NavTabEntry(item.key, currentSection))
+        }
+    }
+
+    if (originalLayout != null) {
+        for (entry in originalLayout.entries) {
+            if (entries.none { it.key == entry.key }) {
+                entries.add(entry)
+            }
         }
     }
 

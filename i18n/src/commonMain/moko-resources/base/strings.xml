@@ -173,6 +173,13 @@
     <string name="pref_chimanew_artwork_picker_updating">Applying cover…</string>
     <string name="pref_chimanew_artwork_picker_banner_applied">Custom banner applied</string>
     <string name="pref_chimanew_artwork_picker_cover_applied">Cover updated</string>
+    <!-- EaZy Nuvio+ / Chimanew: Media Sections Toggles -->
+    <string name="pref_chimanew_media_sections_title">Media Sections</string>
+    <string name="pref_chimanew_media_sections_summary">Enable or disable content types to simplify navigation and speed up the app</string>
+    <string name="pref_chimanew_enable_anime_title">Anime section</string>
+    <string name="pref_chimanew_enable_anime_summary">Show anime library, browse anime sources, and run background updates</string>
+    <string name="pref_chimanew_enable_novels_title">Light novel section</string>
+    <string name="pref_chimanew_enable_novels_summary">Show novel library, browse novel sources, and run background updates</string>
     <string name="label_more">More</string>
     <string name="label_settings">Settings</string>
     <string name="label_download_queue">Download queue</string>

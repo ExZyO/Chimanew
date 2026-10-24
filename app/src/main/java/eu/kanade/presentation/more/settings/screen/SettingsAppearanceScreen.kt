@@ -336,9 +336,16 @@ object SettingsAppearanceScreen : SearchableSettings {
             val layout = eu.kanade.domain.ui.model.NavTabLayout.parse(navTabLayoutStr)
             layout.getKeysForSection(eu.kanade.domain.ui.model.NavSection.NAVBAR)
                 .let { keys ->
-                    if (Injekt.get<UiPreferences>().useConsolidatedLibrary().get()) {
-                        keys.filter { it != eu.kanade.domain.ui.model.NavTabLayout.KEY_NOVELS && it != eu.kanade.domain.ui.model.NavTabLayout.KEY_ANIME }
-                    } else keys
+                    val consolidated = Injekt.get<UiPreferences>().useConsolidatedLibrary().get()
+                    val chimanewPreferences = Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences>()
+                    val enableAnime = chimanewPreferences.enableAnimeModule().get()
+                    val enableNovels = chimanewPreferences.enableNovelModule().get()
+                    keys.filter { key ->
+                        if (consolidated && (key == eu.kanade.domain.ui.model.NavTabLayout.KEY_NOVELS || key == eu.kanade.domain.ui.model.NavTabLayout.KEY_ANIME)) false
+                        else if (!enableAnime && key == eu.kanade.domain.ui.model.NavTabLayout.KEY_ANIME) false
+                        else if (!enableNovels && key == eu.kanade.domain.ui.model.NavTabLayout.KEY_NOVELS) false
+                        else true
+                    }
                 }
                 .associateWith { key ->
                     when (key) {

@@ -571,11 +571,20 @@ class MainActivity : BaseActivity() {
                     if (!LibraryUpdateJob.isPeriodicUpdateScheduled(context)) {
                         LibraryUpdateJob.setupTask(context)
                     }
-                    if (!AnimeLibraryUpdateJob.isPeriodicUpdateScheduled(context)) {
-                        AnimeLibraryUpdateJob.setupTask(context)
+                    val chimanewPreferences = Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences>()
+                    if (chimanewPreferences.enableAnimeModule().get()) {
+                        if (!AnimeLibraryUpdateJob.isPeriodicUpdateScheduled(context)) {
+                            AnimeLibraryUpdateJob.setupTask(context)
+                        }
+                    } else {
+                        AnimeLibraryUpdateJob.setupTask(context, 0)
                     }
-                    if (!NovelUpdateJob.isPeriodicUpdateScheduled(context)) {
-                        NovelUpdateJob.setupTask(context)
+                    if (chimanewPreferences.enableNovelModule().get()) {
+                        if (!NovelUpdateJob.isPeriodicUpdateScheduled(context)) {
+                            NovelUpdateJob.setupTask(context)
+                        }
+                    } else {
+                        NovelUpdateJob.setupTask(context, 0)
                     }
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e)
@@ -646,6 +655,10 @@ class MainActivity : BaseActivity() {
         // Novel plugin updates (JS): same once-a-day throttle as manga
         LaunchedEffect(Unit) {
             try {
+                val chimanewPreferences = Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences>()
+                if (!chimanewPreferences.enableNovelModule().get()) {
+                    return@LaunchedEffect
+                }
                 val preferences = Injekt.get<SourcePreferences>()
                 if (Instant.now().toEpochMilli() < preferences.lastNovelExtensionCheck().get() + 1.days.inWholeMilliseconds) {
                     return@LaunchedEffect

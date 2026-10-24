@@ -24,6 +24,7 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.NavSection
 import eu.kanade.domain.ui.model.NavTabLayout
 import eu.kanade.presentation.more.MoreScreen
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
@@ -95,8 +96,20 @@ data object MoreTab : Tab {
             // SY -->
             moreTabKeys = {
                 val consolidated = Injekt.get<UiPreferences>().useConsolidatedLibrary().get()
+                val chimanewPreferences = Injekt.get<ChimanewPreferences>()
+                val enableAnime = chimanewPreferences.enableAnimeModule().get()
+                val enableNovels = chimanewPreferences.enableNovelModule().get()
                 NavTabLayout.parse(screenModel.moreTabKeys.value)
-                    .let { if (consolidated) NavTabLayout(it.entries.filter { e -> e.key != NavTabLayout.KEY_NOVELS && e.key != NavTabLayout.KEY_ANIME }) else it }
+                    .let { layout ->
+                        NavTabLayout(
+                            layout.entries.filter { e ->
+                                if (consolidated && (e.key == NavTabLayout.KEY_NOVELS || e.key == NavTabLayout.KEY_ANIME)) false
+                                else if (!enableAnime && e.key == NavTabLayout.KEY_ANIME) false
+                                else if (!enableNovels && e.key == NavTabLayout.KEY_NOVELS) false
+                                else true
+                            },
+                        )
+                    }
                     .getKeysForSection(NavSection.MORE)
             }(),
             // SY <--

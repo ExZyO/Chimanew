@@ -166,11 +166,16 @@ object HomeScreen : Screen() {
         val navTabLayoutStr by uiPreferences.navTabLayout().collectAsState()
         val navStartScreenKey by uiPreferences.navStartScreen().collectAsState()
         val useConsolidatedLibrary by uiPreferences.useConsolidatedLibrary().asState(scope)
+        val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
+        val enableAnime by chimanewPreferences.enableAnimeModule().asState(scope)
+        val enableNovels by chimanewPreferences.enableNovelModule().asState(scope)
 
-        val navbarTabs = remember(navTabLayoutStr, useConsolidatedLibrary) {
+        val navbarTabs = remember(navTabLayoutStr, useConsolidatedLibrary, enableAnime, enableNovels) {
             val layout = NavTabLayout.parse(navTabLayoutStr)
             val navbarKeys = layout.getKeysForSection(NavSection.NAVBAR)
                 .filterNot { useConsolidatedLibrary && (it == NavTabLayout.KEY_NOVELS || it == NavTabLayout.KEY_ANIME) }
+                .filterNot { !enableAnime && it == NavTabLayout.KEY_ANIME }
+                .filterNot { !enableNovels && it == NavTabLayout.KEY_NOVELS }
             navbarKeys.mapNotNull { ALL_TABS_MAP[it] } + listOf(MoreTab)
         }
 
@@ -184,7 +189,6 @@ object HomeScreen : Screen() {
             key = TAB_NAVIGATOR_KEY,
         ) { tabNavigator ->
             // EaZy Nuvio+ / Chimanew: Nuvio Dynamic Island & iOS Liquid Sliding Glass Dock
-            val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
             val navbarAutoHideOnScroll by chimanewPreferences.navbarAutoHideOnScroll().collectAsState()
             var isDockCollapsed by rememberSaveable { mutableStateOf(false) }
 

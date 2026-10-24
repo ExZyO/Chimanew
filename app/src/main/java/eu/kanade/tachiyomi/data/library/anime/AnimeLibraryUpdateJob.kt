@@ -100,6 +100,10 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private var animeToUpdate: List<LibraryAnime> = mutableListOf()
 
     override suspend fun doWork(): Result {
+        val chimanewPreferences = Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences>()
+        if (!chimanewPreferences.enableAnimeModule().get()) {
+            return Result.success()
+        }
         if (tags.contains(WORK_NAME_AUTO)) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                 val preferences = Injekt.get<LibraryPreferences>()

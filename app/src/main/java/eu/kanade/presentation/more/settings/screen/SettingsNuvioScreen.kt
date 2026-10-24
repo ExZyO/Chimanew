@@ -37,6 +37,7 @@ object SettingsNuvioScreen : SearchableSettings {
         val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
 
         return listOf(
+            getMediaSectionsGroup(chimanewPreferences),
             getHeroGroup(chimanewPreferences),
             getShelvesGroup(chimanewPreferences, navigator),
             getCardsGroup(chimanewPreferences),
@@ -261,6 +262,25 @@ object SettingsNuvioScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_chimanew_details_backdrop_scale),
                     subtitle = stringResource(MR.strings.pref_chimanew_details_backdrop_scale_summary),
                     enabled = useAnilistInDetails,
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getMediaSectionsGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_chimanew_media_sections_title),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.enableAnimeModule(),
+                    title = stringResource(MR.strings.pref_chimanew_enable_anime_title),
+                    subtitle = stringResource(MR.strings.pref_chimanew_enable_anime_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.enableNovelModule(),
+                    title = stringResource(MR.strings.pref_chimanew_enable_novels_title),
+                    subtitle = stringResource(MR.strings.pref_chimanew_enable_novels_summary),
                 ),
             ),
         )

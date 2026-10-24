@@ -78,6 +78,7 @@ import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.browse.source.sourcesTab
 import chimahon.novel.ui.browse.novelSourcesTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -159,10 +160,29 @@ data object BrowseTab : Tab {
         val snackbarHostState = remember { SnackbarHostState() }
 
         val uiPreferences = remember { Injekt.get<UiPreferences>() }
+        val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
+        val enableAnime by chimanewPreferences.enableAnimeModule().asState(scope)
+        val enableNovels by chimanewPreferences.enableNovelModule().asState(scope)
+
+        val availableModes = remember(enableAnime, enableNovels) {
+            val list = mutableListOf(BrowseViewMode.Sources)
+            if (enableAnime) list.add(BrowseViewMode.Anime)
+            if (enableNovels) list.add(BrowseViewMode.Novels)
+            list
+        }
+
         var browseMode by remember {
-            mutableStateOf(BrowseViewMode.entries.getOrElse(uiPreferences.lastUsedBrowseMode().get()) { BrowseViewMode.Sources })
+            val savedMode = BrowseViewMode.entries.getOrElse(uiPreferences.lastUsedBrowseMode().get()) { BrowseViewMode.Sources }
+            mutableStateOf(if (savedMode in availableModes) savedMode else BrowseViewMode.Sources)
         }
         var showModeDropdown by remember { mutableStateOf(false) }
+
+        LaunchedEffect(availableModes) {
+            if (browseMode !in availableModes) {
+                browseMode = BrowseViewMode.Sources
+                uiPreferences.lastUsedBrowseMode().set(BrowseViewMode.Sources.ordinal)
+            }
+        }
 
         val currentTabs: ImmutableList<TabContent> = when (browseMode) {
             BrowseViewMode.Sources -> {
@@ -273,7 +293,7 @@ data object BrowseTab : Tab {
                     SearchToolbar(
                         titleContent = {
                             Row(
-                                modifier = Modifier.clickable { showModeDropdown = true },
+                                modifier = if (availableModes.size > 1) Modifier.clickable { showModeDropdown = true } else Modifier,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
@@ -281,30 +301,32 @@ data object BrowseTab : Tab {
                                     style = MaterialTheme.typography.titleLarge,
                                     color = MaterialTheme.colorScheme.onBackground,
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onBackground,
-                                )
-                                DropdownMenu(
-                                    expanded = showModeDropdown,
-                                    onDismissRequest = { showModeDropdown = false },
-                                ) {
-                                    BrowseViewMode.entries.forEach { mode ->
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = stringResource(mode.labelRes),
-                                                    fontWeight = if (mode == browseMode) FontWeight.Bold else FontWeight.Normal,
-                                                )
-                                            },
-                                            onClick = {
-                                                showModeDropdown = false
-                                                browseMode = mode
-                                                uiPreferences.lastUsedBrowseMode().set(mode.ordinal)
-                                            },
-                                        )
+                                if (availableModes.size > 1) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onBackground,
+                                    )
+                                    DropdownMenu(
+                                        expanded = showModeDropdown,
+                                        onDismissRequest = { showModeDropdown = false },
+                                    ) {
+                                        availableModes.forEach { mode ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = stringResource(mode.labelRes),
+                                                        fontWeight = if (mode == browseMode) FontWeight.Bold else FontWeight.Normal,
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showModeDropdown = false
+                                                    browseMode = mode
+                                                    uiPreferences.lastUsedBrowseMode().set(mode.ordinal)
+                                                },
+                                            )
+                                        }
                                     }
                                 }
                             }

@@ -99,4 +99,8 @@ class ChimanewPreferences(
     )
 
     fun mangaCustomBannerUrl(mangaId: Long) = preferenceStore.getString("pref_chimanew_manga_banner_$mangaId", "")
+
+    // Media sections toggle // EaZy Nuvio+ / Chimanew
+    fun enableAnimeModule() = preferenceStore.getBoolean("pref_chimanew_enable_anime", true)
+    fun enableNovelModule() = preferenceStore.getBoolean("pref_chimanew_enable_novels", true)
 }

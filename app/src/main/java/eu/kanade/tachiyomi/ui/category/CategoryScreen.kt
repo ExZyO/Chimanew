@@ -36,6 +36,7 @@ import eu.kanade.presentation.category.components.CategoryListItem
 import eu.kanade.presentation.category.components.CategoryRenameDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.collectLatest
@@ -73,11 +74,24 @@ class CategoryScreen(
         val animeScreenModel = rememberScreenModel { AnimeCategoryScreenModel() }
         val novelScreenModel = rememberScreenModel { NovelCategoryScreenModel() }
 
+        val chimanewPreferences = remember { uy.kohesive.injekt.Injekt.get<ChimanewPreferences>() }
+        val enableAnime = chimanewPreferences.enableAnimeModule().get()
+        val enableNovels = chimanewPreferences.enableNovelModule().get()
+
+        val availableTabs = remember(enableAnime, enableNovels) {
+            listOfNotNull(
+                Tab.MANGA,
+                if (enableNovels) Tab.NOVELS else null,
+                if (enableAnime) Tab.ANIME else null,
+            )
+        }
+
         val mangaState by mangaScreenModel.state.collectAsState()
         val animeState by animeScreenModel.state.collectAsState()
         val novelState by novelScreenModel.state.collectAsState()
 
-        val pagerState = rememberPagerState(initialPage = initialTab.ordinal, pageCount = { 3 })
+        val initialPageIndex = availableTabs.indexOf(initialTab).takeIf { it != -1 } ?: 0
+        val pagerState = rememberPagerState(initialPage = initialPageIndex, pageCount = { availableTabs.size })
         val fabLazyListState = rememberLazyListState()
 
         Scaffold(
@@ -87,29 +101,32 @@ class CategoryScreen(
                         title = stringResource(MR.strings.categories),
                         navigateUp = navigator::pop,
                     )
-                    PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
-                        Tab.entries.forEachIndexed { index, tab ->
-                            Tab(
-                                selected = pagerState.currentPage == index,
-                                onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                                text = { TabText(text = tab.displayName) },
-                                unselectedContentColor = MaterialTheme.colorScheme.onSurface,
-                            )
+                    if (availableTabs.size > 1) {
+                        PrimaryTabRow(selectedTabIndex = pagerState.currentPage.coerceAtMost(availableTabs.lastIndex)) {
+                            availableTabs.forEachIndexed { index, tab ->
+                                Tab(
+                                    selected = pagerState.currentPage == index,
+                                    onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                                    text = { TabText(text = tab.displayName) },
+                                    unselectedContentColor = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
                         }
                     }
                 }
             },
             floatingActionButton = {
-                when (pagerState.currentPage) {
-                    0 -> CategoryFloatingActionButton(
+                val currentTab = availableTabs.getOrElse(pagerState.currentPage) { Tab.MANGA }
+                when (currentTab) {
+                    Tab.MANGA -> CategoryFloatingActionButton(
                         lazyListState = fabLazyListState,
                         onCreate = { mangaScreenModel.showDialog(CategoryDialog.Create) },
                     )
-                    1 -> CategoryFloatingActionButton(
+                    Tab.NOVELS -> CategoryFloatingActionButton(
                         lazyListState = fabLazyListState,
                         onCreate = { novelScreenModel.showDialog(NovelCategoryDialog.Create) },
                     )
-                    2 -> CategoryFloatingActionButton(
+                    Tab.ANIME -> CategoryFloatingActionButton(
                         lazyListState = fabLazyListState,
                         onCreate = { animeScreenModel.showDialog(AnimeCategoryDialog.Create) },
                     )
@@ -120,18 +137,19 @@ class CategoryScreen(
                 modifier = Modifier.fillMaxSize(),
                 state = pagerState,
             ) { page ->
-                when (page) {
-                    0 -> MangaTab(
+                val currentTab = availableTabs.getOrElse(page) { Tab.MANGA }
+                when (currentTab) {
+                    Tab.MANGA -> MangaTab(
                         state = mangaState,
                         screenModel = mangaScreenModel,
                         contentPadding = paddingValues,
                     )
-                    1 -> NovelTab(
+                    Tab.NOVELS -> NovelTab(
                         state = novelState,
                         screenModel = novelScreenModel,
                         contentPadding = paddingValues,
                     )
-                    2 -> AnimeTab(
+                    Tab.ANIME -> AnimeTab(
                         state = animeState,
                         screenModel = animeScreenModel,
                         contentPadding = paddingValues,
