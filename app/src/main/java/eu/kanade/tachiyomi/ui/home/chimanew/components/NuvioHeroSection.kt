@@ -78,6 +78,7 @@ fun NuvioHeroSection(
     val heroArtworkPairing by preferences.heroArtworkPairing().collectPrefAsState()
 
     fun hasAuthenticBanner(item: HomeMangaItem): Boolean {
+        if ("banner" !in heroArtworkSources) return false
         val banner = item.highResBannerUrl
         if (banner.isNullOrBlank()) return false
         val cover = item.highResCoverUrl ?: item.coverData.ogUrl
@@ -89,8 +90,9 @@ fun NuvioHeroSection(
     }
 
     fun hasAuthenticCover(item: HomeMangaItem): Boolean {
-        return !item.highResCoverUrl.isNullOrBlank() ||
-            ("default" in heroArtworkSources && !item.coverData.ogUrl.isNullOrBlank())
+        val hasHighRes = !item.highResCoverUrl.isNullOrBlank() && "cover" in heroArtworkSources
+        val hasDefault = !item.coverData.ogUrl.isNullOrBlank() && "default" in heroArtworkSources
+        return hasHighRes || hasDefault
     }
 
     val displayItems = remember(items, heroStyle, heroRequireSelectedArtwork, heroArtworkSources, heroArtworkPairing) {
