@@ -235,6 +235,9 @@ class NaverWebtoonCoverRepository(
         private val WEBTOONS_CARD_LINK_REGEX = Regex("""<a\s+href=["'](https://www\.webtoons\.com/en/[^"']+/list\?title_no=\d+)["']""")
         private val WEBTOONS_BG_REGEX = Regex("""class=["']detail_bg["']\s+style=["'][^"']*url\(['"]?([^'"\)]+)['"]?\)""")
         private val WEBTOONS_COVER_REGEX = Regex("""<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']""")
+        private val HANGUL_REGEX = Regex("""[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]""")
+
+        fun containsHangul(text: String): Boolean = HANGUL_REGEX.containsMatchIn(text)
 
         fun normalizeKey(query: String): String {
             return query.trim().lowercase()
