@@ -11,6 +11,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import java.util.concurrent.atomic.AtomicLong
+
 enum class DiagnosticCategory(val code: String, val label: String) {
     NETWORK("network", "Network & Payloads"),
     ARTWORK("artwork", "Artwork Waterfall & Cache"),
@@ -20,6 +22,7 @@ enum class DiagnosticCategory(val code: String, val label: String) {
 }
 
 data class DiagnosticEntry(
+    val id: Long,
     val timestamp: Long = System.currentTimeMillis(),
     val category: DiagnosticCategory,
     val tag: String,
@@ -42,6 +45,7 @@ object ChimanewDiagnostics {
     private const val LOGCAT_TAG = "ChimanewDiag"
     private const val MAX_ENTRIES = 2500
 
+    private val idGenerator = AtomicLong(0L)
     private val buffer = ArrayDeque<DiagnosticEntry>(MAX_ENTRIES)
     private val lock = Any()
 
@@ -92,6 +96,7 @@ object ChimanewDiagnostics {
 
         // 2. Thread-safe Ring Buffer
         val entry = DiagnosticEntry(
+            id = idGenerator.incrementAndGet(),
             category = category,
             tag = tag,
             message = msg,

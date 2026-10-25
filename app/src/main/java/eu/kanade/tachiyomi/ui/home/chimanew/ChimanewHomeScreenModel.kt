@@ -248,6 +248,21 @@ class ChimanewHomeScreenModel(
             }
 
             combine(dataFlow, prefsFlow) { data, prefs ->
+                ChimanewDiagnostics.log(DiagnosticCategory.HERO, "Settings") {
+                    "Hero Config: strict=${prefs.heroRequireSelectedArtwork}, reqs=${prefs.heroStrictArtworkRequirements}, sources=${prefs.heroArtworkSources}, style=${prefs.heroStyle}"
+                }
+                ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Settings") {
+                    val bannerOrder = eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.parsePriorityOrder(
+                        preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
+                        listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
+                    )
+                    val coverOrder = eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.parsePriorityOrder(
+                        preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
+                        listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
+                    )
+                    "Artwork Priority: Banners=$bannerOrder, Covers=$coverOrder"
+                }
+
                 val distinctHistory = data.historyList.distinctBy { it.mangaId }
                 val tracksByManga = data.tracks.groupBy { it.mangaId }
 

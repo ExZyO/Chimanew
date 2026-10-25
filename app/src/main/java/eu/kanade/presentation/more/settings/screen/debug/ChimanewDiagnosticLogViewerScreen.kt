@@ -162,7 +162,7 @@ class ChimanewDiagnosticLogViewerScreen : Screen() {
                 ) {
                     items(
                         items = filteredLogs,
-                        key = { it.timestamp.toString() + it.tag + it.message.hashCode() },
+                        key = { it.id },
                     ) { entry ->
                         DiagnosticLogItem(entry)
                         Spacer(modifier = Modifier.height(4.dp))
