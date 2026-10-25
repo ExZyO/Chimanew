@@ -14,6 +14,7 @@ import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 data class BookWalkerArtwork(
+    val bannerUrl: String? = null,
     val coverUrl: String? = null,
     val title: String? = null,
     val bookId: String? = null,
@@ -42,7 +43,8 @@ class BookWalkerCoverRepository(
         return withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(query.trim(), "UTF-8")
-                val searchUrl = "https://bookwalker.jp/search/?q=$encoded"
+                // BookWalker Japan search expects 'word' parameter, not 'q'
+                val searchUrl = "https://bookwalker.jp/search/?word=$encoded"
                 val request = GET(
                     searchUrl,
                     headers = okhttp3.Headers.Builder()
@@ -55,11 +57,12 @@ class BookWalkerCoverRepository(
                 if (html.isBlank()) return@withContext null
 
                 // Extract BookWalker digital cover image ID
-                val match = RIMG_ID_REGEX.find(html) ?: CIMG_ID_REGEX.find(html)
+                val match = THUMB_ID_REGEX.find(html) ?: CIMG_ID_REGEX.find(html) ?: RIMG_ID_REGEX.find(html)
                 if (match != null) {
                     val id = match.groupValues[1]
                     val hdCoverUrl = "https://c.bookwalker.jp/$id/t_700x780.jpg"
                     val artwork = BookWalkerArtwork(
+                        bannerUrl = hdCoverUrl,
                         coverUrl = hdCoverUrl,
                         title = query,
                         bookId = id,
@@ -85,11 +88,13 @@ class BookWalkerCoverRepository(
     }
 
     companion object {
+        // Use non-blocked User-Agent to bypass AWS WAF 202 challenge
         private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "Chimanew/2.6.13 (Android; https://github.com/ExZyO/Chimanew)"
 
-        private val RIMG_ID_REGEX = Regex("""https://rimg\.bookwalker\.jp/(\d+)/""")
-        private val CIMG_ID_REGEX = Regex("""https://c\.bookwalker\.jp/(\d+)/""")
+        private val THUMB_ID_REGEX = Regex("""thumbnailImage_([a-zA-Z0-9]+)\.jpg""")
+        private val CIMG_ID_REGEX = Regex("""https://c\.bookwalker\.jp/([a-zA-Z0-9]+)/""")
+        private val RIMG_ID_REGEX = Regex("""https://rimg\.bookwalker\.jp/([a-zA-Z0-9]+)/""")
 
         fun normalizeKey(query: String): String {
             return query.trim().lowercase()

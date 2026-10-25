@@ -144,6 +144,8 @@ class ChimanewHomeScreenModel(
 ) : StateScreenModel<ChimanewHomeScreenModel.State>(State()) {
 
     private val artworkRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    // EaZy Nuvio+ / Chimanew: prevent infinite re-query loops for hero art
+    private val attemptedHeroTitles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     @Immutable
     data class State(
@@ -419,8 +421,8 @@ class ChimanewHomeScreenModel(
                     return when (heroStyle) {
                         2 -> hasBanner && hasCover // Cover and Banner style (both required)
                         1 -> hasBanner             // Banner alone style (wide banner required)
-                        0 -> hasCover              // Cover alone style (high-res cover required)
-                        else -> hasCover
+                        0 -> if ("banner" in prefs.heroArtworkSources) hasBanner && hasCover else hasCover
+                        else -> hasBanner && hasCover
                     }
                 }
 
@@ -525,7 +527,7 @@ class ChimanewHomeScreenModel(
                                 lib.id !in heroFromHistory.map { item -> item.mangaId } &&
                                 (!prefs.heroRequireSelectedArtwork || hasRequiredHeroArtwork(lib.manga.id, lib.manga.ogTitle ?: lib.manga.title, prefs.heroStyle))
                             }
-                            .shuffled()
+                            .sortedByDescending { it.unreadCount.coerceAtLeast(0L) }
                             .take(7 - heroFromHistory.size)
                             .map { lib ->
                                 createHomeItem(
@@ -547,14 +549,11 @@ class ChimanewHomeScreenModel(
 
                 if (prefs.useAnilistArtwork) {
                     val missingHeroArt = heroItems.filter { item ->
-                        val art = artworkWaterfallRepository.getCached(item.title)
-                        art == null ||
-                            (item.highResBannerUrl.isNullOrBlank() && "banner" in prefs.heroArtworkSources) ||
-                            (item.highResCoverUrl.isNullOrBlank() && "cover" in prefs.heroArtworkSources)
+                        !artworkWaterfallRepository.isCached(item.title) && attemptedHeroTitles.add(item.title)
                     }
                     val missingLibraryArt = data.libraryList.filter { lib ->
                         val mTitle = lib.manga.ogTitle ?: lib.manga.title
-                        !artworkWaterfallRepository.isCached(mTitle)
+                        !artworkWaterfallRepository.isCached(mTitle) && attemptedHeroTitles.add(mTitle)
                     }
                     if (missingHeroArt.isNotEmpty() || missingLibraryArt.isNotEmpty()) {
                         screenModelScope.launchIO {

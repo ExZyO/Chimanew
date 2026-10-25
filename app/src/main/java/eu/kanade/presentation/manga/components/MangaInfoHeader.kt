@@ -224,6 +224,7 @@ fun MangaInfoBox(
 
     val chosenArtworkModel: Any? = when {
         !customBannerUrl.isNullOrBlank() -> customBannerUrl
+        detailsPageLayout == 0 -> unifiedArtwork?.bannerUrl // Mode 0 (Nuvio Hero) is strictly BANNER ONLY, NO COVER!
         !useAnilistArtwork || unifiedArtwork == null -> if (heroAllowCroppedFallback) manga else null
         detailsBackdropArtwork == 0 && !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
         detailsBackdropArtwork == 1 && !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
@@ -284,25 +285,55 @@ fun MangaInfoBox(
         key(effectiveArtworkModel, detailsBackdropStyle, detailsBackdropScale, detailsBackdropArtwork, activeStyle) {
             when (detailsBackdropScale) {
                 0 -> {
-                    // MODE 0: Cinema Showcase Card (Widescreen Card + Ambient Aura)
-                    // Layer 1: Ambient Glow Underlay behind everything (including status bar)
-                    val underlayModel = effectiveArtworkModel ?: ambientArtworkModel
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(underlayModel)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.Center,
-                        modifier = Modifier
-                            .matchParentSize()
-                            .blur(36.dp)
-                            .alpha(0.50f)
-                            .background(surfaceTintColor.copy(alpha = 0.12f)),
-                    )
+                    // MODE 0: Nuvio Hero Edge-to-Edge with 7-Stop Silk Bottom Dissolve
+                    if (effectiveArtworkModel != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(effectiveArtworkModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            onError = {
+                                if (chosenArtworkModel != manga) artworkLoadFailed = true
+                            },
+                            onSuccess = { result ->
+                                val image = result.result.image
+                                if (image.width > 0 && image.height > 0) {
+                                    bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                                }
+                                if (effectiveArtworkModel == manga) {
+                                    coverRatio.floatValue = image.height.toFloat() / image.width
+                                }
+                            },
+                            modifier = Modifier
+                                .matchParentSize()
+                                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                                .alpha(backdropAlpha),
+                        )
+                    } else if (detailsPageLayout != 0) {
+                        // Ambient glow underlay fallback (only if not Nuvio Hero mode)
+                        val underlayModel = ambientArtworkModel
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(underlayModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            modifier = Modifier
+                                .matchParentSize()
+                                .blur(36.dp)
+                                .alpha(0.50f)
+                                .background(surfaceTintColor.copy(alpha = 0.12f)),
+                        )
+                    }
 
-                    // Scrims for status bar and background dissolve
+                    // Scrims drawn ON TOP OF the banner:
+                    // 1. Top status bar scrim for text readability
+                    // 2. Official Nuvio 7-Stop Silk Bottom Dissolve
                     Canvas(modifier = Modifier.matchParentSize()) {
                         drawRect(
                             brush = Brush.verticalGradient(
@@ -314,52 +345,22 @@ fun MangaInfoBox(
                                 endY = (appBarPadding.toPx() + 20.dp.toPx()).coerceAtLeast(140f),
                             ),
                         )
+                        // Official Nuvio 7-stop silk gradient dissolve into background
                         drawRect(
                             brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    backgroundColor.copy(alpha = 0.50f),
-                                    backgroundColor,
+                                colorStops = arrayOf(
+                                    0.00f to Color.Transparent,
+                                    0.16f to backgroundColor.copy(alpha = 0.04f),
+                                    0.32f to backgroundColor.copy(alpha = 0.14f),
+                                    0.50f to backgroundColor.copy(alpha = 0.34f),
+                                    0.68f to backgroundColor.copy(alpha = 0.62f),
+                                    0.84f to backgroundColor.copy(alpha = 0.84f),
+                                    1.00f to backgroundColor,
                                 ),
-                                startY = size.height * 0.45f,
+                                startY = size.height * 0.30f,
                                 endY = size.height,
                             ),
                         )
-                    }
-
-                    // Layer 2: 100% Full-Bleed Edge-to-Edge Widescreen Showcase
-                    if (effectiveArtworkModel != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .matchParentSize(),
-                        ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(effectiveArtworkModel)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                alignment = Alignment.Center,
-                                onError = {
-                                    if (chosenArtworkModel != manga) artworkLoadFailed = true
-                                },
-                                onSuccess = { result ->
-                                    val image = result.result.image
-                                    if (image.width > 0 && image.height > 0) {
-                                        bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
-                                    }
-                                    if (effectiveArtworkModel == manga) {
-                                        coverRatio.floatValue = image.height.toFloat() / image.width
-                                    }
-                                },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                                    .alpha(backdropAlpha),
-                            )
-                        }
                     }
                 }
 

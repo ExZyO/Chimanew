@@ -66,8 +66,23 @@ import kotlin.random.Random
                 val newRequest = when {
                     host.contains("pstatic.net") -> {
                         request.newBuilder()
-                            .header("Referer", if (host.contains("webtoon-phinf")) "https://www.webtoons.com" else "https://comic.naver.com/webtoon")
+                            .header("Referer", if (host.contains("webtoon-phinf")) "https://www.webtoons.com/" else "https://comic.naver.com/")
+                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                             .build()
+                    }
+                    host.contains("naver.com") || host.contains("webtoons.com") -> {
+                        if (request.header("Referer") == null) {
+                            request.newBuilder()
+                                .header("Referer", "https://www.webtoons.com/")
+                                .build()
+                        } else request
+                    }
+                    host.contains("kkmh.com") || host.contains("kuaikanmanhua.com") -> {
+                        if (request.header("Referer") == null) {
+                            request.newBuilder()
+                                .header("Referer", "https://www.kuaikanmanhua.com/")
+                                .build()
+                        } else request
                     }
                     else -> request
                 }

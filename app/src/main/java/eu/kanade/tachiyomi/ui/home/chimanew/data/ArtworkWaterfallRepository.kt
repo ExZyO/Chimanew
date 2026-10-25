@@ -306,12 +306,25 @@ class ArtworkWaterfallRepository(
         }
 
         // 2. NAVER WEBTOON (Native Korean Manhwa & LINE Webtoon Global)
+        val bannerOrder = parsePriorityOrder(
+            preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
+            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "BOOKWALKER", "ANILIST", "KITSU"),
+        )
+        val coverOrder = parsePriorityOrder(
+            preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
+            allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU"),
+        )
+        val isNaverRequested = "NAVER" in bannerOrder || "NAVER" in coverOrder
+        val isKuaikanRequested = "KUAIKAN" in bannerOrder || "KUAIKAN" in coverOrder
+        val isBangumiRequested = "BANGUMI" in bannerOrder || "BANGUMI" in coverOrder
+        val isBookWalkerRequested = "BOOKWALKER" in bannerOrder || "BOOKWALKER" in coverOrder
+
         val isNotJapanese = alArt?.countryOfOrigin != "JP" && !containsJapanese(title)
         val koreanQuery = listOfNotNull(
             alArt?.nativeTitle?.takeIf { containsHangul(it) },
             alArt?.synonyms?.firstOrNull { containsHangul(it) },
             title.takeIf { containsHangul(it) },
-        ).firstOrNull() ?: if (isNotJapanese) title else null
+        ).firstOrNull() ?: if (isNotJapanese || isNaverRequested) title else null
 
         if (koreanQuery != null) {
             val naverArt = naverRepo.getCached(koreanQuery) ?: naverRepo.fetchArtwork(koreanQuery)
@@ -337,7 +350,7 @@ class ArtworkWaterfallRepository(
             alArt?.nativeTitle?.takeIf { containsHanzi(it) },
             alArt?.synonyms?.firstOrNull { containsHanzi(it) },
             title.takeIf { containsHanzi(it) },
-        ).firstOrNull() ?: if (isChinese) title else null
+        ).firstOrNull() ?: if (isChinese || isKuaikanRequested) title else null
 
         if (chineseQuery != null) {
             val kkArt = kuaikanRepo.getCached(chineseQuery) ?: kuaikanRepo.fetchArtwork(chineseQuery)
@@ -364,7 +377,7 @@ class ArtworkWaterfallRepository(
             alArt?.synonyms?.firstOrNull { containsJapanese(it) },
             title.takeIf { containsJapanese(it) },
             alArt?.romajiTitle,
-        ).firstOrNull() ?: if (isJapanese) title else null
+        ).firstOrNull() ?: if (isJapanese || isBangumiRequested || isBookWalkerRequested) title else null
 
         if (japaneseQuery != null) {
             // BookWalker Japan
@@ -374,14 +387,24 @@ class ArtworkWaterfallRepository(
                     covers.add(ArtworkCoverOption(url = it, source = "BookWalker", subtitle = "Official Tankōbon Art"))
                 }
             }
+            bwArt?.bannerUrl?.let {
+                if (it.isNotBlank()) {
+                    banners.add(it)
+                    bannerOptions.add(ArtworkBannerOption(it, "BOOKWALKER"))
+                }
+            }
 
             // Bangumi (bgm.tv)
             val bgmArt = bangumiRepo.getCached(japaneseQuery) ?: bangumiRepo.fetchArtwork(japaneseQuery)
             bgmArt?.coverUrl?.let {
                 if (it.isNotBlank()) {
                     covers.add(ArtworkCoverOption(url = it, source = "Bangumi", subtitle = "Official Series Art"))
-                    bannerOptions.add(ArtworkBannerOption(it, "BANGUMI"))
+                }
+            }
+            bgmArt?.bannerUrl?.let {
+                if (it.isNotBlank()) {
                     banners.add(it)
+                    bannerOptions.add(ArtworkBannerOption(it, "BANGUMI"))
                 }
             }
             if (bgmArt?.score10 != null && bgmArt.score100 != null) {

@@ -84,21 +84,13 @@ fun NuvioHeroSection(
                 val hasBanner = !item.highResBannerUrl.isNullOrBlank()
                 val hasCover = !item.highResCoverUrl.isNullOrBlank()
                 when (heroStyle) {
-                    2 -> {
-                        if (heroArtworkPairing == 1) {
-                            hasCover
-                        } else {
-                            val needsBanner = "banner" in heroArtworkSources
-                            val needsCover = "cover" in heroArtworkSources
-                            if (needsBanner && needsCover) hasBanner && hasCover
-                            else if (needsBanner) hasBanner
-                            else if (needsCover) hasCover
-                            else hasCover
-                        }
+                    2 -> hasBanner && hasCover // Both banner and cover required for Cover & Banner style
+                    1 -> hasBanner             // Wide banner required for Banner Alone style
+                    0 -> {
+                        // If banner source is active for Style 0's backdrop, require both; otherwise cover
+                        if ("banner" in heroArtworkSources) hasBanner && hasCover else hasCover
                     }
-                    1 -> hasBanner
-                    0 -> hasCover
-                    else -> hasCover
+                    else -> hasBanner && hasCover
                 }
             }
         }
@@ -163,9 +155,9 @@ fun NuvioHeroSection(
             }
 
             val bannerImageModel: Any? = when {
-                heroArtworkPairing == 1 -> posterImageModel // Unified: same cover for both
-                // Separate: wide banner for backdrop with automatic fallback to posterImageModel if allowed
                 !item.highResBannerUrl.isNullOrBlank() && "banner" in heroArtworkSources -> item.highResBannerUrl
+                heroRequireSelectedArtwork -> null // Strict profile: never fall back to blurring cover if official banner is missing!
+                heroArtworkPairing == 1 -> posterImageModel // Unified: same cover for both
                 heroAllowCroppedFallback -> posterImageModel
                 else -> null
             }
