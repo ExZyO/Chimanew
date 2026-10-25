@@ -9,6 +9,9 @@ import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -61,14 +64,14 @@ class MangadexCoverRepository(
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()
                 val body = response.body.string()
-                val root = json.parseToJsonElement(body).jsonObject
-                val dataArr = root["data"]?.jsonArray ?: return@withContext null
+                val root = json.parseToJsonElement(body) as? JsonObject ?: return@withContext null
+                val dataArr = root["data"] as? JsonArray ?: return@withContext null
 
                 val covers = dataArr.mapNotNull { item ->
-                    val attrs = item.jsonObject["attributes"]?.jsonObject ?: return@mapNotNull null
-                    val fileName = attrs["fileName"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    val volume = attrs["volume"]?.jsonPrimitive?.content
-                    val locale = attrs["locale"]?.jsonPrimitive?.content
+                    val attrs = (item as? JsonObject)?.get("attributes") as? JsonObject ?: return@mapNotNull null
+                    val fileName = attrs["fileName"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    val volume = attrs["volume"]?.jsonPrimitive?.contentOrNull
+                    val locale = attrs["locale"]?.jsonPrimitive?.contentOrNull
                     val coverUrl = "https://uploads.mangadex.org/covers/$mangaId/$fileName.512.jpg"
                     MangadexCoverArt(volume, locale, coverUrl)
                 }
@@ -103,8 +106,8 @@ class MangadexCoverRepository(
 
                 val searchResponse = client.newCall(GET(searchUrl, headers)).awaitSuccess()
                 val searchBody = searchResponse.body.string()
-                val searchRoot = json.parseToJsonElement(searchBody).jsonObject
-                val dataArr = searchRoot["data"]?.jsonArray ?: return@withContext null
+                val searchRoot = json.parseToJsonElement(searchBody) as? JsonObject ?: return@withContext null
+                val dataArr = searchRoot["data"] as? JsonArray ?: return@withContext null
                 if (dataArr.isEmpty()) {
                     val empty = MangadexMediaArtwork()
                     titleCache[title] = empty
@@ -116,13 +119,13 @@ class MangadexCoverRepository(
 
                 val candidateSummaries = mutableListOf<String>()
                 val matchedMangaId = dataArr.firstNotNullOfOrNull { item ->
-                    val obj = item.jsonObject
-                    val id = obj["id"]?.jsonPrimitive?.content ?: return@firstNotNullOfOrNull null
-                    val attrs = obj["attributes"]?.jsonObject ?: return@firstNotNullOfOrNull null
-                    val titleMap = attrs["title"]?.jsonObject
-                    val mainTitles = titleMap?.values?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
-                    val altTitlesList = attrs["altTitles"]?.jsonArray?.flatMap { altObj ->
-                        altObj.jsonObject.values.mapNotNull { it.jsonPrimitive.contentOrNull }
+                    val obj = item as? JsonObject ?: return@firstNotNullOfOrNull null
+                    val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: return@firstNotNullOfOrNull null
+                    val attrs = obj["attributes"] as? JsonObject ?: return@firstNotNullOfOrNull null
+                    val titleMap = attrs["title"] as? JsonObject
+                    val mainTitles = titleMap?.values?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
+                    val altTitlesList = (attrs["altTitles"] as? JsonArray)?.flatMap { altObj ->
+                        (altObj as? JsonObject)?.values?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
                     } ?: emptyList()
 
                     val allCandidateTitles = mainTitles + altTitlesList

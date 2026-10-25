@@ -9,6 +9,10 @@ import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -126,9 +130,9 @@ class NaverWebtoonCoverRepository(
         val bodyString = response.body.string()
         if (bodyString.isBlank()) return null
 
-        val root = json.parseToJsonElement(bodyString).jsonObject
-        val searchWebtoonResult = root["searchWebtoonResult"]?.jsonObject
-        val webtoonList = searchWebtoonResult?.get("searchViewList")?.jsonArray
+        val root = json.parseToJsonElement(bodyString) as? JsonObject ?: return null
+        val searchWebtoonResult = root["searchWebtoonResult"] as? JsonObject
+        val webtoonList = searchWebtoonResult?.get("searchViewList") as? JsonArray
 
         var titleId: Long? = null
         var thumbnailUrl: String? = null
@@ -136,30 +140,32 @@ class NaverWebtoonCoverRepository(
 
         if (!webtoonList.isNullOrEmpty()) {
             val queryClean = query.replace(" ", "").lowercase()
-            val matchedObj = webtoonList.firstOrNull { elem ->
-                val name = elem.jsonObject["titleName"]?.jsonPrimitive?.content.orEmpty().replace(" ", "").lowercase()
-                name == queryClean || (queryClean.length >= 4 && (name.startsWith(queryClean) || queryClean.startsWith(name)))
-            }?.jsonObject ?: if (containsHangul(query)) {
-                webtoonList.firstOrNull { elem ->
-                    val name = elem.jsonObject["titleName"]?.jsonPrimitive?.content.orEmpty()
-                    name.contains(query.trim())
-                }?.jsonObject
+            val matchedObj = webtoonList.firstNotNullOfOrNull { elem ->
+                val obj = elem as? JsonObject ?: return@firstNotNullOfOrNull null
+                val name = obj["titleName"]?.jsonPrimitive?.contentOrNull.orEmpty().replace(" ", "").lowercase()
+                if (name == queryClean || (queryClean.length >= 4 && (name.startsWith(queryClean) || queryClean.startsWith(name)))) obj else null
+            } ?: if (containsHangul(query)) {
+                webtoonList.firstNotNullOfOrNull { elem ->
+                    val obj = elem as? JsonObject ?: return@firstNotNullOfOrNull null
+                    val name = obj["titleName"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    if (name.contains(query.trim())) obj else null
+                }
             } else null
 
             if (matchedObj != null) {
-                titleId = matchedObj["titleId"]?.jsonPrimitive?.content?.toLongOrNull()
-                thumbnailUrl = matchedObj["thumbnailUrl"]?.jsonPrimitive?.content
-                matchedTitle = matchedObj["titleName"]?.jsonPrimitive?.content
+                titleId = matchedObj["titleId"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                thumbnailUrl = matchedObj["thumbnailUrl"]?.jsonPrimitive?.contentOrNull
+                matchedTitle = matchedObj["titleName"]?.jsonPrimitive?.contentOrNull
             }
         }
 
         if (titleId == null) {
             // Check Nbooks comic/novel results as fallback
-            val nbooks = root["searchNbooksNovelResult"]?.jsonObject?.get("searchViewList")?.jsonArray
-                ?: root["searchNbooksComicResult"]?.jsonObject?.get("searchViewList")?.jsonArray
+            val nbooks = (root["searchNbooksNovelResult"] as? JsonObject)?.get("searchViewList") as? JsonArray
+                ?: (root["searchNbooksComicResult"] as? JsonObject)?.get("searchViewList") as? JsonArray
             if (!nbooks.isNullOrEmpty()) {
-                val item = nbooks.first().jsonObject
-                matchedTitle = item["titleName"]?.jsonPrimitive?.content
+                val item = nbooks.firstOrNull() as? JsonObject
+                matchedTitle = item?.get("titleName")?.jsonPrimitive?.contentOrNull
             }
         }
 

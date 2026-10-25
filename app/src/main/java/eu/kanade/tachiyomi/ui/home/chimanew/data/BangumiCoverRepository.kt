@@ -11,8 +11,11 @@ import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -81,22 +84,22 @@ class BangumiCoverRepository(
                 val bodyString = response.body.string()
                 if (bodyString.isBlank()) return@withContext null
 
-                val root = json.parseToJsonElement(bodyString).jsonObject
-                val data = root["data"]?.jsonArray
+                val root = json.parseToJsonElement(bodyString) as? JsonObject ?: return@withContext null
+                val data = root["data"] as? JsonArray
 
                 if (!data.isNullOrEmpty()) {
-                    val first = data.first().jsonObject
-                    val subjectId = first["id"]?.jsonPrimitive?.content?.toLongOrNull()
-                    val titleName = first["name"]?.jsonPrimitive?.content
-                        ?: first["name_cn"]?.jsonPrimitive?.content
+                    val first = data.firstOrNull() as? JsonObject ?: return@withContext null
+                    val subjectId = first["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                    val titleName = first["name"]?.jsonPrimitive?.contentOrNull
+                        ?: first["name_cn"]?.jsonPrimitive?.contentOrNull
 
-                    val imagesObj = first["images"]?.jsonObject
-                    val rawCover = imagesObj?.get("large")?.jsonPrimitive?.content
-                        ?: imagesObj?.get("common")?.jsonPrimitive?.content
-                        ?: first["image"]?.jsonPrimitive?.content
+                    val imagesObj = first["images"] as? JsonObject
+                    val rawCover = imagesObj?.get("large")?.jsonPrimitive?.contentOrNull
+                        ?: imagesObj?.get("common")?.jsonPrimitive?.contentOrNull
+                        ?: first["image"]?.jsonPrimitive?.contentOrNull
                     val coverUrl = toHttps(rawCover)
 
-                    val ratingObj = first["rating"]?.jsonObject
+                    val ratingObj = first["rating"] as? JsonObject
                     val score = ratingObj?.get("score")?.jsonPrimitive?.floatOrNull
                     val score100 = score?.let { (it * 10).toInt() }
 
@@ -112,10 +115,13 @@ class BangumiCoverRepository(
                             val relResp = client.newCall(relReq).awaitSuccess()
                             val relBody = relResp.body.string()
                             if (relBody.isNotBlank()) {
-                                val relArray = json.parseToJsonElement(relBody).jsonArray
-                                val animeSubject = relArray.firstOrNull { it.jsonObject["type"]?.jsonPrimitive?.content == "2" }?.jsonObject
-                                val rawAnimeImg = animeSubject?.get("images")?.jsonObject?.get("large")?.jsonPrimitive?.content
-                                    ?: animeSubject?.get("images")?.jsonObject?.get("common")?.jsonPrimitive?.content
+                                val relArray = json.parseToJsonElement(relBody) as? JsonArray
+                                val animeSubject = relArray?.firstNotNullOfOrNull { elem ->
+                                    val obj = elem as? JsonObject
+                                    if (obj?.get("type")?.jsonPrimitive?.contentOrNull == "2") obj else null
+                                }
+                                val rawAnimeImg = (animeSubject?.get("images") as? JsonObject)?.get("large")?.jsonPrimitive?.contentOrNull
+                                    ?: (animeSubject?.get("images") as? JsonObject)?.get("common")?.jsonPrimitive?.contentOrNull
                                 val animeImg = toHttps(rawAnimeImg)
                                 if (!animeImg.isNullOrBlank()) {
                                     bannerUrl = animeImg

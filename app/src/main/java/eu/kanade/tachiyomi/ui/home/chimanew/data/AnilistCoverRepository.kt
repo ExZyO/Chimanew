@@ -8,11 +8,14 @@ import eu.kanade.tachiyomi.network.jsonMime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -118,23 +121,23 @@ class AnilistCoverRepository(
 
                 val response = client.newCall(request).awaitSuccess()
                 val bodyString = response.body.string()
-                val root = json.parseToJsonElement(bodyString).jsonObject
-                val media = root["data"]?.jsonObject?.get("Media")?.jsonObject
+                val root = json.parseToJsonElement(bodyString) as? JsonObject
+                val media = (root?.get("data") as? JsonObject)?.get("Media") as? JsonObject
 
                 if (media != null) {
-                    val id = media["id"]?.jsonPrimitive?.content?.toLongOrNull()
+                    val id = media["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                     val country = media["countryOfOrigin"].asStringOrNull()
-                    val titleObj = media["title"]?.jsonObject
+                    val titleObj = media["title"] as? JsonObject
                     val english = titleObj?.get("english").asStringOrNull()
                     val romaji = titleObj?.get("romaji").asStringOrNull()
                     val native = titleObj?.get("native").asStringOrNull()
-                    val synonymsList = media["synonyms"]?.jsonArray?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                    val synonymsList = (media["synonyms"] as? JsonArray)?.mapNotNull { it.asStringOrNull() } ?: emptyList()
                     val banner = media["bannerImage"].asStringOrNull()
-                    val coverObj = media["coverImage"]?.jsonObject
+                    val coverObj = media["coverImage"] as? JsonObject
                     val extraLarge = coverObj?.get("extraLarge").asStringOrNull()
                         ?: coverObj?.get("large").asStringOrNull()
-                    val avgScore = media["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
-                    val meanScore = media["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                    val avgScore = media["averageScore"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                    val meanScore = media["meanScore"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
                     val score100 = avgScore ?: meanScore
                     val score10 = score100?.let { it / 10f }
 
@@ -214,25 +217,25 @@ class AnilistCoverRepository(
 
                         val response = client.newCall(request).awaitSuccess()
                         val bodyString = response.body.string()
-                        val root = json.parseToJsonElement(bodyString).jsonObject
-                        val mediaList = root["data"]?.jsonObject?.get("Page")?.jsonObject?.get("media")?.jsonArray
+                        val root = json.parseToJsonElement(bodyString) as? JsonObject
+                        val mediaList = ((root?.get("data") as? JsonObject)?.get("Page") as? JsonObject)?.get("media") as? JsonArray
 
                         mediaList?.forEach { element ->
-                            val obj = element.jsonObject
-                            val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull()
-                            val idMal = obj["idMal"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@forEach
+                            val obj = element as? JsonObject ?: return@forEach
+                            val id = obj["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                            val idMal = obj["idMal"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
                             val country = obj["countryOfOrigin"].asStringOrNull()
-                            val titleObj = obj["title"]?.jsonObject
+                            val titleObj = obj["title"] as? JsonObject
                             val english = titleObj?.get("english").asStringOrNull()
                             val romaji = titleObj?.get("romaji").asStringOrNull()
                             val native = titleObj?.get("native").asStringOrNull()
-                            val synonymsList = obj["synonyms"]?.jsonArray?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                            val synonymsList = (obj["synonyms"] as? JsonArray)?.mapNotNull { it.asStringOrNull() } ?: emptyList()
                             val banner = obj["bannerImage"].asStringOrNull()
-                            val coverObj = obj["coverImage"]?.jsonObject
+                            val coverObj = obj["coverImage"] as? JsonObject
                             val extraLarge = coverObj?.get("extraLarge").asStringOrNull()
                                 ?: coverObj?.get("large").asStringOrNull()
-                            val avgScore = obj["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
-                            val meanScore = obj["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                            val avgScore = obj["averageScore"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                            val meanScore = obj["meanScore"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
                             val score100 = avgScore ?: meanScore
                             val score10 = score100?.let { it / 10f }
 
@@ -314,24 +317,24 @@ class AnilistCoverRepository(
 
                         val response = client.newCall(request).awaitSuccess()
                         val bodyString = response.body?.string() ?: return@forEach
-                        val root = json.parseToJsonElement(bodyString).jsonObject
-                        val mediaList = root["data"]?.jsonObject?.get("Page")?.jsonObject?.get("media")?.jsonArray
+                        val root = json.parseToJsonElement(bodyString) as? JsonObject
+                        val mediaList = ((root?.get("data") as? JsonObject)?.get("Page") as? JsonObject)?.get("media") as? JsonArray
 
                         mediaList?.forEach { element ->
-                            val obj = element.jsonObject
-                            val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@forEach
+                            val obj = element as? JsonObject ?: return@forEach
+                            val id = obj["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
                             val country = obj["countryOfOrigin"].asStringOrNull()
-                            val titleObj = obj["title"]?.jsonObject
+                            val titleObj = obj["title"] as? JsonObject
                             val english = titleObj?.get("english").asStringOrNull()
                             val romaji = titleObj?.get("romaji").asStringOrNull()
                             val native = titleObj?.get("native").asStringOrNull()
-                            val synonymsList = obj["synonyms"]?.jsonArray?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                            val synonymsList = (obj["synonyms"] as? JsonArray)?.mapNotNull { it.asStringOrNull() } ?: emptyList()
                             val banner = obj["bannerImage"].asStringOrNull()
-                            val coverObj = obj["coverImage"]?.jsonObject
+                            val coverObj = obj["coverImage"] as? JsonObject
                             val extraLarge = coverObj?.get("extraLarge").asStringOrNull()
                                 ?: coverObj?.get("large").asStringOrNull()
-                            val avgScore = obj["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
-                            val meanScore = obj["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                            val avgScore = obj["averageScore"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                            val meanScore = obj["meanScore"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
                             val score100 = avgScore ?: meanScore
                             val score10 = score100?.let { it / 10f }
 
@@ -407,23 +410,23 @@ class AnilistCoverRepository(
 
                 val response = client.newCall(request).awaitSuccess()
                 val bodyString = response.body?.string() ?: return@withContext null
-                val root = json.parseToJsonElement(bodyString).jsonObject
-                val media = root["data"]?.jsonObject?.get("Media")?.jsonObject
+                val root = json.parseToJsonElement(bodyString) as? JsonObject
+                val media = (root?.get("data") as? JsonObject)?.get("Media") as? JsonObject
 
                 if (media != null) {
-                    val id = media["id"]?.jsonPrimitive?.content?.toLongOrNull()
+                    val id = media["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                     val country = media["countryOfOrigin"].asStringOrNull()
-                    val titleObj = media["title"]?.jsonObject
+                    val titleObj = media["title"] as? JsonObject
                     val english = titleObj?.get("english").asStringOrNull()
                     val romaji = titleObj?.get("romaji").asStringOrNull()
                     val native = titleObj?.get("native").asStringOrNull()
-                    val synonymsList = media["synonyms"]?.jsonArray?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                    val synonymsList = (media["synonyms"] as? JsonArray)?.mapNotNull { it.asStringOrNull() } ?: emptyList()
                     val banner = media["bannerImage"].asStringOrNull()
-                    val coverObj = media["coverImage"]?.jsonObject
+                    val coverObj = media["coverImage"] as? JsonObject
                     val extraLarge = coverObj?.get("extraLarge").asStringOrNull()
                         ?: coverObj?.get("large").asStringOrNull()
-                    val avgScore = media["averageScore"]?.jsonPrimitive?.content?.toIntOrNull()
-                    val meanScore = media["meanScore"]?.jsonPrimitive?.content?.toIntOrNull()
+                    val avgScore = media["averageScore"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                    val meanScore = media["meanScore"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
                     val score100 = avgScore ?: meanScore
                     val score10 = score100?.let { it / 10f }
 

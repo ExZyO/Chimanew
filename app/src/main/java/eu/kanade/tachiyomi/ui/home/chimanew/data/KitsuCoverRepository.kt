@@ -9,6 +9,9 @@ import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -57,15 +60,15 @@ class KitsuCoverRepository(
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()
                 val body = response.body.string()
-                val root = json.parseToJsonElement(body).jsonObject
-                val dataObj = root["data"]?.jsonObject ?: return@withContext null
-                val attributes = dataObj["attributes"]?.jsonObject ?: return@withContext null
+                val root = json.parseToJsonElement(body) as? JsonObject
+                val dataObj = root?.get("data") as? JsonObject ?: return@withContext null
+                val attributes = dataObj["attributes"] as? JsonObject ?: return@withContext null
 
-                val bannerUrl = attributes["coverImage"]?.jsonObject?.let {
-                    it["large"]?.jsonPrimitive?.content ?: it["original"]?.jsonPrimitive?.content
+                val bannerUrl = (attributes["coverImage"] as? JsonObject)?.let {
+                    it["large"]?.jsonPrimitive?.contentOrNull ?: it["original"]?.jsonPrimitive?.contentOrNull
                 }
-                val posterUrl = attributes["posterImage"]?.jsonObject?.let {
-                    it["large"]?.jsonPrimitive?.content ?: it["original"]?.jsonPrimitive?.content
+                val posterUrl = (attributes["posterImage"] as? JsonObject)?.let {
+                    it["large"]?.jsonPrimitive?.contentOrNull ?: it["original"]?.jsonPrimitive?.contentOrNull
                 }
                 val avgRating = attributes["averageRating"]?.jsonPrimitive?.contentOrNull?.toFloatOrNull()
                 val score10 = avgRating?.let { it / 10f }
@@ -102,8 +105,8 @@ class KitsuCoverRepository(
 
                 val response = client.newCall(GET(url, headers)).awaitSuccess()
                 val body = response.body.string()
-                val root = json.parseToJsonElement(body).jsonObject
-                val dataArr = root["data"]?.jsonArray ?: return@withContext null
+                val root = json.parseToJsonElement(body) as? JsonObject
+                val dataArr = root?.get("data") as? JsonArray ?: return@withContext null
                 if (dataArr.isEmpty()) {
                     val empty = KitsuMediaArtwork()
                     titleCache[title] = empty
@@ -115,10 +118,11 @@ class KitsuCoverRepository(
 
                 val candidateSummaries = mutableListOf<String>()
                 val matchedObj = dataArr.firstNotNullOfOrNull { item ->
-                    val attrs = item.jsonObject["attributes"]?.jsonObject ?: return@firstNotNullOfOrNull null
+                    val obj = item as? JsonObject ?: return@firstNotNullOfOrNull null
+                    val attrs = obj["attributes"] as? JsonObject ?: return@firstNotNullOfOrNull null
                     val canonical = attrs["canonicalTitle"]?.jsonPrimitive?.contentOrNull
-                    val titlesList = attrs["titles"]?.jsonObject?.values?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
-                    val abbrevList = attrs["abbreviatedTitles"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+                    val titlesList = (attrs["titles"] as? JsonObject)?.values?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+                    val abbrevList = (attrs["abbreviatedTitles"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
                     val candidateTitles = listOfNotNull(canonical) + titlesList + abbrevList
 
                     candidateSummaries.add(canonical ?: "unknown")
@@ -134,11 +138,11 @@ class KitsuCoverRepository(
                     return@withContext null
                 }
 
-                val bannerUrl = matchedObj["coverImage"]?.jsonObject?.let {
-                    it["large"]?.jsonPrimitive?.content ?: it["original"]?.jsonPrimitive?.content
+                val bannerUrl = (matchedObj["coverImage"] as? JsonObject)?.let {
+                    it["large"]?.jsonPrimitive?.contentOrNull ?: it["original"]?.jsonPrimitive?.contentOrNull
                 }
-                val posterUrl = matchedObj["posterImage"]?.jsonObject?.let {
-                    it["large"]?.jsonPrimitive?.content ?: it["original"]?.jsonPrimitive?.content
+                val posterUrl = (matchedObj["posterImage"] as? JsonObject)?.let {
+                    it["large"]?.jsonPrimitive?.contentOrNull ?: it["original"]?.jsonPrimitive?.contentOrNull
                 }
                 val avgRating = matchedObj["averageRating"]?.jsonPrimitive?.contentOrNull?.toFloatOrNull()
                 val score10 = avgRating?.let { it / 10f }

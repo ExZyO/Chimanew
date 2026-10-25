@@ -9,6 +9,10 @@ import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -63,20 +67,21 @@ class KuaikanCoverRepository(
                 val bodyString = response.body.string()
                 if (bodyString.isBlank()) return@withContext null
 
-                val root = json.parseToJsonElement(bodyString).jsonObject
-                val hits = root["data"]?.jsonObject?.get("hit")?.jsonArray
+                val root = json.parseToJsonElement(bodyString) as? JsonObject ?: return@withContext null
+                val hits = (root["data"] as? JsonObject)?.get("hit") as? JsonArray
 
                 if (!hits.isNullOrEmpty()) {
                     val queryClean = query.replace(" ", "").lowercase()
-                    val matchedObj = hits.firstOrNull { elem ->
-                        val name = elem.jsonObject["title"]?.jsonPrimitive?.content.orEmpty().replace(" ", "").lowercase()
-                        name == queryClean || name.contains(queryClean) || queryClean.contains(name)
-                    }?.jsonObject ?: hits.first().jsonObject
+                    val matchedObj = hits.firstNotNullOfOrNull { elem ->
+                        val obj = elem as? JsonObject ?: return@firstNotNullOfOrNull null
+                        val name = obj["title"]?.jsonPrimitive?.contentOrNull.orEmpty().replace(" ", "").lowercase()
+                        if (name == queryClean || name.contains(queryClean) || queryClean.contains(name)) obj else null
+                    } ?: hits.firstOrNull() as? JsonObject ?: return@withContext null
 
-                    val topicId = matchedObj["id"]?.jsonPrimitive?.content?.toLongOrNull()
-                    val rawBanner = matchedObj["cover_image_url"]?.jsonPrimitive?.content
-                    val rawCover = matchedObj["vertical_image_url"]?.jsonPrimitive?.content
-                    val matchedTitle = matchedObj["title"]?.jsonPrimitive?.content
+                    val topicId = matchedObj["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                    val rawBanner = matchedObj["cover_image_url"]?.jsonPrimitive?.contentOrNull
+                    val rawCover = matchedObj["vertical_image_url"]?.jsonPrimitive?.contentOrNull
+                    val matchedTitle = matchedObj["title"]?.jsonPrimitive?.contentOrNull
 
                     val cleanBanner = rawBanner?.let { stripResolutionSuffix(it) }
                     val cleanCover = rawCover?.let { stripResolutionSuffix(it) }
