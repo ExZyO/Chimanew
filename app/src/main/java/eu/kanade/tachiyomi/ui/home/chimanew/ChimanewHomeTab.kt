@@ -66,13 +66,14 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
-import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.AsyncImage
 import eu.kanade.presentation.more.settings.screen.SettingsNuvioScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioHeroSection
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioMangaShelf
+import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioQuickTrackerSheet
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import kotlinx.coroutines.channels.Channel
@@ -111,6 +112,7 @@ data object ChimanewHomeTab : Tab {
         val state by screenModel.state.collectAsState()
 
         var selectedLongPressItem by remember { mutableStateOf<HomeMangaItem?>(null) }
+        var quickTrackerItem by remember { mutableStateOf<HomeMangaItem?>(null) }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         val onResumeClick: (HomeMangaItem) -> Unit = { item ->
@@ -192,6 +194,7 @@ data object ChimanewHomeTab : Tab {
                             heroArtworkSources = state.heroArtworkSources,
                             onItemClick = onCardClick,
                             onResumeClick = onResumeClick,
+                            onQuickStatusClick = { item -> quickTrackerItem = item },
                         )
                     }
                 }
@@ -310,7 +313,7 @@ data object ChimanewHomeTab : Tab {
                                 .padding(horizontal = 20.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            SubcomposeAsyncImage(
+                            AsyncImage(
                                 model = item.coverData,
                                 contentDescription = item.title,
                                 contentScale = ContentScale.Crop,
@@ -374,6 +377,24 @@ data object ChimanewHomeTab : Tab {
                         )
                     }
                 }
+            }
+
+            // EaZy Nuvio+ / Chimanew: Quick-Action Tracker Modal Bottom Sheet
+            quickTrackerItem?.let { item ->
+                NuvioQuickTrackerSheet(
+                    item = item,
+                    onDismissRequest = { quickTrackerItem = null },
+                    onStatusSelected = { status ->
+                        screenModel.updateMangaTrackStatus(item.mangaId, status)
+                    },
+                    onToggleLibrary = {
+                        screenModel.toggleLibraryBookmark(item.mangaId)
+                    },
+                    onOpenFullDetails = {
+                        quickTrackerItem = null
+                        onDetailsClick(item)
+                    },
+                )
             }
         }
     }

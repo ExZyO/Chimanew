@@ -1,6 +1,7 @@
 // EaZy Nuvio+ / Chimanew
 package eu.kanade.tachiyomi.ui.home.chimanew.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -26,16 +27,22 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -45,12 +52,21 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.SubcomposeAsyncImage
+import androidx.palette.graphics.Palette
+import coil3.compose.AsyncImage
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.toBitmap
 import eu.kanade.presentation.manga.components.CommunityRatingBadge
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
@@ -58,11 +74,22 @@ import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+
+object NuvioPaletteColorCache {
+    private val cache = ConcurrentHashMap<String, Color>()
+    operator fun get(key: String): Color? = cache[key]
+    operator fun set(key: String, color: Color) { cache[key] = color }
+}
 
 @Composable
 fun NuvioHeroSection(
@@ -72,6 +99,7 @@ fun NuvioHeroSection(
     heroArtworkSources: Set<String> = setOf("banner", "cover", "default"),
     onItemClick: (HomeMangaItem) -> Unit,
     onResumeClick: (HomeMangaItem) -> Unit,
+    onQuickStatusClick: (HomeMangaItem) -> Unit = {},
 ) {
     if (items.isEmpty()) return
 
@@ -151,6 +179,74 @@ fun NuvioHeroSection(
         pageCount = { virtualCount },
     )
 
+    val haptic = LocalHapticFeedback.current
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .drop(1)
+            .collect {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+    }
+
+    // Dynamic Ambient Palette Extraction (Option A: Smooth Vertical Gradient)
+    val currentSettledIndex = if (isLooping) pagerState.currentPage % displayItems.size else pagerState.currentPage.coerceIn(0, displayItems.lastIndex)
+    val currentHeroItem = displayItems.getOrNull(currentSettledIndex)
+    val context = LocalContext.current
+
+    val activeBannerUrl = currentHeroItem?.let { item ->
+        val hasBanner = hasAuthenticBanner(item)
+        if (hasBanner && "banner" in heroArtworkSources) item.highResBannerUrl
+        else item.highResCoverUrl ?: item.coverData.ogUrl
+    }
+
+    var dynamicExtractedColor by remember { mutableStateOf<Color?>(null) }
+
+    LaunchedEffect(activeBannerUrl) {
+        if (activeBannerUrl.isNullOrBlank()) {
+            dynamicExtractedColor = null
+            return@LaunchedEffect
+        }
+        val cached = NuvioPaletteColorCache[activeBannerUrl]
+        if (cached != null) {
+            dynamicExtractedColor = cached
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.Default) {
+            try {
+                val loader = context.imageLoader
+                val request = ImageRequest.Builder(context)
+                    .data(activeBannerUrl)
+                    .allowHardware(false)
+                    .size(160)
+                    .build()
+                val result = (loader.execute(request) as? SuccessResult)?.image?.toBitmap()
+                if (result != null) {
+                    val palette = Palette.from(result).generate()
+                    val targetRgb = palette.getVibrantColor(
+                        palette.getDominantColor(palette.getDarkVibrantColor(0))
+                    )
+                    if (targetRgb != 0) {
+                        val color = Color(targetRgb)
+                        NuvioPaletteColorCache[activeBannerUrl] = color
+                        dynamicExtractedColor = color
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    val ambientTargetColor = dynamicExtractedColor
+        ?: currentHeroItem?.coverData?.vibrantCoverColor?.let { Color(it) }
+        ?: currentHeroItem?.coverData?.dominantCoverColors?.first?.let { Color(it) }
+        ?: MaterialTheme.colorScheme.primary
+
+    val animatedAmbientColor by animateColorAsState(
+        targetValue = ambientTargetColor,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "HeroAmbientColorAnimation",
+    )
+
     // Auto-advance carousel smoothly forward every 6 seconds unless user is scrolling
     LaunchedEffect(displayItems.size, isLooping) {
         if (!isLooping) return@LaunchedEffect
@@ -167,7 +263,14 @@ fun NuvioHeroSection(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(bannerHeight),
+            .height(bannerHeight)
+            .background(
+                Brush.verticalGradient(
+                    0.0f to animatedAmbientColor.copy(alpha = 0.45f),
+                    0.65f to MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                    1.0f to MaterialTheme.colorScheme.background,
+                ),
+            ),
     ) {
         HorizontalPager(
             state = pagerState,
@@ -231,7 +334,7 @@ fun NuvioHeroSection(
                         // 1. Atmospheric Heavily Blurred Cover Backdrop or Fallback Background
                         if (bannerImageModel != null) {
                             val heroBannerAlpha = if (heroDimBanner) 0.35f else 0.85f
-                            SubcomposeAsyncImage(
+                            AsyncImage(
                                 model = bannerImageModel,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
@@ -240,29 +343,6 @@ fun NuvioHeroSection(
                                     .fillMaxSize()
                                     .blur(22.dp)
                                     .alpha(heroBannerAlpha),
-                                loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
-                                error = {
-                                    if (heroAllowCroppedFallback && !heroRequireSelectedArtwork && bannerImageModel != item.coverData) {
-                                        SubcomposeAsyncImage(
-                                            model = item.coverData,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            alignment = Alignment.TopCenter,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .blur(22.dp)
-                                                .alpha(heroBannerAlpha),
-                                        )
-                                    } else {
-                                        HeroFallbackBackgroundCanvas(
-                                            posterModel = posterImageModel,
-                                            ambientStyle = ambientCanvasStyle,
-                                            accentColor = accentColor,
-                                            dimBanner = heroDimBanner,
-                                            allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
-                                        )
-                                    }
-                                },
                             )
                         } else {
                             HeroFallbackBackgroundCanvas(
@@ -332,6 +412,7 @@ fun NuvioHeroSection(
                                 showRatingsOnHero = showRatingsOnHero && showCommunityRatings,
                                 communityRatingFormat = communityRatingFormat,
                                 onResumeClick = onResumeClick,
+                                onQuickStatusClick = onQuickStatusClick,
                             )
                         }
                     }
@@ -344,7 +425,7 @@ fun NuvioHeroSection(
                         // 1. Crisp Unblurred Widescreen Banner Backdrop or Fallback Background
                         if (bannerImageModel != null) {
                             val heroBannerAlpha = if (heroDimBanner) 0.55f else 1.0f
-                            SubcomposeAsyncImage(
+                            AsyncImage(
                                 model = bannerImageModel,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
@@ -352,28 +433,6 @@ fun NuvioHeroSection(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .alpha(heroBannerAlpha),
-                                loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
-                                error = {
-                                    if (heroAllowCroppedFallback && !heroRequireSelectedArtwork && bannerImageModel != item.coverData) {
-                                        SubcomposeAsyncImage(
-                                            model = item.coverData,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            alignment = Alignment.TopCenter,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .alpha(heroBannerAlpha),
-                                        )
-                                    } else {
-                                        HeroFallbackBackgroundCanvas(
-                                            posterModel = posterImageModel,
-                                            ambientStyle = ambientCanvasStyle,
-                                            accentColor = accentColor,
-                                            dimBanner = heroDimBanner,
-                                            allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
-                                        )
-                                    }
-                                },
                             )
                         } else {
                             HeroFallbackBackgroundCanvas(
@@ -443,6 +502,7 @@ fun NuvioHeroSection(
                                 showRatingsOnHero = showRatingsOnHero && showCommunityRatings,
                                 communityRatingFormat = communityRatingFormat,
                                 onResumeClick = onResumeClick,
+                                onQuickStatusClick = onQuickStatusClick,
                             )
                         }
                     }
@@ -454,38 +514,12 @@ fun NuvioHeroSection(
 
                         // 1. Cover / Wide Artwork or Fallback Background
                         if (bannerImageModel != null) {
-                            SubcomposeAsyncImage(
+                            AsyncImage(
                                 model = bannerImageModel,
                                 contentDescription = item.title,
                                 contentScale = ContentScale.Crop,
                                 alignment = Alignment.TopCenter,
                                 modifier = Modifier.fillMaxSize(),
-                                loading = {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(Color(0xFF1E1E1E)),
-                                    )
-                                },
-                                error = {
-                                    if (heroAllowCroppedFallback && !heroRequireSelectedArtwork && bannerImageModel != item.coverData) {
-                                        SubcomposeAsyncImage(
-                                            model = item.coverData,
-                                            contentDescription = item.title,
-                                            contentScale = ContentScale.Crop,
-                                            alignment = Alignment.TopCenter,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    } else {
-                                        HeroFallbackBackgroundCanvas(
-                                            posterModel = posterImageModel,
-                                            ambientStyle = ambientCanvasStyle,
-                                            accentColor = accentColor,
-                                            dimBanner = heroDimBanner,
-                                            allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
-                                        )
-                                    }
-                                },
                             )
                         } else {
                             HeroFallbackBackgroundCanvas(
@@ -667,6 +701,22 @@ fun NuvioHeroSection(
                                 )
                             }
 
+                            FilledTonalIconButton(
+                                onClick = { onQuickStatusClick(item) },
+                                modifier = Modifier.size(34.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = Color.White.copy(alpha = 0.20f),
+                                    contentColor = Color.White,
+                                ),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.BookmarkBorder,
+                                    contentDescription = "Quick Status",
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+
                             val progressText = buildString {
                                 if (item.lastChapterNumber != null) {
                                     append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
@@ -762,6 +812,7 @@ private fun HeroAmbientForegroundContent(
     showRatingsOnHero: Boolean = true,
     communityRatingFormat: Int = 0,
     onResumeClick: (HomeMangaItem) -> Unit,
+    onQuickStatusClick: (HomeMangaItem) -> Unit = {},
 ) {
     Row(
         modifier = Modifier
@@ -780,36 +831,12 @@ private fun HeroAmbientForegroundContent(
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
             color = Color.Black.copy(alpha = 0.40f),
         ) {
-            SubcomposeAsyncImage(
+            AsyncImage(
                 model = posterImageModel,
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
                 alignment = Alignment.TopCenter,
                 modifier = Modifier.fillMaxSize(),
-                loading = {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF2A2A2A)),
-                    )
-                },
-                error = {
-                    if (posterImageModel != item.coverData) {
-                        SubcomposeAsyncImage(
-                            model = item.coverData,
-                            contentDescription = item.title,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.TopCenter,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF2A2A2A)),
-                        )
-                    }
-                },
             )
         }
 
@@ -917,38 +944,54 @@ private fun HeroAmbientForegroundContent(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // 1-Tap Resume Button
-            val buttonText = if (item.lastChapterNumber != null) {
-                "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
-            } else {
-                "Start Reading"
-            }
-
-            Button(
-                onClick = { onResumeClick(item) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                ),
-                shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            // Action Row: Resume Button + Quick Status
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = Color.Black,
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = buttonText,
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black,
+                Button(
+                    onClick = { onResumeClick(item) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
                     ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                    shape = RoundedCornerShape(20.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color.Black,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = buttonText,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                FilledTonalIconButton(
+                    onClick = { onQuickStatusClick(item) },
+                    modifier = Modifier.size(34.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = Color.White.copy(alpha = 0.20f),
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.BookmarkBorder,
+                        contentDescription = "Quick Status",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
     }
@@ -1012,7 +1055,7 @@ fun HeroFallbackBackgroundCanvas(
                 // Style 2: Frosted Glass (Subtle Matte Texture)
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (allowCoverBlur) {
-                        SubcomposeAsyncImage(
+                        AsyncImage(
                             model = posterModel,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
@@ -1021,8 +1064,6 @@ fun HeroFallbackBackgroundCanvas(
                                 .fillMaxSize()
                                 .blur(48.dp)
                                 .alpha(if (dimBanner) 0.25f else 0.45f),
-                            loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
-                            error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
                         )
                     }
                     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1057,7 +1098,7 @@ fun HeroFallbackBackgroundCanvas(
                 // Style 0 (Default): Clean Subtle Aura (or Gentle ambient glow)
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (allowCoverBlur) {
-                        SubcomposeAsyncImage(
+                        AsyncImage(
                             model = posterModel,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
@@ -1066,8 +1107,6 @@ fun HeroFallbackBackgroundCanvas(
                                 .fillMaxSize()
                                 .blur(36.dp)
                                 .alpha(if (dimBanner) 0.45f else 0.80f),
-                            loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
-                            error = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF141416))) },
                         )
                     }
                     // Color ambient wash

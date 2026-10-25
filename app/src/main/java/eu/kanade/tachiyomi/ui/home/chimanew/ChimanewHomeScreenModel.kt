@@ -4,9 +4,12 @@ package eu.kanade.tachiyomi.ui.home.chimanew
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
 import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistMediaArtwork
 import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
@@ -54,6 +57,8 @@ data class HomeMangaItem(
     val chapterTotalPages: Long = 0,
     val genres: List<String> = emptyList(),
     val description: String? = null,
+    val inLibrary: Boolean = false,
+    val primaryTrackStatus: Long? = null,
 )
 
 @Immutable
@@ -381,6 +386,9 @@ class ChimanewHomeScreenModel(
                     description: String? = null,
                 ): HomeMangaItem {
                     val artwork = getArtwork(mangaId, title)
+                    val inLib = libraryByMangaId.containsKey(mangaId)
+                    val mangaTracks = tracksByManga[mangaId]
+                    val primaryStatus = mangaTracks?.firstOrNull()?.status
                     return HomeMangaItem(
                         mangaId = mangaId,
                         title = title,
@@ -398,6 +406,8 @@ class ChimanewHomeScreenModel(
                         chapterTotalPages = chapterTotalPages,
                         genres = genres,
                         description = description,
+                        inLibrary = inLib,
+                        primaryTrackStatus = primaryStatus,
                     )
                 }
 
@@ -853,6 +863,69 @@ class ChimanewHomeScreenModel(
             } else {
                 getNextChapters.await(mangaId, onlyUnread = true).firstOrNull()
                     ?: getNextChapters.await(mangaId, onlyUnread = false).firstOrNull()
+            }
+        }
+    }
+
+    fun updateMangaTrackStatus(mangaId: Long, trackStatus: TrackStatus) {
+        screenModelScope.launchIO {
+            try {
+                val mangaTracks = trackRepository.getTracksByMangaId(mangaId)
+                if (mangaTracks.isNotEmpty()) {
+                    mangaTracks.forEach { track ->
+                        val tracker = trackerManager.get(track.trackerId)
+                        if (tracker != null && tracker.isLoggedIn) {
+                            val newStatus = when (track.trackerId) {
+                                trackerManager.aniList.id -> when (trackStatus) {
+                                    TrackStatus.READING -> 1L
+                                    TrackStatus.PLAN_TO_READ -> 2L
+                                    TrackStatus.COMPLETED -> 3L
+                                    TrackStatus.PAUSED -> 4L
+                                    TrackStatus.DROPPED -> 5L
+                                    TrackStatus.REPEATING -> 6L
+                                    else -> 1L
+                                }
+                                trackerManager.myAnimeList.id -> when (trackStatus) {
+                                    TrackStatus.READING -> 1L
+                                    TrackStatus.COMPLETED -> 2L
+                                    TrackStatus.PAUSED -> 3L
+                                    TrackStatus.DROPPED -> 4L
+                                    TrackStatus.PLAN_TO_READ -> 6L
+                                    TrackStatus.REPEATING -> 7L
+                                    else -> 1L
+                                }
+                                trackerManager.kitsu.id -> when (trackStatus) {
+                                    TrackStatus.READING -> 1L
+                                    TrackStatus.PLAN_TO_READ -> 2L
+                                    TrackStatus.COMPLETED -> 3L
+                                    TrackStatus.PAUSED -> 4L
+                                    TrackStatus.DROPPED -> 5L
+                                    else -> 1L
+                                }
+                                else -> 1L
+                            }
+                            val updatedTrack = track.copy(status = newStatus)
+                            try {
+                                tracker.setRemoteStatus(updatedTrack.toDbTrack(), newStatus)
+                            } catch (_: Exception) {}
+                            trackRepository.insert(updatedTrack)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Failed to update track status for manga $mangaId" }
+            }
+        }
+    }
+
+    fun toggleLibraryBookmark(mangaId: Long) {
+        screenModelScope.launchIO {
+            try {
+                val manga = getManga.await(mangaId) ?: return@launchIO
+                val updateManga = Injekt.get<eu.kanade.domain.manga.interactor.UpdateManga>()
+                updateManga.awaitUpdateFavorite(mangaId, !manga.favorite)
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Failed to toggle library bookmark for manga $mangaId" }
             }
         }
     }
