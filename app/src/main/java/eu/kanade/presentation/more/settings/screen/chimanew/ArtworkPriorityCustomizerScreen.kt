@@ -65,6 +65,7 @@ data class ArtworkPriorityItem(
 class ArtworkPriorityCustomizerScreen : Screen() {
 
     companion object {
+        const val PROVIDER_DEFAULT = "default"
         const val PROVIDER_ANILIST = "anilist"
         const val PROVIDER_KITSU = "kitsu"
         const val PROVIDER_MANGADEX = "mangadex"
@@ -81,6 +82,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
             PROVIDER_MANGADEX,
             PROVIDER_ANILIST,
             PROVIDER_KITSU,
+            PROVIDER_DEFAULT,
         )
 
         fun parseOrder(raw: String, allowed: List<String> = ALL_PROVIDERS): List<Pair<String, Boolean>> {
@@ -131,6 +133,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
         var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
         val providerTitles = mapOf(
+            PROVIDER_DEFAULT to stringResource(MR.strings.pref_chimanew_artwork_provider_default),
             PROVIDER_NAVER to stringResource(MR.strings.pref_chimanew_artwork_provider_naver),
             PROVIDER_KUAIKAN to stringResource(MR.strings.pref_chimanew_artwork_provider_kuaikan),
             PROVIDER_BOOKWALKER to stringResource(MR.strings.pref_chimanew_artwork_provider_bookwalker),
@@ -141,6 +144,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
         )
 
         val providerSubtitles = mapOf(
+            PROVIDER_DEFAULT to stringResource(MR.strings.pref_chimanew_artwork_provider_default_desc),
             PROVIDER_NAVER to stringResource(MR.strings.pref_chimanew_artwork_provider_naver_desc),
             PROVIDER_KUAIKAN to stringResource(MR.strings.pref_chimanew_artwork_provider_kuaikan_desc),
             PROVIDER_BOOKWALKER to stringResource(MR.strings.pref_chimanew_artwork_provider_bookwalker_desc),
@@ -186,9 +190,9 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                         chimanewPreferences.artworkBannerOrder()
                     }
                     val allowed = if (selectedTabIndex == 0) {
-                        listOf(PROVIDER_MANGADEX, PROVIDER_BOOKWALKER, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_KITSU)
+                        listOf(PROVIDER_MANGADEX, PROVIDER_BOOKWALKER, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_KITSU, PROVIDER_DEFAULT)
                     } else {
-                        listOf(PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_BANGUMI, PROVIDER_BOOKWALKER, PROVIDER_ANILIST, PROVIDER_KITSU)
+                        listOf(PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_BANGUMI, PROVIDER_BOOKWALKER, PROVIDER_ANILIST, PROVIDER_KITSU, PROVIDER_DEFAULT)
                     }
 
                     val rawOrder = remember { orderPref.get() }

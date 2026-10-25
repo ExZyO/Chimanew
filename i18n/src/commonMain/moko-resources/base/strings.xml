@@ -139,6 +139,8 @@
     <string name="pref_chimanew_artwork_waterfall">Artwork Sources &amp; Priority</string>
     <string name="pref_chimanew_artwork_waterfall_summary">Reorder or disable artwork providers (Naver, Kuaikan, AniList, Kitsu, MangaDex)</string>
     <string name="pref_chimanew_artwork_priority_screen_title">Artwork Sources &amp; Priority</string>
+    <string name="pref_chimanew_artwork_provider_default">Default (Source / Extension)</string>
+    <string name="pref_chimanew_artwork_provider_default_desc">Original artwork provided directly by the manga source or extension</string>
     <string name="pref_chimanew_artwork_provider_naver">Naver Webtoon</string>
     <string name="pref_chimanew_artwork_provider_naver_desc">Authentic Korean banners &amp; official webtoon key visuals</string>
     <string name="pref_chimanew_artwork_provider_kuaikan">Kuaikan Manhua</string>

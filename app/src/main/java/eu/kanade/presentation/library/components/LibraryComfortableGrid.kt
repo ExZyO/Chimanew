@@ -55,7 +55,7 @@ internal fun LibraryComfortableGrid(
             val highResCover by produceState<String?>(
                 initialValue = if (useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title
-                    waterfallRepo.getCached(mTitle)?.posterUrl
+                    waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl)?.posterUrl
                 } else null,
                 manga.id,
                 useAnilistArtwork,
@@ -64,12 +64,12 @@ internal fun LibraryComfortableGrid(
             ) {
                 if (useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title
-                    val cached = waterfallRepo.getCached(mTitle)?.posterUrl
+                    val cached = waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl)?.posterUrl
                     if (cached != null) {
                         value = cached
                     } else {
                         val resolved = withContext(Dispatchers.IO) {
-                            waterfallRepo.resolveArtwork(mTitle, mangaId = manga.id)
+                            waterfallRepo.resolveArtwork(mTitle, mangaId = manga.id, defaultCoverUrl = manga.thumbnailUrl)
                         }
                         value = resolved.posterUrl
                     }

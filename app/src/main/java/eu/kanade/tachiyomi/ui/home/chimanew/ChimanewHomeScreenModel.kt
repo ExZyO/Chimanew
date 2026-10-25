@@ -268,12 +268,13 @@ class ChimanewHomeScreenModel(
 
                 fun getArtwork(mangaId: Long, title: String): UnifiedArtwork? {
                     if (!prefs.useAnilistArtwork) return null
-                    var cachedUnified = artworkWaterfallRepository.getCached(title)
+                    val defaultCoverUrl = libraryByMangaId[mangaId]?.manga?.thumbnailUrl
+                    var cachedUnified = artworkWaterfallRepository.getCached(title, defaultCoverUrl = defaultCoverUrl)
                     if (cachedUnified == null) {
                         val libManga = libraryByMangaId[mangaId]
                         val og = libManga?.manga?.ogTitle
                         if (!og.isNullOrBlank() && og != title) {
-                            cachedUnified = artworkWaterfallRepository.getCached(og)
+                            cachedUnified = artworkWaterfallRepository.getCached(og, defaultCoverUrl = defaultCoverUrl)
                         }
                     }
                     if (cachedUnified != null) return cachedUnified
@@ -315,7 +316,7 @@ class ChimanewHomeScreenModel(
                                 },
                             ),
                         )
-                        val effective = artworkWaterfallRepository.getEffectiveArtwork(alArtwork)
+                        val effective = artworkWaterfallRepository.getEffectiveArtwork(alArtwork, defaultCoverUrl = defaultCoverUrl)
                         artworkWaterfallRepository.putCached(title, alArtwork)
                         return effective
                     }

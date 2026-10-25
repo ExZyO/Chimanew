@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImagePainter
 import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
 import eu.kanade.presentation.manga.components.MangaCover.Companion.COVER_TEMPLATE_SIZE_BIG
 import eu.kanade.presentation.manga.components.MangaCover.Companion.COVER_TEMPLATE_SIZE_MEDIUM
 import eu.kanade.presentation.manga.components.MangaCover.Companion.COVER_TEMPLATE_SIZE_NORMAL
@@ -146,6 +147,12 @@ enum class MangaCover(val ratio: Float) {
                     when (data) {
                         is Manga -> onCoverLoaded(data.asMangaCover(), result)
                         is DomainMangaCover -> onCoverLoaded(data, result)
+                        is ImageRequest -> {
+                            when (val d = data.data) {
+                                is Manga -> onCoverLoaded(d.asMangaCover(), result)
+                                is DomainMangaCover -> onCoverLoaded(d, result)
+                            }
+                        }
                     }
                 }
             },

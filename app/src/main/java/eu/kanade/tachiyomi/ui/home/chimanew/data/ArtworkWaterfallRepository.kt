@@ -176,27 +176,35 @@ class ArtworkWaterfallRepository(
 
     fun isCached(title: String): Boolean = cache.containsKey(cleanTitle(title))
 
-    fun getEffectiveArtwork(raw: UnifiedArtwork): UnifiedArtwork {
+    fun getEffectiveArtwork(raw: UnifiedArtwork, defaultCoverUrl: String? = null): UnifiedArtwork {
         val bannerOrder = parsePriorityOrder(
             preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
+            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "BOOKWALKER", "ANILIST", "KITSU", "DEFAULT"),
         )
         val coverOrder = parsePriorityOrder(
             preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU"),
+            allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
         )
+
+        val defaultCover = defaultCoverUrl?.takeIf { it.isNotBlank() }
+            ?: raw.allAvailableCovers.firstOrNull { it.source.equals("Default", ignoreCase = true) }?.url
 
         var effectiveBanner: String? = null
         for (provider in bannerOrder) {
-            val banner = raw.bannerOptions.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
-                ?: when (provider) {
-                    "NAVER" -> raw.allAvailableBanners.firstOrNull { it.contains("pstatic", ignoreCase = true) || it.contains("naver", ignoreCase = true) }
-                    "KUAIKAN" -> raw.allAvailableBanners.firstOrNull { it.contains("kkmh", ignoreCase = true) || it.contains("kuaikan", ignoreCase = true) }
-                    "BANGUMI" -> raw.allAvailableBanners.firstOrNull { it.contains("bgm.tv", ignoreCase = true) || it.contains("bangumi", ignoreCase = true) }
-                    "ANILIST" -> raw.allAvailableBanners.firstOrNull { it.contains("anilist", ignoreCase = true) }
-                    "KITSU" -> raw.allAvailableBanners.firstOrNull { it.contains("kitsu", ignoreCase = true) }
-                    else -> null
+            val banner = when (provider) {
+                "DEFAULT" -> defaultCover
+                else -> {
+                    raw.bannerOptions.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
+                        ?: when (provider) {
+                            "NAVER" -> raw.allAvailableBanners.firstOrNull { it.contains("pstatic", ignoreCase = true) || it.contains("naver", ignoreCase = true) }
+                            "KUAIKAN" -> raw.allAvailableBanners.firstOrNull { it.contains("kkmh", ignoreCase = true) || it.contains("kuaikan", ignoreCase = true) }
+                            "BANGUMI" -> raw.allAvailableBanners.firstOrNull { it.contains("bgm.tv", ignoreCase = true) || it.contains("bangumi", ignoreCase = true) }
+                            "ANILIST" -> raw.allAvailableBanners.firstOrNull { it.contains("anilist", ignoreCase = true) }
+                            "KITSU" -> raw.allAvailableBanners.firstOrNull { it.contains("kitsu", ignoreCase = true) }
+                            else -> null
+                        }
                 }
+            }
             if (!banner.isNullOrBlank() && !banner.contains("bookwalker", ignoreCase = true)) {
                 effectiveBanner = banner
                 break
@@ -205,18 +213,30 @@ class ArtworkWaterfallRepository(
 
         var effectivePoster: String? = null
         for (provider in coverOrder) {
-            val cover = raw.allAvailableCovers.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
-                ?: when (provider) {
-                    "BOOKWALKER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bookwalker", ignoreCase = true) }?.url
-                    "BANGUMI" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bgm.tv", ignoreCase = true) || it.url.contains("bangumi", ignoreCase = true) }?.url
-                    "NAVER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("pstatic", ignoreCase = true) || it.url.contains("naver", ignoreCase = true) }?.url
-                    "KUAIKAN" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kkmh", ignoreCase = true) || it.url.contains("kuaikan", ignoreCase = true) }?.url
-                    else -> null
+            val cover = when (provider) {
+                "DEFAULT" -> defaultCover
+                else -> {
+                    raw.allAvailableCovers.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
+                        ?: when (provider) {
+                            "BOOKWALKER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bookwalker", ignoreCase = true) }?.url
+                            "BANGUMI" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bgm.tv", ignoreCase = true) || it.url.contains("bangumi", ignoreCase = true) }?.url
+                            "NAVER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("pstatic", ignoreCase = true) || it.url.contains("naver", ignoreCase = true) }?.url
+                            "KUAIKAN" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kkmh", ignoreCase = true) || it.url.contains("kuaikan", ignoreCase = true) }?.url
+                            "MANGADEX" -> raw.allAvailableCovers.firstOrNull { it.url.contains("mangadex", ignoreCase = true) }?.url
+                            "ANILIST" -> raw.allAvailableCovers.firstOrNull { it.url.contains("anilist", ignoreCase = true) }?.url
+                            "KITSU" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kitsu", ignoreCase = true) }?.url
+                            else -> null
+                        }
                 }
+            }
             if (!cover.isNullOrBlank()) {
                 effectivePoster = cover
                 break
             }
+        }
+
+        if (effectivePoster.isNullOrBlank() && !defaultCover.isNullOrBlank() && ("DEFAULT" in coverOrder || coverOrder.isEmpty())) {
+            effectivePoster = defaultCover
         }
 
         return raw.copy(
@@ -225,9 +245,9 @@ class ArtworkWaterfallRepository(
         )
     }
 
-    fun getCached(title: String): UnifiedArtwork? {
+    fun getCached(title: String, defaultCoverUrl: String? = null): UnifiedArtwork? {
         val raw = cache[cleanTitle(title)] ?: return null
-        return getEffectiveArtwork(raw)
+        return getEffectiveArtwork(raw, defaultCoverUrl)
     }
 
     fun putCached(title: String, artwork: UnifiedArtwork) {
@@ -244,10 +264,11 @@ class ArtworkWaterfallRepository(
         kitsuRemoteId: Long? = null,
         malRemoteId: Long? = null,
         mangaId: Long? = null,
+        defaultCoverUrl: String? = null,
     ): UnifiedArtwork = withContext(Dispatchers.IO) {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return@withContext UnifiedArtwork()
-        cache[title]?.let { return@withContext getEffectiveArtwork(it) }
+        cache[title]?.let { return@withContext getEffectiveArtwork(it, defaultCoverUrl) }
 
         var effectiveAniListId = anilistRemoteId
         var effectiveKitsuId = kitsuRemoteId
@@ -315,11 +336,11 @@ class ArtworkWaterfallRepository(
         // 2. NAVER WEBTOON (Native Korean Manhwa & LINE Webtoon Global)
         val bannerOrder = parsePriorityOrder(
             preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "BOOKWALKER", "ANILIST", "KITSU"),
+            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "BOOKWALKER", "ANILIST", "KITSU", "DEFAULT"),
         )
         val coverOrder = parsePriorityOrder(
             preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU"),
+            allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
         )
         val isNaverRequested = "NAVER" in bannerOrder || "NAVER" in coverOrder
         val isKuaikanRequested = "KUAIKAN" in bannerOrder || "KUAIKAN" in coverOrder
@@ -445,6 +466,11 @@ class ArtworkWaterfallRepository(
             }
         }
 
+        if (!defaultCoverUrl.isNullOrBlank()) {
+            covers.add(ArtworkCoverOption(url = defaultCoverUrl, source = "Default", subtitle = "Source Cover"))
+            bannerOptions.add(ArtworkBannerOption(url = defaultCoverUrl, source = "DEFAULT"))
+        }
+
         val rawResult = UnifiedArtwork(
             bannerUrl = null,
             posterUrl = null,
@@ -457,7 +483,7 @@ class ArtworkWaterfallRepository(
             cache[title] = rawResult
             scheduleSaveToDisk()
         }
-        val effective = getEffectiveArtwork(rawResult)
+        val effective = getEffectiveArtwork(rawResult, defaultCoverUrl)
         logcat(priority = LogPriority.INFO) { "Resolved waterfall artwork for '$title': banner=${effective.bannerUrl}, cover=${effective.posterUrl}, coversCount=${covers.size}, bannersCount=${banners.size}" }
         return@withContext effective
     }
@@ -483,27 +509,32 @@ class ArtworkWaterfallRepository(
 
         fun parsePriorityOrder(
             raw: String,
-            allowed: List<String> = listOf("NAVER", "KUAIKAN", "BOOKWALKER", "BANGUMI", "ANILIST", "KITSU", "MANGADEX"),
+            allowed: List<String> = listOf("NAVER", "KUAIKAN", "BOOKWALKER", "BANGUMI", "ANILIST", "KITSU", "MANGADEX", "DEFAULT"),
         ): List<String> {
             if (raw.isBlank()) return allowed
             val result = mutableListOf<String>()
+            var anySpecified = false
             for (token in raw.split(",")) {
                 val trimmed = token.trim()
                 if (trimmed.contains(":")) {
                     val parts = trimmed.split(":", limit = 2)
                     val id = parts[0].uppercase()
                     val enabled = parts[1].toBooleanStrictOrNull() ?: true
-                    if (enabled && id in allowed) {
-                        result.add(id)
+                    if (id in allowed) {
+                        anySpecified = true
+                        if (enabled) {
+                            result.add(id)
+                        }
                     }
                 } else if (trimmed.isNotBlank()) {
                     val id = trimmed.uppercase()
                     if (id in allowed) {
+                        anySpecified = true
                         result.add(id)
                     }
                 }
             }
-            return result.ifEmpty { allowed }
+            return if (anySpecified) result else allowed
         }
     }
 }

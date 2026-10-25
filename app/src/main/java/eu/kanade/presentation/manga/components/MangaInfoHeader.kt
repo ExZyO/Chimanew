@@ -192,7 +192,7 @@ fun MangaInfoBox(
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val mangaTitle = remember(manga) { manga.ogTitle ?: manga.title }
     val cachedArtwork = remember(mangaTitle, artworkBannerOrder, artworkCoverOrder, artworkWaterfallOrder) {
-        waterfallRepo.getCached(mangaTitle)
+        waterfallRepo.getCached(mangaTitle, defaultCoverUrl = manga.thumbnailUrl)
     }
 
     val unifiedArtwork by produceState<UnifiedArtwork?>(
@@ -220,20 +220,22 @@ fun MangaInfoBox(
                 anilistRemoteId = anilistTrack?.remoteId?.takeIf { it > 0 },
                 kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
                 malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
+                mangaId = manga.id,
+                defaultCoverUrl = manga.thumbnailUrl,
             )
             value = art
         }
     }
 
-    val chosenArtworkModel: Any? = when {
+    val chosenArtworkModel: Any = when {
         !customBannerUrl.isNullOrBlank() -> customBannerUrl
-        !useAnilistArtwork || unifiedArtwork == null -> if (heroAllowCroppedFallback) manga else null
+        !useAnilistArtwork -> manga
         detailsBackdropArtwork == 0 && !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
         detailsBackdropArtwork == 1 && !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
         detailsBackdropArtwork == 2 -> manga
         !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
-        !unifiedArtwork?.posterUrl.isNullOrBlank() -> if (heroAllowCroppedFallback) unifiedArtwork!!.posterUrl!! else null
-        else -> if (heroAllowCroppedFallback) manga else null
+        !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
+        else -> manga
     }
 
     val ambientArtworkModel: Any = if (useAnilistArtwork && !unifiedArtwork?.posterUrl.isNullOrBlank()) {
@@ -277,7 +279,7 @@ fun MangaInfoBox(
         // EaZy Nuvio+ / Chimanew: resilient fallback to local manga cover if remote banner/artwork fails to load
         var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
         val effectiveArtworkModel = if (artworkLoadFailed) {
-            if (heroAllowCroppedFallback) manga else null
+            manga
         } else {
             chosenArtworkModel
         }
@@ -287,50 +289,31 @@ fun MangaInfoBox(
             when (detailsPageLayout) {
                 0 -> {
                     // MODE 0: Nuvio Hero Edge-to-Edge with 7-Stop Silk Bottom Dissolve
-                    if (effectiveArtworkModel != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(effectiveArtworkModel)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.Center,
-                            onError = {
-                                if (chosenArtworkModel != manga) artworkLoadFailed = true
-                            },
-                            onSuccess = { result ->
-                                val image = result.result.image
-                                if (image.width > 0 && image.height > 0) {
-                                    bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
-                                }
-                                if (effectiveArtworkModel == manga) {
-                                    coverRatio.floatValue = image.height.toFloat() / image.width
-                                }
-                            },
-                            modifier = Modifier
-                                .matchParentSize()
-                                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                                .alpha(backdropAlpha),
-                        )
-                    } else {
-                        // Ambient glow underlay fallback
-                        val underlayModel = ambientArtworkModel
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(underlayModel)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.Center,
-                            modifier = Modifier
-                                .matchParentSize()
-                                .blur(36.dp)
-                                .alpha(0.50f)
-                                .background(surfaceTintColor.copy(alpha = 0.12f)),
-                        )
-                    }
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(effectiveArtworkModel)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        onError = {
+                            if (chosenArtworkModel != manga) artworkLoadFailed = true
+                        },
+                        onSuccess = { result ->
+                            val image = result.result.image
+                            if (image.width > 0 && image.height > 0) {
+                                bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                            }
+                            if (effectiveArtworkModel == manga) {
+                                coverRatio.floatValue = image.height.toFloat() / image.width
+                            }
+                        },
+                        modifier = Modifier
+                            .matchParentSize()
+                            .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                            .alpha(backdropAlpha),
+                    )
 
                     // Scrims drawn ON TOP OF the banner:
                     // 1. Top status bar scrim for text readability
