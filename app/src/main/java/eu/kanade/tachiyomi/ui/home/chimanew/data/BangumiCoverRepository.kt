@@ -20,6 +20,7 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
+import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -88,9 +89,10 @@ class BangumiCoverRepository(
                         ?: first["name_cn"]?.jsonPrimitive?.content
 
                     val imagesObj = first["images"]?.jsonObject
-                    val coverUrl = imagesObj?.get("large")?.jsonPrimitive?.content
+                    val rawCover = imagesObj?.get("large")?.jsonPrimitive?.content
                         ?: imagesObj?.get("common")?.jsonPrimitive?.content
                         ?: first["image"]?.jsonPrimitive?.content
+                    val coverUrl = toHttps(rawCover)
 
                     val ratingObj = first["rating"]?.jsonObject
                     val score = ratingObj?.get("score")?.jsonPrimitive?.floatOrNull
@@ -110,16 +112,14 @@ class BangumiCoverRepository(
                             if (relBody.isNotBlank()) {
                                 val relArray = json.parseToJsonElement(relBody).jsonArray
                                 val animeSubject = relArray.firstOrNull { it.jsonObject["type"]?.jsonPrimitive?.content == "2" }?.jsonObject
-                                val animeImg = animeSubject?.get("images")?.jsonObject?.get("large")?.jsonPrimitive?.content
+                                val rawAnimeImg = animeSubject?.get("images")?.jsonObject?.get("large")?.jsonPrimitive?.content
                                     ?: animeSubject?.get("images")?.jsonObject?.get("common")?.jsonPrimitive?.content
+                                val animeImg = toHttps(rawAnimeImg)
                                 if (!animeImg.isNullOrBlank()) {
                                     bannerUrl = animeImg
                                 }
                             }
                         } catch (_: Exception) {}
-                    }
-                    if (bannerUrl.isNullOrBlank()) {
-                        bannerUrl = coverUrl
                     }
 
                     val artwork = BangumiArtwork(
@@ -131,6 +131,7 @@ class BangumiCoverRepository(
                         subjectId = subjectId,
                     )
                     cache[key] = artwork
+                    logcat(priority = LogPriority.INFO) { "Fetched Bangumi artwork for '$query': cover=$coverUrl, banner=$bannerUrl" }
                     artwork
                 } else {
                     val empty = BangumiArtwork()
@@ -141,18 +142,27 @@ class BangumiCoverRepository(
                 val msg = e.message.orEmpty()
                 if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
                     rateLimitedUntil = System.currentTimeMillis() + 60_000L
-                    logcat(throwable = e) { "Bangumi rate limited (429). Pausing calls for 60s." }
+                    logcat(priority = LogPriority.WARN, throwable = e) { "Bangumi rate limited (429). Pausing calls for 60s." }
                 } else {
-                    logcat(throwable = e) { "Failed to fetch Bangumi artwork for query: $query" }
+                    logcat(priority = LogPriority.INFO, throwable = e) { "Failed to fetch Bangumi artwork for query: $query" }
                 }
                 null
             }
         }
     }
 
+    private fun toHttps(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return if (url.startsWith("http://")) {
+            url.replaceFirst("http://", "https://")
+        } else {
+            url
+        }
+    }
+
     companion object {
         private const val API_URL = "https://api.bgm.tv/v0/search/subjects"
-        private const val USER_AGENT = "Chimanew/2.6.13 (Android; https://github.com/ExZyO/Chimanew)"
+        private const val USER_AGENT = "Chimanew/2.6.15 (Android; https://github.com/ExZyO/Chimanew)"
 
         fun normalizeKey(query: String): String {
             return query.trim().lowercase()

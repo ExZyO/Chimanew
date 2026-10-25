@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
+import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -67,7 +68,7 @@ class KuaikanCoverRepository(
                     val queryClean = query.replace(" ", "").lowercase()
                     val matchedObj = hits.firstOrNull { elem ->
                         val name = elem.jsonObject["title"]?.jsonPrimitive?.content.orEmpty().replace(" ", "").lowercase()
-                        name == queryClean || name.contains(queryClean)
+                        name == queryClean || name.contains(queryClean) || queryClean.contains(name)
                     }?.jsonObject ?: hits.first().jsonObject
 
                     val topicId = matchedObj["id"]?.jsonPrimitive?.content?.toLongOrNull()
@@ -85,6 +86,7 @@ class KuaikanCoverRepository(
                         topicId = topicId,
                     )
                     cache[key] = artwork
+                    logcat(priority = LogPriority.INFO) { "Fetched Kuaikan artwork for '$query': cover=$cleanCover, banner=$cleanBanner" }
                     artwork
                 } else {
                     val empty = KuaikanArtwork()
@@ -95,9 +97,9 @@ class KuaikanCoverRepository(
                 val msg = e.message.orEmpty()
                 if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
                     rateLimitedUntil = System.currentTimeMillis() + 60_000L
-                    logcat(throwable = e) { "Kuaikan Manhua rate limited (429). Pausing calls for 60s." }
+                    logcat(priority = LogPriority.WARN, throwable = e) { "Kuaikan Manhua rate limited (429). Pausing calls for 60s." }
                 } else {
-                    logcat(throwable = e) { "Failed to fetch Kuaikan Manhua artwork for query: $query" }
+                    logcat(priority = LogPriority.INFO, throwable = e) { "Failed to fetch Kuaikan Manhua artwork for query: $query" }
                 }
                 null
             }

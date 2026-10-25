@@ -191,7 +191,7 @@ fun NuvioHeroSection(
                                     .alpha(heroBannerAlpha),
                                 loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
                                 error = {
-                                    if (heroAllowCroppedFallback && bannerImageModel != item.coverData) {
+                                    if (heroAllowCroppedFallback && !heroRequireSelectedArtwork && bannerImageModel != item.coverData) {
                                         SubcomposeAsyncImage(
                                             model = item.coverData,
                                             contentDescription = null,
@@ -208,7 +208,7 @@ fun NuvioHeroSection(
                                             ambientStyle = ambientCanvasStyle,
                                             accentColor = accentColor,
                                             dimBanner = heroDimBanner,
-                                            allowCoverBlur = heroAllowCroppedFallback,
+                                            allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
                                         )
                                     }
                                 },
@@ -219,7 +219,7 @@ fun NuvioHeroSection(
                                 ambientStyle = ambientCanvasStyle,
                                 accentColor = accentColor,
                                 dimBanner = heroDimBanner,
-                                allowCoverBlur = heroAllowCroppedFallback,
+                                allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
                             )
                         }
 
@@ -303,7 +303,7 @@ fun NuvioHeroSection(
                                     .alpha(heroBannerAlpha),
                                 loading = { Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) },
                                 error = {
-                                    if (heroAllowCroppedFallback && bannerImageModel != item.coverData) {
+                                    if (heroAllowCroppedFallback && !heroRequireSelectedArtwork && bannerImageModel != item.coverData) {
                                         SubcomposeAsyncImage(
                                             model = item.coverData,
                                             contentDescription = null,
@@ -319,7 +319,7 @@ fun NuvioHeroSection(
                                             ambientStyle = ambientCanvasStyle,
                                             accentColor = accentColor,
                                             dimBanner = heroDimBanner,
-                                            allowCoverBlur = heroAllowCroppedFallback,
+                                            allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
                                         )
                                     }
                                 },
@@ -330,7 +330,7 @@ fun NuvioHeroSection(
                                 ambientStyle = ambientCanvasStyle,
                                 accentColor = accentColor,
                                 dimBanner = heroDimBanner,
-                                allowCoverBlur = heroAllowCroppedFallback,
+                                allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
                             )
                         }
 
@@ -417,7 +417,7 @@ fun NuvioHeroSection(
                                     )
                                 },
                                 error = {
-                                    if (heroAllowCroppedFallback && bannerImageModel != item.coverData) {
+                                    if (heroAllowCroppedFallback && !heroRequireSelectedArtwork && bannerImageModel != item.coverData) {
                                         SubcomposeAsyncImage(
                                             model = item.coverData,
                                             contentDescription = item.title,
@@ -431,7 +431,7 @@ fun NuvioHeroSection(
                                             ambientStyle = ambientCanvasStyle,
                                             accentColor = accentColor,
                                             dimBanner = heroDimBanner,
-                                            allowCoverBlur = heroAllowCroppedFallback,
+                                            allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
                                         )
                                     }
                                 },
@@ -442,7 +442,7 @@ fun NuvioHeroSection(
                                 ambientStyle = ambientCanvasStyle,
                                 accentColor = accentColor,
                                 dimBanner = heroDimBanner,
-                                allowCoverBlur = heroAllowCroppedFallback,
+                                allowCoverBlur = heroAllowCroppedFallback && !heroRequireSelectedArtwork,
                             )
                         }
 

@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
+import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -104,12 +105,14 @@ class NaverWebtoonCoverRepository(
             val queryClean = query.replace(" ", "").lowercase()
             val matchedObj = webtoonList.firstOrNull { elem ->
                 val name = elem.jsonObject["titleName"]?.jsonPrimitive?.content.orEmpty().replace(" ", "").lowercase()
-                name == queryClean || name.contains(queryClean)
-            }?.jsonObject ?: webtoonList.first().jsonObject
+                name == queryClean || name.contains(queryClean) || queryClean.contains(name)
+            }?.jsonObject ?: if (containsHangul(query)) webtoonList.first().jsonObject else null
 
-            titleId = matchedObj["titleId"]?.jsonPrimitive?.content?.toLongOrNull()
-            thumbnailUrl = matchedObj["thumbnailUrl"]?.jsonPrimitive?.content
-            matchedTitle = matchedObj["titleName"]?.jsonPrimitive?.content
+            if (matchedObj != null) {
+                titleId = matchedObj["titleId"]?.jsonPrimitive?.content?.toLongOrNull()
+                thumbnailUrl = matchedObj["thumbnailUrl"]?.jsonPrimitive?.content
+                matchedTitle = matchedObj["titleName"]?.jsonPrimitive?.content
+            }
         }
 
         if (titleId == null) {
@@ -131,9 +134,13 @@ class NaverWebtoonCoverRepository(
             bannerUrl = fetchNaverMobileHeaderBanner(titleId)
         }
 
+        val bannerHttps = bannerUrl?.replace("http://", "https://")?.ifBlank { null }
+        val coverHttps = thumbnailUrl?.replace("http://", "https://")?.ifBlank { null }
+
+        logcat(priority = LogPriority.INFO) { "Fetched Naver Comic artwork for '$query': cover=$coverHttps, banner=$bannerHttps" }
         return NaverWebtoonArtwork(
-            bannerUrl = bannerUrl?.ifBlank { null },
-            coverUrl = thumbnailUrl?.ifBlank { null },
+            bannerUrl = bannerHttps,
+            coverUrl = coverHttps,
             title = matchedTitle,
             titleId = titleId,
         )
@@ -180,8 +187,14 @@ class NaverWebtoonCoverRepository(
             val response = client.newCall(request).awaitSuccess()
             val html = response.body.string()
 
-            val cardMatch = WEBTOONS_CARD_LINK_REGEX.find(html) ?: return null
-            val seriesUrl = cardMatch.groupValues[1]
+            val cardMatches = WEBTOONS_CARD_LINK_REGEX.findAll(html).toList()
+            if (cardMatches.isEmpty()) return null
+
+            val qClean = query.replace(" ", "").lowercase()
+            val seriesUrl = cardMatches.firstOrNull { m ->
+                val u = m.groupValues[1].lowercase()
+                u.contains(qClean.take(6)) || qClean.split(Regex("""[^a-z0-9]+""")).any { it.length >= 4 && u.contains(it) }
+            }?.groupValues?.get(1) ?: cardMatches.first().groupValues[1]
 
             val seriesReq = GET(
                 seriesUrl,
@@ -193,11 +206,12 @@ class NaverWebtoonCoverRepository(
             val seriesResp = client.newCall(seriesReq).awaitSuccess()
             val seriesHtml = seriesResp.body.string()
 
-            val bannerUrl = WEBTOONS_BG_REGEX.find(seriesHtml)?.groupValues?.get(1)
+            val bannerUrl = WEBTOONS_BG_REGEX.find(seriesHtml)?.groupValues?.get(1)?.replace("http://", "https://")
             val rawCoverUrl = WEBTOONS_COVER_REGEX.find(seriesHtml)?.groupValues?.get(1)
-            val coverUrl = rawCoverUrl?.replace(Regex("""\?type=crop\d+_\d+"""), "?type=q90")
+            val coverUrl = rawCoverUrl?.replace(Regex("""\?type=crop\d+_\d+"""), "?type=q90")?.replace("http://", "https://")
 
             if (bannerUrl != null || coverUrl != null) {
+                logcat(priority = LogPriority.INFO) { "Fetched Webtoons Global artwork for '$query': cover=$coverUrl, banner=$bannerUrl" }
                 NaverWebtoonArtwork(
                     bannerUrl = bannerUrl,
                     coverUrl = coverUrl,
@@ -205,7 +219,7 @@ class NaverWebtoonCoverRepository(
                 )
             } else null
         } catch (e: Exception) {
-            logcat(throwable = e) { "Failed to fetch from Webtoons Global for query: $query" }
+            logcat(priority = LogPriority.INFO, throwable = e) { "Failed to fetch from Webtoons Global for query: $query" }
             null
         }
     }

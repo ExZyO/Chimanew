@@ -264,9 +264,18 @@ class ChimanewHomeScreenModel(
                     anilistCoverRepository.fetchBatchByMalIds(malRemoteIds)
                 }
 
+                val libraryByMangaId = data.libraryList.associateBy { it.manga.id }
+
                 fun getArtwork(mangaId: Long, title: String): UnifiedArtwork? {
                     if (!prefs.useAnilistArtwork) return null
-                    val cachedUnified = artworkWaterfallRepository.getCached(title)
+                    var cachedUnified = artworkWaterfallRepository.getCached(title)
+                    if (cachedUnified == null) {
+                        val libManga = libraryByMangaId[mangaId]
+                        val og = libManga?.manga?.ogTitle
+                        if (!og.isNullOrBlank() && og != title) {
+                            cachedUnified = artworkWaterfallRepository.getCached(og)
+                        }
+                    }
                     if (cachedUnified != null) return cachedUnified
 
                     val mangaTracks = tracksByManga[mangaId]
@@ -348,8 +357,6 @@ class ChimanewHomeScreenModel(
                         description = description,
                     )
                 }
-
-                val libraryByMangaId = data.libraryList.associateBy { it.manga.id }
 
                 val continueReadingItems = if (prefs.showContinue) {
                     distinctHistory.map { h ->

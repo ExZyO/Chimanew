@@ -9,6 +9,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -127,12 +128,19 @@ class ArtworkWaterfallRepository(
                                 ArtworkBannerOption(url, inferredSource)
                             }
                         }
+                        // Purge any BookWalker portrait covers erroneously saved as banners
+                        val cleanBannerOptions = bannersWithOptions.filterNot {
+                            it.source.equals("BOOKWALKER", ignoreCase = true) || it.url.contains("bookwalker", ignoreCase = true)
+                        }
+                        val cleanAllBanners = (entry.allBanners.ifEmpty { bannersWithOptions.map { it.url } }).filterNot {
+                            it.contains("bookwalker", ignoreCase = true)
+                        }
                         cache[title] = UnifiedArtwork(
                             bannerUrl = null,
                             posterUrl = null,
-                            allAvailableBanners = entry.allBanners.ifEmpty { bannersWithOptions.map { it.url } },
+                            allAvailableBanners = cleanAllBanners,
                             allAvailableCovers = entry.allCovers.map { ArtworkCoverOption(it.url, it.source, it.subtitle) },
-                            bannerOptions = bannersWithOptions,
+                            bannerOptions = cleanBannerOptions,
                             ratings = entry.ratings.map { CommunityRating(it.score10, it.score100, it.source) },
                         )
                     }
@@ -171,7 +179,7 @@ class ArtworkWaterfallRepository(
     fun getEffectiveArtwork(raw: UnifiedArtwork): UnifiedArtwork {
         val bannerOrder = parsePriorityOrder(
             preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "BOOKWALKER", "ANILIST", "KITSU"),
+            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
         )
         val coverOrder = parsePriorityOrder(
             preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
@@ -185,12 +193,11 @@ class ArtworkWaterfallRepository(
                     "NAVER" -> raw.allAvailableBanners.firstOrNull { it.contains("pstatic", ignoreCase = true) || it.contains("naver", ignoreCase = true) }
                     "KUAIKAN" -> raw.allAvailableBanners.firstOrNull { it.contains("kkmh", ignoreCase = true) || it.contains("kuaikan", ignoreCase = true) }
                     "BANGUMI" -> raw.allAvailableBanners.firstOrNull { it.contains("bgm.tv", ignoreCase = true) || it.contains("bangumi", ignoreCase = true) }
-                    "BOOKWALKER" -> raw.allAvailableBanners.firstOrNull { it.contains("bookwalker", ignoreCase = true) }
                     "ANILIST" -> raw.allAvailableBanners.firstOrNull { it.contains("anilist", ignoreCase = true) }
                     "KITSU" -> raw.allAvailableBanners.firstOrNull { it.contains("kitsu", ignoreCase = true) }
                     else -> null
                 }
-            if (!banner.isNullOrBlank()) {
+            if (!banner.isNullOrBlank() && !banner.contains("bookwalker", ignoreCase = true)) {
                 effectiveBanner = banner
                 break
             }
@@ -373,28 +380,23 @@ class ArtworkWaterfallRepository(
             (alArt?.nativeTitle != null && containsJapanese(alArt.nativeTitle))
 
         val japaneseQuery = listOfNotNull(
-            alArt?.nativeTitle?.takeIf { containsJapanese(it) },
+            alArt?.nativeTitle,
             alArt?.synonyms?.firstOrNull { containsJapanese(it) },
             title.takeIf { containsJapanese(it) },
             alArt?.romajiTitle,
+            title,
         ).firstOrNull() ?: if (isJapanese || isBangumiRequested || isBookWalkerRequested) title else null
 
         if (japaneseQuery != null) {
-            // BookWalker Japan
+            // BookWalker Japan (Official tankōbon book covers only)
             val bwArt = bookwalkerRepo.getCached(japaneseQuery) ?: bookwalkerRepo.fetchArtwork(japaneseQuery)
             bwArt?.coverUrl?.let {
                 if (it.isNotBlank()) {
                     covers.add(ArtworkCoverOption(url = it, source = "BookWalker", subtitle = "Official Tankōbon Art"))
                 }
             }
-            bwArt?.bannerUrl?.let {
-                if (it.isNotBlank()) {
-                    banners.add(it)
-                    bannerOptions.add(ArtworkBannerOption(it, "BOOKWALKER"))
-                }
-            }
 
-            // Bangumi (bgm.tv)
+            // Bangumi (bgm.tv - Official Series Art & Anime Adaptation Banners)
             val bgmArt = bangumiRepo.getCached(japaneseQuery) ?: bangumiRepo.fetchArtwork(japaneseQuery)
             bgmArt?.coverUrl?.let {
                 if (it.isNotBlank()) {
@@ -402,7 +404,7 @@ class ArtworkWaterfallRepository(
                 }
             }
             bgmArt?.bannerUrl?.let {
-                if (it.isNotBlank()) {
+                if (it.isNotBlank() && it != bgmArt.coverUrl) {
                     banners.add(it)
                     bannerOptions.add(ArtworkBannerOption(it, "BANGUMI"))
                 }
@@ -455,13 +457,15 @@ class ArtworkWaterfallRepository(
             cache[title] = rawResult
             scheduleSaveToDisk()
         }
-        return@withContext getEffectiveArtwork(rawResult)
+        val effective = getEffectiveArtwork(rawResult)
+        logcat(priority = LogPriority.INFO) { "Resolved waterfall artwork for '$title': banner=${effective.bannerUrl}, cover=${effective.posterUrl}, coversCount=${covers.size}, bannersCount=${banners.size}" }
+        return@withContext effective
     }
 
     companion object {
         private val HANGUL_REGEX = Regex("""[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]""")
         private val HANZI_REGEX = Regex("""[\u4E00-\u9FFF\u3400-\u4DBF]""")
-        private val JAPANESE_REGEX = Regex("""[\u3040-\u309F\u30A0-\u30FF]""")
+        private val JAPANESE_REGEX = Regex("""[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]""")
 
         fun containsHangul(text: String): Boolean = HANGUL_REGEX.containsMatchIn(text)
         fun containsHanzi(text: String): Boolean = HANZI_REGEX.containsMatchIn(text)

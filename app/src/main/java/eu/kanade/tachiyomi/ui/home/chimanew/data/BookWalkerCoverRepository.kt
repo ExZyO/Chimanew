@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import okhttp3.OkHttpClient
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
@@ -43,12 +44,14 @@ class BookWalkerCoverRepository(
         return withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(query.trim(), "UTF-8")
-                // BookWalker Japan search expects 'word' parameter, not 'q'
+                // BookWalker Japan search expects 'word' parameter
                 val searchUrl = "https://bookwalker.jp/search/?word=$encoded"
                 val request = GET(
                     searchUrl,
                     headers = okhttp3.Headers.Builder()
                         .add("User-Agent", USER_AGENT)
+                        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                        .add("Accept-Language", "ja,en-US;q=0.7,en;q=0.3")
                         .build(),
                 )
 
@@ -56,18 +59,24 @@ class BookWalkerCoverRepository(
                 val html = response.body.string()
                 if (html.isBlank()) return@withContext null
 
-                // Extract BookWalker digital cover image ID
-                val match = THUMB_ID_REGEX.find(html) ?: CIMG_ID_REGEX.find(html) ?: RIMG_ID_REGEX.find(html)
-                if (match != null) {
-                    val id = match.groupValues[1]
-                    val hdCoverUrl = "https://c.bookwalker.jp/$id/t_700x780.jpg"
+                // Extract BookWalker digital cover image
+                val thumbMatch = THUMB_ID_REGEX.find(html)
+                val bookId = thumbMatch?.groupValues?.get(1)
+                val coverUrl = if (!bookId.isNullOrBlank()) {
+                    "https://c.bookwalker.jp/thumbnailImage_$bookId.jpg"
+                } else {
+                    DATA_ORIGINAL_REGEX.find(html)?.groupValues?.get(1)
+                }
+
+                if (!coverUrl.isNullOrBlank()) {
                     val artwork = BookWalkerArtwork(
-                        bannerUrl = hdCoverUrl,
-                        coverUrl = hdCoverUrl,
+                        bannerUrl = null, // BookWalker is a manga tankōbon bookstore and only provides portrait covers
+                        coverUrl = coverUrl,
                         title = query,
-                        bookId = id,
+                        bookId = bookId,
                     )
                     cache[key] = artwork
+                    logcat(priority = LogPriority.INFO) { "Fetched BookWalker artwork for '$query': cover=$coverUrl" }
                     artwork
                 } else {
                     val empty = BookWalkerArtwork()
@@ -78,9 +87,9 @@ class BookWalkerCoverRepository(
                 val msg = e.message.orEmpty()
                 if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
                     rateLimitedUntil = System.currentTimeMillis() + 60_000L
-                    logcat(throwable = e) { "BookWalker Japan rate limited (429). Pausing calls for 60s." }
+                    logcat(priority = LogPriority.WARN, throwable = e) { "BookWalker Japan rate limited (429). Pausing calls for 60s." }
                 } else {
-                    logcat(throwable = e) { "Failed to fetch BookWalker artwork for query: $query" }
+                    logcat(priority = LogPriority.INFO, throwable = e) { "Failed to fetch BookWalker artwork for query: $query" }
                 }
                 null
             }
@@ -88,13 +97,12 @@ class BookWalkerCoverRepository(
     }
 
     companion object {
-        // Use non-blocked User-Agent to bypass AWS WAF 202 challenge
+        // Mobile Safari User-Agent bypasses AWS WAF challenge without captcha
         private const val USER_AGENT =
-            "Chimanew/2.6.13 (Android; https://github.com/ExZyO/Chimanew)"
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
         private val THUMB_ID_REGEX = Regex("""thumbnailImage_([a-zA-Z0-9]+)\.jpg""")
-        private val CIMG_ID_REGEX = Regex("""https://c\.bookwalker\.jp/([a-zA-Z0-9]+)/""")
-        private val RIMG_ID_REGEX = Regex("""https://rimg\.bookwalker\.jp/([a-zA-Z0-9]+)/""")
+        private val DATA_ORIGINAL_REGEX = Regex("""data-original=["'](https://c\.bookwalker\.jp/[^"']+)["']""")
 
         fun normalizeKey(query: String): String {
             return query.trim().lowercase()
