@@ -944,6 +944,12 @@ private fun HeroAmbientForegroundContent(
 
             Spacer(modifier = Modifier.height(4.dp))
 
+            val buttonText = if (item.lastChapterNumber != null) {
+                "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
+            } else {
+                "Start Reading"
+            }
+
             // Action Row: Resume Button + Quick Status
             Row(
                 verticalAlignment = Alignment.CenterVertically,
