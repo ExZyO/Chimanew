@@ -44,3 +44,5 @@ UPDATE_GUIDE.md
 /AnkiconnectAndroid
 *.patch
 /docs
+artifacts_*/
+*.apk
