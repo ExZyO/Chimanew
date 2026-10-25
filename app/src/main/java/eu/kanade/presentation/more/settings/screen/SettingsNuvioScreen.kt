@@ -13,6 +13,8 @@ import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.chimanew.ArtworkPriorityCustomizerScreen
 import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.util.system.copyToClipboard
+import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toPersistentMap
@@ -45,6 +47,7 @@ object SettingsNuvioScreen : SearchableSettings {
             getRatingsGroup(chimanewPreferences),
             getDetailsPageGroup(chimanewPreferences),
             getNavbarGroup(chimanewPreferences),
+            getDiagnosticsGroup(chimanewPreferences, navigator),
         )
     }
 
@@ -404,6 +407,71 @@ object SettingsNuvioScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_chimanew_show_ratings_in_details),
                     subtitle = stringResource(MR.strings.pref_chimanew_show_ratings_in_details_summary),
                     enabled = showRatings,
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getDiagnosticsGroup(
+        preferences: ChimanewPreferences,
+        navigator: Navigator,
+    ): Preference.PreferenceGroup {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val enableDiagnostics by preferences.enableDiagnostics().collectPrefAsState()
+
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_chimanew_diagnostics_group),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.enableDiagnostics(),
+                    title = stringResource(MR.strings.pref_chimanew_enable_diagnostics),
+                    subtitle = stringResource(MR.strings.pref_chimanew_enable_diagnostics_summary),
+                ),
+                Preference.PreferenceItem.MultiSelectListPreference(
+                    preference = preferences.diagnosticCategories(),
+                    entries = persistentMapOf(
+                        "network" to stringResource(MR.strings.pref_chimanew_diag_cat_network),
+                        "artwork" to stringResource(MR.strings.pref_chimanew_diag_cat_artwork),
+                        "hero" to stringResource(MR.strings.pref_chimanew_diag_cat_hero),
+                        "details" to stringResource(MR.strings.pref_chimanew_diag_cat_details),
+                        "shelves" to stringResource(MR.strings.pref_chimanew_diag_cat_shelves),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_diagnostic_categories),
+                    subtitle = stringResource(MR.strings.pref_chimanew_diagnostic_categories_summary),
+                    enabled = enableDiagnostics,
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_chimanew_view_diagnostics),
+                    subtitle = stringResource(MR.strings.pref_chimanew_view_diagnostics_summary),
+                    enabled = enableDiagnostics,
+                    onClick = {
+                        navigator.push(eu.kanade.presentation.more.settings.screen.debug.ChimanewDiagnosticLogViewerScreen())
+                    },
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_chimanew_copy_diagnostics),
+                    subtitle = stringResource(MR.strings.pref_chimanew_copy_diagnostics_summary),
+                    enabled = enableDiagnostics,
+                    onClick = {
+                        val text = eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.exportText()
+                        if (text.isBlank()) {
+                            context.toast(MR.strings.pref_chimanew_diagnostics_empty)
+                        } else {
+                            val count = eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.getLogs().size
+                            context.copyToClipboard("Nuvio Diagnostics", text)
+                            context.toast(context.getString(MR.strings.pref_chimanew_diagnostics_copied, count))
+                        }
+                    },
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_chimanew_clear_diagnostics),
+                    subtitle = stringResource(MR.strings.pref_chimanew_clear_diagnostics_summary),
+                    enabled = enableDiagnostics,
+                    onClick = {
+                        eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.clear()
+                        context.toast(MR.strings.pref_chimanew_diagnostics_cleared)
+                    },
                 ),
             ),
         )

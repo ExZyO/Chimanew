@@ -55,6 +55,8 @@ import eu.kanade.presentation.manga.components.CommunityRatingBadge
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -112,11 +114,25 @@ fun NuvioHeroSection(
                 val bannerPass = if (enforceBanner) hasBanner else true
                 val coverPass = if (enforceCover && heroStyle != 1) hasCover else true
 
-                if (!enforceBanner && !enforceCover) {
+                val accepted = if (!enforceBanner && !enforceCover) {
                     hasBanner || hasCover
                 } else {
                     bannerPass && coverPass
                 }
+
+                ChimanewDiagnostics.log(DiagnosticCategory.HERO, "StrictFilter") {
+                    val status = if (accepted) "[ACCEPTED]" else "[REJECTED]"
+                    val reason = when {
+                        accepted -> "All requirements satisfied (hasBanner=$hasBanner, hasCover=$hasCover)"
+                        !bannerPass && !coverPass -> "Missing BOTH authentic banner AND valid cover"
+                        !bannerPass -> "Missing authentic wide banner (banner=${item.highResBannerUrl})"
+                        !coverPass -> "Missing valid cover from active sources"
+                        else -> "Filtered by strict layout constraints"
+                    }
+                    "$status '${item.title}' (id=${item.mangaId}) -> $reason"
+                }
+
+                accepted
             }
         }
     }
@@ -187,6 +203,15 @@ fun NuvioHeroSection(
                 heroArtworkPairing == 1 -> posterImageModel // Unified: same cover for both
                 heroAllowCroppedFallback -> posterImageModel
                 else -> null
+            }
+            ChimanewDiagnostics.log(DiagnosticCategory.HERO, "BannerModel") {
+                val bannerType = when {
+                    bannerImageModel == null -> "NULL (Strict rejection / no fallback)"
+                    bannerImageModel == item.highResBannerUrl -> "Authentic HD Banner"
+                    bannerImageModel == posterImageModel -> "Cover Cropped/Blurred Fallback"
+                    else -> "Model: $bannerImageModel"
+                }
+                "'${item.title}' banner set to $bannerType"
             }
 
             Box(

@@ -201,6 +201,26 @@
     <string name="pref_chimanew_enable_anime_summary">Show anime library, browse anime sources, and run background updates</string>
     <string name="pref_chimanew_enable_novels_title">Light novel section</string>
     <string name="pref_chimanew_enable_novels_summary">Show novel library, browse novel sources, and run background updates</string>
+    <!-- EaZy Nuvio+ / Chimanew: Diagnostics & Logs -->
+    <string name="pref_chimanew_diagnostics_group">Diagnostics &amp; Logs</string>
+    <string name="pref_chimanew_enable_diagnostics">Enable Detailed Diagnostics</string>
+    <string name="pref_chimanew_enable_diagnostics_summary">Record internal operations across artwork, hero, details, and shelves to Logcat and memory</string>
+    <string name="pref_chimanew_diagnostic_categories">Active Diagnostic Modules</string>
+    <string name="pref_chimanew_diagnostic_categories_summary">Choose which subsystems record diagnostic events (%s)</string>
+    <string name="pref_chimanew_diag_cat_network">Network &amp; API Payloads</string>
+    <string name="pref_chimanew_diag_cat_artwork">Artwork Waterfall &amp; Caching</string>
+    <string name="pref_chimanew_diag_cat_hero">Hero Carousel &amp; Strict Mode</string>
+    <string name="pref_chimanew_diag_cat_details">Details Page &amp; Backdrops</string>
+    <string name="pref_chimanew_diag_cat_shelves">Home Shelves &amp; Trackers</string>
+    <string name="pref_chimanew_view_diagnostics">Open Diagnostic Log Viewer</string>
+    <string name="pref_chimanew_view_diagnostics_summary">Inspect, filter, and export recent log events in real time</string>
+    <string name="pref_chimanew_copy_diagnostics">Copy Diagnostic Logs</string>
+    <string name="pref_chimanew_copy_diagnostics_summary">Copy all current in-memory log entries to clipboard</string>
+    <string name="pref_chimanew_clear_diagnostics">Clear Diagnostic Logs</string>
+    <string name="pref_chimanew_clear_diagnostics_summary">Wipe all log events currently retained in the rolling buffer</string>
+    <string name="pref_chimanew_diagnostics_cleared">Diagnostic logs cleared</string>
+    <string name="pref_chimanew_diagnostics_copied">Copied %d diagnostic log events to clipboard</string>
+    <string name="pref_chimanew_diagnostics_empty">No diagnostic log events recorded yet</string>
     <string name="label_more">More</string>
     <string name="label_settings">Settings</string>
     <string name="label_download_queue">Download queue</string>

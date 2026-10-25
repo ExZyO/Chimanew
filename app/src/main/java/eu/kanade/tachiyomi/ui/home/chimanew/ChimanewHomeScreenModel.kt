@@ -31,6 +31,8 @@ import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.track.model.Track
 import tachiyomi.domain.track.repository.TrackRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -426,6 +428,9 @@ class ChimanewHomeScreenModel(
                             }
                         }
                     }
+                    ChimanewDiagnostics.log(DiagnosticCategory.SHELVES, "Trackers") {
+                        "Grouped library trackers: Reading=${readingList.size}, PlanToRead=${planToReadList.size}, OnHold=${onHoldList.size}, Completed=${completedList.size}, Dropped=${droppedList.size}, NotTracked=${notTrackedList.size}"
+                    }
                 }
 
                 fun hasRequiredHeroArtwork(mangaId: Long, title: String, heroStyle: Int): Boolean {
@@ -439,11 +444,18 @@ class ChimanewHomeScreenModel(
                     val bannerPass = if (enforceBanner) hasBanner else true
                     val coverPass = if (enforceCover && heroStyle != 1) hasCover else true
 
-                    return if (!enforceBanner && !enforceCover) {
+                    val pass = if (!enforceBanner && !enforceCover) {
                         hasBanner || hasCover
                     } else {
                         bannerPass && coverPass
                     }
+
+                    ChimanewDiagnostics.log(DiagnosticCategory.HERO, "Candidate") {
+                        val status = if (pass) "[PASS]" else "[FAIL]"
+                        "$status '$title' (id=$mangaId): hasBanner=$hasBanner, hasCover=$hasCover, reqs=${prefs.heroStrictArtworkRequirements}"
+                    }
+
+                    return pass
                 }
 
                 val heroItems = if (!prefs.showHero) {

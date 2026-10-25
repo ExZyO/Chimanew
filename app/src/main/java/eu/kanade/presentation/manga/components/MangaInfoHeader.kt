@@ -238,6 +238,22 @@ fun MangaInfoBox(
         else -> manga
     }
 
+    androidx.compose.runtime.LaunchedEffect(chosenArtworkModel, manga.id) {
+        eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.log(
+            eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory.DETAILS,
+            "Backdrop",
+        ) {
+            val type = when {
+                chosenArtworkModel == manga -> "Default Library Cover (manga.thumbnailUrl)"
+                chosenArtworkModel == customBannerUrl -> "Custom User Banner ($customBannerUrl)"
+                chosenArtworkModel == unifiedArtwork?.bannerUrl -> "Authentic HD Banner (${unifiedArtwork?.bannerUrl})"
+                chosenArtworkModel == unifiedArtwork?.posterUrl -> "HD Poster (${unifiedArtwork?.posterUrl})"
+                else -> "Model: $chosenArtworkModel"
+            }
+            "Details opened for '${manga.title}' (id=${manga.id}) -> Backdrop resolved to $type"
+        }
+    }
+
     val ambientArtworkModel: Any = if (useAnilistArtwork && !unifiedArtwork?.posterUrl.isNullOrBlank()) {
         unifiedArtwork!!.posterUrl!!
     } else {

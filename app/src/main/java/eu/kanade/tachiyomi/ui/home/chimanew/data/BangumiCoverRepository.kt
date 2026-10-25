@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.jsonMime
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -131,14 +133,23 @@ class BangumiCoverRepository(
                         subjectId = subjectId,
                     )
                     cache[key] = artwork
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Bangumi") {
+                        "Found Bangumi artwork for '$query': banner=$bannerUrl, cover=$coverUrl, score=$score"
+                    }
                     logcat(priority = LogPriority.INFO) { "Fetched Bangumi artwork for '$query': cover=$coverUrl, banner=$bannerUrl" }
                     artwork
                 } else {
                     val empty = BangumiArtwork()
                     cache[key] = empty
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Bangumi") {
+                        "No Bangumi hits for '$query'"
+                    }
                     empty
                 }
             } catch (e: Exception) {
+                ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Bangumi", e) {
+                    "Failed to fetch Bangumi artwork for '$query': ${e.message}"
+                }
                 val msg = e.message.orEmpty()
                 if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
                     rateLimitedUntil = System.currentTimeMillis() + 60_000L

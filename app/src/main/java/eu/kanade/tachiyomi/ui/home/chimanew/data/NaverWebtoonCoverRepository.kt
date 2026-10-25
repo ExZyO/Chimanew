@@ -4,6 +4,8 @@ package eu.kanade.tachiyomi.ui.home.chimanew.data
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -52,6 +54,9 @@ class NaverWebtoonCoverRepository(
                 val naverResult = fetchFromNaverComic(query)
                 if (naverResult != null && (naverResult.bannerUrl != null || naverResult.coverUrl != null)) {
                     cache[key] = naverResult
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Naver") {
+                        "Found Naver Comic artwork for '$query': banner=${naverResult.bannerUrl}, cover=${naverResult.coverUrl}"
+                    }
                     return@withContext naverResult
                 }
 
@@ -59,13 +64,22 @@ class NaverWebtoonCoverRepository(
                 val globalResult = fetchFromWebtoonsGlobal(query)
                 if (globalResult != null && (globalResult.bannerUrl != null || globalResult.coverUrl != null)) {
                     cache[key] = globalResult
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "NaverGlobal") {
+                        "Found Webtoons Global artwork for '$query': banner=${globalResult.bannerUrl}, cover=${globalResult.coverUrl}"
+                    }
                     return@withContext globalResult
                 }
 
                 val empty = NaverWebtoonArtwork()
                 cache[key] = empty
+                ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Naver") {
+                    "No Naver artwork found for '$query'"
+                }
                 empty
             } catch (e: Exception) {
+                ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Naver", e) {
+                    "Failed to fetch Naver Webtoon artwork for '$query': ${e.message}"
+                }
                 val msg = e.message.orEmpty()
                 if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
                     rateLimitedUntil = System.currentTimeMillis() + 60_000L

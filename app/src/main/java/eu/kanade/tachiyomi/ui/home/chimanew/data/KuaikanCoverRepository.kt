@@ -4,6 +4,8 @@ package eu.kanade.tachiyomi.ui.home.chimanew.data
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -86,14 +88,23 @@ class KuaikanCoverRepository(
                         topicId = topicId,
                     )
                     cache[key] = artwork
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kuaikan") {
+                        "Found Kuaikan artwork for '$query': banner=$cleanBanner, cover=$cleanCover"
+                    }
                     logcat(priority = LogPriority.INFO) { "Fetched Kuaikan artwork for '$query': cover=$cleanCover, banner=$cleanBanner" }
                     artwork
                 } else {
                     val empty = KuaikanArtwork()
                     cache[key] = empty
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kuaikan") {
+                        "No Kuaikan artwork hits for '$query'"
+                    }
                     empty
                 }
             } catch (e: Exception) {
+                ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kuaikan", e) {
+                    "Failed to fetch Kuaikan artwork for '$query': ${e.message}"
+                }
                 val msg = e.message.orEmpty()
                 if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
                     rateLimitedUntil = System.currentTimeMillis() + 60_000L

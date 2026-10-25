@@ -4,6 +4,8 @@ package eu.kanade.tachiyomi.ui.home.chimanew.data
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
@@ -76,14 +78,23 @@ class BookWalkerCoverRepository(
                         bookId = bookId,
                     )
                     cache[key] = artwork
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "BookWalker") {
+                        "Found BookWalker cover for '$query': cover=$coverUrl (bookId=$bookId)"
+                    }
                     logcat(priority = LogPriority.INFO) { "Fetched BookWalker artwork for '$query': cover=$coverUrl" }
                     artwork
                 } else {
                     val empty = BookWalkerArtwork()
                     cache[key] = empty
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "BookWalker") {
+                        "No BookWalker cover found for '$query'"
+                    }
                     empty
                 }
             } catch (e: Exception) {
+                ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "BookWalker", e) {
+                    "Failed to fetch BookWalker artwork for '$query': ${e.message}"
+                }
                 val msg = e.message.orEmpty()
                 if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
                     rateLimitedUntil = System.currentTimeMillis() + 60_000L

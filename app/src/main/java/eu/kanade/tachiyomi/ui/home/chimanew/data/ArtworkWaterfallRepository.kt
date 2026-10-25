@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.ui.home.chimanew.data
 
 import android.app.Application
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -242,7 +244,11 @@ class ArtworkWaterfallRepository(
 
     fun getCached(title: String, defaultCoverUrl: String? = null): UnifiedArtwork? {
         val raw = cache[cleanTitle(title)] ?: return null
-        return getEffectiveArtwork(raw, defaultCoverUrl)
+        val effective = getEffectiveArtwork(raw, defaultCoverUrl)
+        ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Cache") {
+            "Memory cache HIT for '$title': banner=${effective?.bannerUrl}, poster=${effective?.posterUrl}"
+        }
+        return effective
     }
 
     fun putCached(title: String, artwork: UnifiedArtwork) {
@@ -263,7 +269,17 @@ class ArtworkWaterfallRepository(
     ): UnifiedArtwork = withContext(Dispatchers.IO) {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return@withContext UnifiedArtwork()
-        cache[title]?.let { return@withContext getEffectiveArtwork(it, defaultCoverUrl) }
+        cache[title]?.let {
+            val cached = getEffectiveArtwork(it, defaultCoverUrl)
+            ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
+                "Resolved from cache for '$title': banner=${cached?.bannerUrl}, poster=${cached?.posterUrl}"
+            }
+            return@withContext cached
+        }
+
+        ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
+            "Starting network discovery for '$rawTitle' (clean='$title', mangaId=$mangaId, AL=$anilistRemoteId, MAL=$malRemoteId, Kitsu=$kitsuRemoteId, defaultCover=${!defaultCoverUrl.isNullOrBlank()})"
+        }
 
         var effectiveAniListId = anilistRemoteId
         var effectiveKitsuId = kitsuRemoteId
@@ -479,6 +495,9 @@ class ArtworkWaterfallRepository(
             scheduleSaveToDisk()
         }
         val effective = getEffectiveArtwork(rawResult, defaultCoverUrl)
+        ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
+            "Network discovery completed for '$title' -> banner=${effective.bannerUrl}, cover=${effective.posterUrl} (covers=${covers.size}, banners=${banners.size})"
+        }
         logcat(priority = LogPriority.INFO) { "Resolved waterfall artwork for '$title': banner=${effective.bannerUrl}, cover=${effective.posterUrl}, coversCount=${covers.size}, bannersCount=${banners.size}" }
         return@withContext effective
     }

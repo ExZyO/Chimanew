@@ -117,4 +117,11 @@ class ChimanewPreferences(
     // Media sections toggle // EaZy Nuvio+ / Chimanew
     fun enableAnimeModule() = preferenceStore.getBoolean("pref_chimanew_enable_anime", true)
     fun enableNovelModule() = preferenceStore.getBoolean("pref_chimanew_enable_novels", true)
+
+    // Diagnostics & Logs // EaZy Nuvio+ / Chimanew
+    fun enableDiagnostics() = preferenceStore.getBoolean("pref_chimanew_enable_diagnostics", false)
+    fun diagnosticCategories() = preferenceStore.getStringSet(
+        "pref_chimanew_diagnostic_categories",
+        setOf("network", "artwork", "hero", "details", "shelves"),
+    )
 }
