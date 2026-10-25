@@ -51,6 +51,7 @@ data class PersistedArtworkEntry(
     val allCovers: List<PersistedCoverOption> = emptyList(),
     val bannerOptions: List<PersistedBannerOption> = emptyList(),
     val ratings: List<PersistedRating> = emptyList(),
+    val queriedProviders: List<String> = emptyList(),
 )
 
 data class CommunityRating(
@@ -77,6 +78,7 @@ data class UnifiedArtwork(
     val allAvailableCovers: List<ArtworkCoverOption> = emptyList(),
     val bannerOptions: List<ArtworkBannerOption> = emptyList(),
     val ratings: List<CommunityRating> = emptyList(),
+    val queriedProviders: Set<String> = emptySet(),
 )
 
 class ArtworkWaterfallRepository(
@@ -137,6 +139,19 @@ class ArtworkWaterfallRepository(
                         val cleanAllBanners = (entry.allBanners.ifEmpty { bannersWithOptions.map { it.url } }).filterNot {
                             it.contains("bookwalker", ignoreCase = true)
                         }
+                        val loadedQueried = if (entry.queriedProviders.isNotEmpty()) {
+                            entry.queriedProviders.toSet()
+                        } else {
+                            val inferred = mutableSetOf<String>()
+                            if (bannersWithOptions.any { it.source.equals("ANILIST", true) } || entry.allCovers.any { it.source.equals("AniList", true) }) inferred.add("ANILIST")
+                            if (bannersWithOptions.any { it.source.equals("NAVER", true) } || entry.allCovers.any { it.source.equals("Naver", true) }) inferred.add("NAVER")
+                            if (bannersWithOptions.any { it.source.equals("KUAIKAN", true) } || entry.allCovers.any { it.source.equals("Kuaikan", true) }) inferred.add("KUAIKAN")
+                            if (bannersWithOptions.any { it.source.equals("BANGUMI", true) } || entry.allCovers.any { it.source.equals("Bangumi", true) }) inferred.add("BANGUMI")
+                            if (bannersWithOptions.any { it.source.equals("KITSU", true) } || entry.allCovers.any { it.source.equals("Kitsu", true) }) inferred.add("KITSU")
+                            if (entry.allCovers.any { it.source.equals("BookWalker", true) }) inferred.add("BOOKWALKER")
+                            if (entry.allCovers.any { it.source.equals("MangaDex", true) }) inferred.add("MANGADEX")
+                            inferred
+                        }
                         cache[title] = UnifiedArtwork(
                             bannerUrl = null,
                             posterUrl = null,
@@ -144,6 +159,7 @@ class ArtworkWaterfallRepository(
                             allAvailableCovers = entry.allCovers.map { ArtworkCoverOption(it.url, it.source, it.subtitle) },
                             bannerOptions = cleanBannerOptions,
                             ratings = entry.ratings.map { CommunityRating(it.score10, it.score100, it.source) },
+                            queriedProviders = loadedQueried,
                         )
                     }
                 }
@@ -166,6 +182,7 @@ class ArtworkWaterfallRepository(
                         allCovers = value.allAvailableCovers.map { PersistedCoverOption(it.url, it.source, it.subtitle) },
                         bannerOptions = value.bannerOptions.map { PersistedBannerOption(it.url, it.source) },
                         ratings = value.ratings.map { PersistedRating(it.score10, it.score100, it.source) },
+                        queriedProviders = value.queriedProviders.toList(),
                     )
                 }
                 val content = jsonHelper.encodeToString(snapshot)
@@ -271,6 +288,16 @@ class ArtworkWaterfallRepository(
         }
     }
 
+    fun getActiveBannerOrder(): List<String> = parsePriorityOrder(
+        preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
+        allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
+    )
+
+    fun getActiveCoverOrder(): List<String> = parsePriorityOrder(
+        preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
+        allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
+    )
+
     suspend fun resolveArtwork(
         rawTitle: String,
         anilistRemoteId: Long? = null,
@@ -281,11 +308,33 @@ class ArtworkWaterfallRepository(
     ): UnifiedArtwork = withContext(Dispatchers.IO) {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return@withContext UnifiedArtwork()
+
+        val bannerOrder = getActiveBannerOrder()
+        val coverOrder = getActiveCoverOrder()
+
+        val isNaverRequested = "NAVER" in bannerOrder || "NAVER" in coverOrder
+        val isKuaikanRequested = "KUAIKAN" in bannerOrder || "KUAIKAN" in coverOrder
+        val isBangumiRequested = "BANGUMI" in bannerOrder || "BANGUMI" in coverOrder
+        val isBookWalkerRequested = "BOOKWALKER" in coverOrder
+        val isKitsuRequested = "KITSU" in bannerOrder || "KITSU" in coverOrder
+        val isMangaDexRequested = "MANGADEX" in coverOrder
+        val isAniListRequested = "ANILIST" in bannerOrder || "ANILIST" in coverOrder
+        val needsAsianBridge = isNaverRequested || isKuaikanRequested || isBangumiRequested || isBookWalkerRequested
+
+        val requestedProviders = mutableSetOf<String>()
+        if (isNaverRequested) requestedProviders.add("NAVER")
+        if (isKuaikanRequested) requestedProviders.add("KUAIKAN")
+        if (isBangumiRequested) requestedProviders.add("BANGUMI")
+        if (isBookWalkerRequested) requestedProviders.add("BOOKWALKER")
+        if (isKitsuRequested) requestedProviders.add("KITSU")
+        if (isMangaDexRequested) requestedProviders.add("MANGADEX")
+        if (isAniListRequested) requestedProviders.add("ANILIST")
+
         val cachedEntry = cache[title]
         if (cachedEntry != null) {
-            val cached = getEffectiveArtwork(cachedEntry, defaultCoverUrl)
-            val hasBanner = !cached.bannerUrl.isNullOrBlank()
-            if (hasBanner) {
+            val missingProviders = requestedProviders - cachedEntry.queriedProviders
+            if (missingProviders.isEmpty()) {
+                val cached = getEffectiveArtwork(cachedEntry, defaultCoverUrl)
                 ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
                     "Resolved from cache for '$title': banner=${cached.bannerUrl}, poster=${cached.posterUrl}"
                 }
@@ -293,8 +342,14 @@ class ArtworkWaterfallRepository(
             }
         }
 
+        val missingProviders = if (cachedEntry != null) {
+            requestedProviders - cachedEntry.queriedProviders
+        } else {
+            requestedProviders
+        }
+
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
-            "Starting network discovery for '$rawTitle' (clean='$title', mangaId=$mangaId, AL=$anilistRemoteId, MAL=$malRemoteId, Kitsu=$kitsuRemoteId, defaultCover=${!defaultCoverUrl.isNullOrBlank()})"
+            "Starting network discovery for '$rawTitle' (clean='$title', missing=$missingProviders, AL=$anilistRemoteId, MAL=$malRemoteId, Kitsu=$kitsuRemoteId)"
         }
 
         var effectiveAniListId = anilistRemoteId
@@ -322,174 +377,186 @@ class ArtworkWaterfallRepository(
         val ratings = mutableListOf<CommunityRating>()
 
         // 1. ANILIST (Primary metadata & Rosetta Stone bridge for native Hangul/Hanzi names)
-        var alArt = if (effectiveAniListId != null && effectiveAniListId > 0) {
-            anilistRepo.getCached(effectiveAniListId) ?: anilistRepo.fetchBatch(listOf(effectiveAniListId))[effectiveAniListId]
-        } else null
+        val shouldQueryAniList = ("ANILIST" in missingProviders) || (needsAsianBridge && "ANILIST" !in (cachedEntry?.queriedProviders ?: emptySet()))
+        var alArt = if (shouldQueryAniList) {
+            var art = if (effectiveAniListId != null && effectiveAniListId > 0) {
+                anilistRepo.getCached(effectiveAniListId) ?: anilistRepo.fetchBatch(listOf(effectiveAniListId))[effectiveAniListId]
+            } else null
 
-        if ((alArt == null || (alArt.bannerUrl == null && alArt.extraLargeCoverUrl == null)) && effectiveMalId != null && effectiveMalId > 0) {
-            alArt = anilistRepo.getCachedByMalId(effectiveMalId) ?: anilistRepo.fetchByMalId(effectiveMalId)
-        }
-
-        if (alArt == null || (alArt.bannerUrl == null && alArt.extraLargeCoverUrl == null)) {
-            alArt = anilistRepo.getCachedByTitle(title) ?: anilistRepo.fetchByTitle(title)
-        }
-
-        if (alArt != null && alArt.countryOfOrigin == null) {
-            val refreshed = if (effectiveAniListId != null && effectiveAniListId > 0) {
-                anilistRepo.fetchBatch(listOf(effectiveAniListId))[effectiveAniListId]
-            } else if (effectiveMalId != null && effectiveMalId > 0) {
-                anilistRepo.fetchByMalId(effectiveMalId)
-            } else {
-                anilistRepo.fetchByTitle(title)
+            if ((art == null || (art.bannerUrl == null && art.extraLargeCoverUrl == null)) && effectiveMalId != null && effectiveMalId > 0) {
+                art = anilistRepo.getCachedByMalId(effectiveMalId) ?: anilistRepo.fetchByMalId(effectiveMalId)
             }
-            if (refreshed != null) alArt = refreshed
+
+            if (art == null || (art.bannerUrl == null && art.extraLargeCoverUrl == null)) {
+                art = anilistRepo.getCachedByTitle(title) ?: anilistRepo.fetchByTitle(title)
+            }
+
+            if (art != null && art.countryOfOrigin == null) {
+                val refreshed = if (effectiveAniListId != null && effectiveAniListId > 0) {
+                    anilistRepo.fetchBatch(listOf(effectiveAniListId))[effectiveAniListId]
+                } else if (effectiveMalId != null && effectiveMalId > 0) {
+                    anilistRepo.fetchByMalId(effectiveMalId)
+                } else {
+                    anilistRepo.fetchByTitle(title)
+                }
+                if (refreshed != null) art = refreshed
+            }
+            art
+        } else {
+            if (effectiveAniListId != null && effectiveAniListId > 0) {
+                anilistRepo.getCached(effectiveAniListId)
+            } else null
         }
 
-        alArt?.bannerUrl?.let {
-            if (it.isNotBlank()) {
-                banners.add(it)
-                bannerOptions.add(ArtworkBannerOption(it, "ANILIST"))
+        // Only register AniList artwork if AniList was requested by the user
+        if (isAniListRequested && "ANILIST" in missingProviders) {
+            alArt?.bannerUrl?.let {
+                if (it.isNotBlank()) {
+                    banners.add(it)
+                    bannerOptions.add(ArtworkBannerOption(it, "ANILIST"))
+                }
             }
-        }
-        alArt?.extraLargeCoverUrl?.let {
-            if (it.isNotBlank()) {
-                covers.add(ArtworkCoverOption(url = it, source = "AniList", subtitle = "HD Poster"))
+            alArt?.extraLargeCoverUrl?.let {
+                if (it.isNotBlank()) {
+                    covers.add(ArtworkCoverOption(url = it, source = "AniList", subtitle = "HD Poster"))
+                }
             }
-        }
-        if (alArt?.score10 != null && alArt.score100 != null) {
-            ratings.add(CommunityRating(score10 = alArt.score10, score100 = alArt.score100, source = "AniList"))
+            if (alArt?.score10 != null && alArt.score100 != null) {
+                ratings.add(CommunityRating(score10 = alArt.score10, score100 = alArt.score100, source = "AniList"))
+            }
         }
 
         // 2. NAVER WEBTOON (Native Korean Manhwa & LINE Webtoon Global)
-        val bannerOrder = parsePriorityOrder(
-            preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
-        )
-        val coverOrder = parsePriorityOrder(
-            preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
-        )
-        val isNaverRequested = "NAVER" in bannerOrder || "NAVER" in coverOrder
-        val isKuaikanRequested = "KUAIKAN" in bannerOrder || "KUAIKAN" in coverOrder
-        val isBangumiRequested = "BANGUMI" in bannerOrder || "BANGUMI" in coverOrder
-        val isBookWalkerRequested = "BOOKWALKER" in bannerOrder || "BOOKWALKER" in coverOrder
+        if (isNaverRequested && "NAVER" in missingProviders) {
+            val isNotJapanese = alArt?.countryOfOrigin != "JP" && !containsJapanese(title)
+            val koreanQuery = listOfNotNull(
+                alArt?.nativeTitle?.takeIf { containsHangul(it) },
+                alArt?.synonyms?.firstOrNull { containsHangul(it) },
+                title.takeIf { containsHangul(it) },
+            ).firstOrNull() ?: if (isNotJapanese) title else null
 
-        val isNotJapanese = alArt?.countryOfOrigin != "JP" && !containsJapanese(title)
-        val koreanQuery = listOfNotNull(
-            alArt?.nativeTitle?.takeIf { containsHangul(it) },
-            alArt?.synonyms?.firstOrNull { containsHangul(it) },
-            title.takeIf { containsHangul(it) },
-        ).firstOrNull() ?: if (isNotJapanese || isNaverRequested) title else null
-
-        if (koreanQuery != null) {
-            val naverArt = naverRepo.getCached(koreanQuery) ?: naverRepo.fetchArtwork(koreanQuery)
-            naverArt?.bannerUrl?.let {
-                if (it.isNotBlank()) {
-                    banners.add(it)
-                    bannerOptions.add(ArtworkBannerOption(it, "NAVER"))
+            if (koreanQuery != null) {
+                val naverArt = naverRepo.getCached(koreanQuery) ?: naverRepo.fetchArtwork(koreanQuery)
+                naverArt?.bannerUrl?.let {
+                    if (it.isNotBlank()) {
+                        banners.add(it)
+                        bannerOptions.add(ArtworkBannerOption(it, "NAVER"))
+                    }
                 }
-            }
-            naverArt?.coverUrl?.let {
-                if (it.isNotBlank()) {
-                    covers.add(ArtworkCoverOption(url = it, source = "Naver", subtitle = "Official Korean Art"))
+                naverArt?.coverUrl?.let {
+                    if (it.isNotBlank()) {
+                        covers.add(ArtworkCoverOption(url = it, source = "Naver", subtitle = "Official Korean Art"))
+                    }
                 }
             }
         }
 
         // 3. KUAIKAN MANHUA (Native Chinese Manhua)
-        val isChinese = alArt?.countryOfOrigin == "CN" ||
-            containsHanzi(title) ||
-            (alArt?.nativeTitle != null && containsHanzi(alArt.nativeTitle))
+        if (isKuaikanRequested && "KUAIKAN" in missingProviders) {
+            val isChinese = alArt?.countryOfOrigin == "CN" ||
+                containsHanzi(title) ||
+                (alArt?.nativeTitle != null && containsHanzi(alArt.nativeTitle))
 
-        val chineseQuery = listOfNotNull(
-            alArt?.nativeTitle?.takeIf { containsHanzi(it) },
-            alArt?.synonyms?.firstOrNull { containsHanzi(it) },
-            title.takeIf { containsHanzi(it) },
-        ).firstOrNull() ?: if (isChinese || isKuaikanRequested) title else null
+            val chineseQuery = listOfNotNull(
+                alArt?.nativeTitle?.takeIf { containsHanzi(it) },
+                alArt?.synonyms?.firstOrNull { containsHanzi(it) },
+                title.takeIf { containsHanzi(it) },
+            ).firstOrNull() ?: if (isChinese) title else null
 
-        if (chineseQuery != null) {
-            val kkArt = kuaikanRepo.getCached(chineseQuery) ?: kuaikanRepo.fetchArtwork(chineseQuery)
-            kkArt?.bannerUrl?.let {
-                if (it.isNotBlank()) {
-                    banners.add(it)
-                    bannerOptions.add(ArtworkBannerOption(it, "KUAIKAN"))
+            if (chineseQuery != null) {
+                val kkArt = kuaikanRepo.getCached(chineseQuery) ?: kuaikanRepo.fetchArtwork(chineseQuery)
+                kkArt?.bannerUrl?.let {
+                    if (it.isNotBlank()) {
+                        banners.add(it)
+                        bannerOptions.add(ArtworkBannerOption(it, "KUAIKAN"))
+                    }
                 }
-            }
-            kkArt?.coverUrl?.let {
-                if (it.isNotBlank()) {
-                    covers.add(ArtworkCoverOption(url = it, source = "Kuaikan", subtitle = "Official Chinese Art"))
+                kkArt?.coverUrl?.let {
+                    if (it.isNotBlank()) {
+                        covers.add(ArtworkCoverOption(url = it, source = "Kuaikan", subtitle = "Official Chinese Art"))
+                    }
                 }
             }
         }
 
         // 4. JAPANESE ARTWORK PROVIDERS (BookWalker Japan & Bangumi)
-        val isJapanese = alArt?.countryOfOrigin == "JP" ||
-            containsJapanese(title) ||
-            (alArt?.nativeTitle != null && containsJapanese(alArt.nativeTitle))
+        if ((isBookWalkerRequested && "BOOKWALKER" in missingProviders) || (isBangumiRequested && "BANGUMI" in missingProviders)) {
+            val isJapanese = alArt?.countryOfOrigin == "JP" ||
+                containsJapanese(title) ||
+                (alArt?.nativeTitle != null && containsJapanese(alArt.nativeTitle))
 
-        val japaneseQuery = listOfNotNull(
-            alArt?.nativeTitle,
-            alArt?.synonyms?.firstOrNull { containsJapanese(it) },
-            title.takeIf { containsJapanese(it) },
-            alArt?.romajiTitle,
-            title,
-        ).firstOrNull() ?: if (isJapanese || isBangumiRequested || isBookWalkerRequested) title else null
+            val japaneseQuery = listOfNotNull(
+                alArt?.nativeTitle?.takeIf { containsJapanese(it) },
+                alArt?.synonyms?.firstOrNull { containsJapanese(it) },
+                title.takeIf { containsJapanese(it) },
+                alArt?.romajiTitle?.takeIf { !containsHangul(it) },
+                title.takeIf { !containsHangul(it) },
+            ).firstOrNull() ?: if (isJapanese) title else null
 
-        if (japaneseQuery != null) {
-            // BookWalker Japan (Official tankōbon book covers only)
-            val bwArt = bookwalkerRepo.getCached(japaneseQuery) ?: bookwalkerRepo.fetchArtwork(japaneseQuery)
-            bwArt?.coverUrl?.let {
-                if (it.isNotBlank()) {
-                    covers.add(ArtworkCoverOption(url = it, source = "BookWalker", subtitle = "Official Tankōbon Art"))
+            if (japaneseQuery != null) {
+                // BookWalker Japan (Official tankōbon book covers only - NEVER pass Hangul!)
+                if (isBookWalkerRequested && "BOOKWALKER" in missingProviders && !containsHangul(japaneseQuery)) {
+                    val bwArt = bookwalkerRepo.getCached(japaneseQuery) ?: bookwalkerRepo.fetchArtwork(japaneseQuery)
+                    bwArt?.coverUrl?.let {
+                        if (it.isNotBlank()) {
+                            covers.add(ArtworkCoverOption(url = it, source = "BookWalker", subtitle = "Official Tankōbon Art"))
+                        }
+                    }
                 }
-            }
 
-            // Bangumi (bgm.tv - Official Series Art & Anime Adaptation Banners)
-            val bgmArt = bangumiRepo.getCached(japaneseQuery) ?: bangumiRepo.fetchArtwork(japaneseQuery)
-            bgmArt?.coverUrl?.let {
-                if (it.isNotBlank()) {
-                    covers.add(ArtworkCoverOption(url = it, source = "Bangumi", subtitle = "Official Series Art"))
+                // Bangumi (bgm.tv - Official Series Art & Anime Adaptation Banners)
+                if (isBangumiRequested && "BANGUMI" in missingProviders) {
+                    val bgmArt = bangumiRepo.getCached(japaneseQuery) ?: bangumiRepo.fetchArtwork(japaneseQuery)
+                    bgmArt?.coverUrl?.let {
+                        if (it.isNotBlank()) {
+                            covers.add(ArtworkCoverOption(url = it, source = "Bangumi", subtitle = "Official Series Art"))
+                        }
+                    }
+                    bgmArt?.bannerUrl?.let {
+                        if (it.isNotBlank() && it != bgmArt.coverUrl) {
+                            banners.add(it)
+                            bannerOptions.add(ArtworkBannerOption(it, "BANGUMI"))
+                        }
+                    }
+                    if (bgmArt?.score10 != null && bgmArt.score100 != null) {
+                        ratings.add(CommunityRating(score10 = bgmArt.score10, score100 = bgmArt.score100, source = "Bangumi"))
+                    }
                 }
-            }
-            bgmArt?.bannerUrl?.let {
-                if (it.isNotBlank() && it != bgmArt.coverUrl) {
-                    banners.add(it)
-                    bannerOptions.add(ArtworkBannerOption(it, "BANGUMI"))
-                }
-            }
-            if (bgmArt?.score10 != null && bgmArt.score100 != null) {
-                ratings.add(CommunityRating(score10 = bgmArt.score10, score100 = bgmArt.score100, source = "Bangumi"))
             }
         }
 
         // 5. KITSU
-        val kitsuArt = if (effectiveKitsuId != null && effectiveKitsuId > 0) {
-            kitsuRepo.getCached(effectiveKitsuId) ?: kitsuRepo.fetchByKitsuId(effectiveKitsuId)
-        } else {
-            kitsuRepo.getCachedByTitle(title) ?: kitsuRepo.fetchByTitle(title)
-        }
+        if (isKitsuRequested && "KITSU" in missingProviders) {
+            val kitsuArt = if (effectiveKitsuId != null && effectiveKitsuId > 0) {
+                kitsuRepo.getCached(effectiveKitsuId) ?: kitsuRepo.fetchByKitsuId(effectiveKitsuId)
+            } else {
+                kitsuRepo.getCachedByTitle(title) ?: kitsuRepo.fetchByTitle(title)
+            }
 
-        kitsuArt?.bannerUrl?.let {
-            if (it.isNotBlank()) {
-                banners.add(it)
-                bannerOptions.add(ArtworkBannerOption(it, "KITSU"))
+            kitsuArt?.bannerUrl?.let {
+                if (it.isNotBlank()) {
+                    banners.add(it)
+                    bannerOptions.add(ArtworkBannerOption(it, "KITSU"))
+                }
             }
-        }
-        kitsuArt?.posterUrl?.let {
-            if (it.isNotBlank()) {
-                covers.add(ArtworkCoverOption(url = it, source = "Kitsu", subtitle = "Official Poster"))
+            kitsuArt?.posterUrl?.let {
+                if (it.isNotBlank()) {
+                    covers.add(ArtworkCoverOption(url = it, source = "Kitsu", subtitle = "Official Poster"))
+                }
             }
-        }
-        if (kitsuArt?.score10 != null && kitsuArt.score100 != null) {
-            ratings.add(CommunityRating(score10 = kitsuArt.score10, score100 = kitsuArt.score100, source = "Kitsu"))
+            if (kitsuArt?.score10 != null && kitsuArt.score100 != null) {
+                ratings.add(CommunityRating(score10 = kitsuArt.score10, score100 = kitsuArt.score100, source = "Kitsu"))
+            }
         }
 
         // 6. MANGADEX
-        val mdArt = mangadexRepo.getCachedByTitle(title) ?: mangadexRepo.fetchCoversByTitle(title)
-        mdArt?.covers?.let { mdCovers ->
-            mdCovers.forEach { c ->
-                val sub = listOfNotNull(c.volume?.let { "Vol. $it" }, c.locale).joinToString(" ").ifBlank { null }
-                covers.add(ArtworkCoverOption(url = c.url, source = "MangaDex", subtitle = sub))
+        if (isMangaDexRequested && "MANGADEX" in missingProviders) {
+            val mdArt = mangadexRepo.getCachedByTitle(title) ?: mangadexRepo.fetchCoversByTitle(title)
+            mdArt?.covers?.let { mdCovers ->
+                mdCovers.forEach { c ->
+                    val sub = listOfNotNull(c.volume?.let { "Vol. $it" }, c.locale).joinToString(" ").ifBlank { null }
+                    covers.add(ArtworkCoverOption(url = c.url, source = "MangaDex", subtitle = sub))
+                }
             }
         }
 
@@ -498,6 +565,7 @@ class ArtworkWaterfallRepository(
             bannerOptions.add(ArtworkBannerOption(url = defaultCoverUrl, source = "DEFAULT"))
         }
 
+        val updatedQueriedProviders = (cachedEntry?.queriedProviders ?: emptySet()) + requestedProviders
         val mergedBanners = (banners + (cachedEntry?.allAvailableBanners ?: emptyList())).distinct()
         val mergedCovers = (covers + (cachedEntry?.allAvailableCovers ?: emptyList())).distinctBy { it.url }
         val mergedBannerOptions = (bannerOptions + (cachedEntry?.bannerOptions ?: emptyList())).distinctBy { it.url }
@@ -510,6 +578,7 @@ class ArtworkWaterfallRepository(
             allAvailableCovers = mergedCovers,
             bannerOptions = mergedBannerOptions,
             ratings = mergedRatings,
+            queriedProviders = updatedQueriedProviders,
         )
         if (mergedBanners.isNotEmpty() || mergedCovers.isNotEmpty() || mergedRatings.isNotEmpty()) {
             cache[title] = rawResult

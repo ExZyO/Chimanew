@@ -4,6 +4,8 @@ package eu.kanade.tachiyomi.ui.home.chimanew.data
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -33,12 +35,18 @@ class KitsuCoverRepository(
     private val titleCache = ConcurrentHashMap<String, KitsuMediaArtwork>()
     private val idCache = ConcurrentHashMap<Long, KitsuMediaArtwork>()
 
+    @Volatile
+    private var rateLimitedUntil: Long = 0L
+
+    private fun isRateLimited(): Boolean = System.currentTimeMillis() < rateLimitedUntil
+
     fun getCached(kitsuId: Long): KitsuMediaArtwork? = idCache[kitsuId]
 
     fun getCachedByTitle(rawTitle: String): KitsuMediaArtwork? = titleCache[cleanTitle(rawTitle)]
 
     suspend fun fetchByKitsuId(kitsuId: Long): KitsuMediaArtwork? {
         idCache[kitsuId]?.let { return it }
+        if (isRateLimited()) return null
         return withContext(Dispatchers.IO) {
             try {
                 val url = "$API_URL/manga/$kitsuId"
@@ -67,6 +75,10 @@ class KitsuCoverRepository(
                 idCache[kitsuId] = artwork
                 artwork
             } catch (e: Exception) {
+                val msg = e.message.orEmpty()
+                if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
+                    rateLimitedUntil = System.currentTimeMillis() + 60_000L
+                }
                 logcat(throwable = e) { "Failed to fetch Kitsu artwork for ID: $kitsuId" }
                 null
             }
@@ -77,6 +89,7 @@ class KitsuCoverRepository(
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return null
         titleCache[title]?.let { return it }
+        if (isRateLimited()) return null
 
         return withContext(Dispatchers.IO) {
             try {
@@ -94,9 +107,13 @@ class KitsuCoverRepository(
                 if (dataArr.isEmpty()) {
                     val empty = KitsuMediaArtwork()
                     titleCache[title] = empty
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kitsu") {
+                        "No Kitsu results returned for '$title'"
+                    }
                     return@withContext null
                 }
 
+                val candidateSummaries = mutableListOf<String>()
                 val matchedObj = dataArr.firstNotNullOfOrNull { item ->
                     val attrs = item.jsonObject["attributes"]?.jsonObject ?: return@firstNotNullOfOrNull null
                     val canonical = attrs["canonicalTitle"]?.jsonPrimitive?.contentOrNull
@@ -104,12 +121,16 @@ class KitsuCoverRepository(
                     val abbrevList = attrs["abbreviatedTitles"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
                     val candidateTitles = listOfNotNull(canonical) + titlesList + abbrevList
 
+                    candidateSummaries.add(canonical ?: "unknown")
                     if (isTitleMatch(title, candidateTitles)) attrs else null
                 }
 
                 if (matchedObj == null) {
                     val empty = KitsuMediaArtwork()
                     titleCache[title] = empty
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kitsu") {
+                        "No title match for '$title' among Kitsu candidates: $candidateSummaries"
+                    }
                     return@withContext null
                 }
 
@@ -125,8 +146,22 @@ class KitsuCoverRepository(
 
                 val artwork = KitsuMediaArtwork(bannerUrl, posterUrl, score10, score100)
                 titleCache[title] = artwork
+                ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kitsu") {
+                    "Found Kitsu match for '$title': canonical='${matchedObj["canonicalTitle"]?.jsonPrimitive?.contentOrNull}', banner=${!bannerUrl.isNullOrBlank()}, poster=${!posterUrl.isNullOrBlank()}"
+                }
                 artwork
             } catch (e: Exception) {
+                val msg = e.message.orEmpty()
+                if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
+                    rateLimitedUntil = System.currentTimeMillis() + 60_000L
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kitsu") {
+                        "Kitsu rate limited (429). Pausing calls for 60s."
+                    }
+                } else {
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kitsu", e) {
+                        "Failed Kitsu search for '$title': ${e.message}"
+                    }
+                }
                 logcat(throwable = e) { "Failed to fetch Kitsu artwork for title: $title" }
                 null
             }

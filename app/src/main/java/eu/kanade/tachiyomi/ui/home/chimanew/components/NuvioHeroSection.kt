@@ -201,8 +201,7 @@ fun NuvioHeroSection(
                 hasBanner && "banner" in heroArtworkSources -> item.highResBannerUrl
                 enforceBanner -> null // Strict banner profile: never fall back to blurring cover if official banner is missing!
                 heroArtworkPairing == 1 -> posterImageModel // Unified: same cover for both
-                heroAllowCroppedFallback -> posterImageModel
-                else -> null
+                else -> posterImageModel // Non-strict fallback: always display cover backdrop so hero is never blank
             }
             ChimanewDiagnostics.log(DiagnosticCategory.HERO, "BannerModel") {
                 val bannerType = when {

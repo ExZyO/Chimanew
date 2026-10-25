@@ -40,6 +40,9 @@ class BookWalkerCoverRepository(
     suspend fun fetchArtwork(query: String): BookWalkerArtwork? {
         val key = normalizeKey(query)
         if (key.isBlank()) return null
+        if (ArtworkWaterfallRepository.containsHangul(query)) {
+            return null
+        }
         cache[key]?.let { return it }
         if (isRateLimited()) return null
 
@@ -92,14 +95,25 @@ class BookWalkerCoverRepository(
                     empty
                 }
             } catch (e: Exception) {
-                ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "BookWalker", e) {
-                    "Failed to fetch BookWalker artwork for '$query': ${e.message}"
-                }
                 val msg = e.message.orEmpty()
-                if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
+                val is404 = msg.contains("404")
+                val is429 = msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)
+                if (is404) {
+                    val empty = BookWalkerArtwork()
+                    cache[key] = empty
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "BookWalker") {
+                        "No BookWalker match for '$query' (404 Not Found)"
+                    }
+                } else if (is429) {
                     rateLimitedUntil = System.currentTimeMillis() + 60_000L
-                    logcat(priority = LogPriority.WARN, throwable = e) { "BookWalker Japan rate limited (429). Pausing calls for 60s." }
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "BookWalker") {
+                        "BookWalker Japan rate limited (429). Pausing calls for 60s."
+                    }
+                    logcat(priority = LogPriority.WARN, throwable = e) { "BookWalker Japan rate limited (429)." }
                 } else {
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "BookWalker", e) {
+                        "Failed to fetch BookWalker artwork for '$query': ${e.message}"
+                    }
                     logcat(priority = LogPriority.INFO, throwable = e) { "Failed to fetch BookWalker artwork for query: $query" }
                 }
                 null

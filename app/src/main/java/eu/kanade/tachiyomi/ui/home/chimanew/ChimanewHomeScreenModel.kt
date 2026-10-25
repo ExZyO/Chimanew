@@ -92,6 +92,8 @@ private data class HeroPrefs(
     val heroArtworkSources: Set<String>,
     val heroTrackerStatuses: Set<String>,
     val artworkWaterfallOrder: String,
+    val artworkBannerOrder: String,
+    val artworkCoverOrder: String,
 )
 
 @Immutable
@@ -124,6 +126,8 @@ private data class NuvioHomePrefs(
     val heroCategories: Set<String>,
     val heroTrackerStatuses: Set<String>,
     val artworkWaterfallOrder: String,
+    val artworkBannerOrder: String,
+    val artworkCoverOrder: String,
     val showContinue: Boolean,
     val showUpdated: Boolean,
     val showCategoryShelves: Boolean,
@@ -151,6 +155,7 @@ class ChimanewHomeScreenModel(
     private val artworkRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
     // EaZy Nuvio+ / Chimanew: prevent infinite re-query loops for hero art
     private val attemptedHeroTitles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private var lastArtworkConfigKey: String? = null
 
     @Immutable
     data class State(
@@ -188,8 +193,12 @@ class ChimanewHomeScreenModel(
                 preferences.useAnilistArtwork().changes(),
                 preferences.heroArtworkSources().changes(),
                 preferences.heroTrackerStatuses().changes(),
-                preferences.artworkWaterfallOrder().changes(),
-            ) { core, useAnilist, artworkSources, trackerStatuses, waterfallOrder ->
+                combine(
+                    preferences.artworkWaterfallOrder().changes(),
+                    preferences.artworkBannerOrder().changes(),
+                    preferences.artworkCoverOrder().changes(),
+                ) { waterfall, banner, cover -> Triple(waterfall, banner, cover) },
+            ) { core, useAnilist, artworkSources, trackerStatuses, orders ->
                 HeroPrefs(
                     showHero = core.showHero,
                     heroSource = core.heroSource,
@@ -199,7 +208,9 @@ class ChimanewHomeScreenModel(
                     useAnilistArtwork = useAnilist,
                     heroArtworkSources = artworkSources,
                     heroTrackerStatuses = trackerStatuses,
-                    artworkWaterfallOrder = waterfallOrder,
+                    artworkWaterfallOrder = orders.first,
+                    artworkBannerOrder = orders.second,
+                    artworkCoverOrder = orders.third,
                 )
             }
 
@@ -235,6 +246,8 @@ class ChimanewHomeScreenModel(
                     heroCategories = cardPrefs.heroCategories,
                     heroTrackerStatuses = heroPrefs.heroTrackerStatuses,
                     artworkWaterfallOrder = heroPrefs.artworkWaterfallOrder,
+                    artworkBannerOrder = heroPrefs.artworkBannerOrder,
+                    artworkCoverOrder = heroPrefs.artworkCoverOrder,
                     showContinue = shelvesPrefs.showContinue,
                     showUpdated = shelvesPrefs.showUpdated,
                     showCategoryShelves = shelvesPrefs.showCategoryShelves,
@@ -248,6 +261,12 @@ class ChimanewHomeScreenModel(
             }
 
             combine(dataFlow, prefsFlow) { data, prefs ->
+                val currentConfigKey = "${prefs.artworkWaterfallOrder}|${prefs.artworkBannerOrder}|${prefs.artworkCoverOrder}|${prefs.heroArtworkSources}|${prefs.heroRequireSelectedArtwork}|${prefs.heroStrictArtworkRequirements}"
+                if (lastArtworkConfigKey != null && lastArtworkConfigKey != currentConfigKey) {
+                    attemptedHeroTitles.clear()
+                }
+                lastArtworkConfigKey = currentConfigKey
+
                 ChimanewDiagnostics.log(DiagnosticCategory.HERO, "Settings") {
                     "Hero Config: strict=${prefs.heroRequireSelectedArtwork}, reqs=${prefs.heroStrictArtworkRequirements}, sources=${prefs.heroArtworkSources}, style=${prefs.heroStyle}"
                 }
@@ -595,13 +614,21 @@ class ChimanewHomeScreenModel(
                 }
 
                 if (prefs.useAnilistArtwork) {
+                    val activeBannerOrder = artworkWaterfallRepository.getActiveBannerOrder()
+                    val activeCoverOrder = artworkWaterfallRepository.getActiveCoverOrder()
+
                     val missingHeroArt = heroItems.filter { item ->
                         val cached = artworkWaterfallRepository.getCached(item.title)
-                        (cached == null || cached.bannerUrl.isNullOrBlank()) && attemptedHeroTitles.add(item.title)
+                        val needsBanner = activeBannerOrder.isNotEmpty() && (cached == null || cached.bannerUrl.isNullOrBlank())
+                        val needsCover = activeCoverOrder.isNotEmpty() && (cached == null || cached.posterUrl.isNullOrBlank())
+                        (cached == null || needsBanner || needsCover) && attemptedHeroTitles.add(item.title)
                     }
                     val missingLibraryArt = data.libraryList.filter { lib ->
                         val mTitle = lib.manga.ogTitle ?: lib.manga.title
-                        !artworkWaterfallRepository.isCached(mTitle) && attemptedHeroTitles.add(mTitle)
+                        val cached = artworkWaterfallRepository.getCached(mTitle)
+                        val needsBanner = activeBannerOrder.isNotEmpty() && (cached == null || cached.bannerUrl.isNullOrBlank())
+                        val needsCover = activeCoverOrder.isNotEmpty() && (cached == null || cached.posterUrl.isNullOrBlank())
+                        (cached == null || needsBanner || needsCover) && attemptedHeroTitles.add(mTitle)
                     }
                     if (missingHeroArt.isNotEmpty() || missingLibraryArt.isNotEmpty()) {
                         screenModelScope.launchIO {

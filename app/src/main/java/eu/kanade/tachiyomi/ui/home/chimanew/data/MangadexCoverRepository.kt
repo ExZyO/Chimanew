@@ -4,6 +4,8 @@ package eu.kanade.tachiyomi.ui.home.chimanew.data
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -38,12 +40,18 @@ class MangadexCoverRepository(
     private val titleCache = ConcurrentHashMap<String, MangadexMediaArtwork>()
     private val idCache = ConcurrentHashMap<String, MangadexMediaArtwork>()
 
+    @Volatile
+    private var rateLimitedUntil: Long = 0L
+
+    private fun isRateLimited(): Boolean = System.currentTimeMillis() < rateLimitedUntil
+
     fun getCached(mangaId: String): MangadexMediaArtwork? = idCache[mangaId]
 
     fun getCachedByTitle(rawTitle: String): MangadexMediaArtwork? = titleCache[cleanTitle(rawTitle)]
 
     suspend fun fetchCoversByMangaId(mangaId: String): MangadexMediaArtwork? {
         idCache[mangaId]?.let { return it }
+        if (isRateLimited()) return null
         return withContext(Dispatchers.IO) {
             try {
                 val url = "$API_URL/cover?manga[]=$mangaId&limit=50&order[volume]=desc"
@@ -69,6 +77,10 @@ class MangadexCoverRepository(
                 idCache[mangaId] = artwork
                 artwork
             } catch (e: Exception) {
+                val msg = e.message.orEmpty()
+                if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
+                    rateLimitedUntil = System.currentTimeMillis() + 60_000L
+                }
                 logcat(throwable = e) { "Failed to fetch MangaDex covers for ID: $mangaId" }
                 null
             }
@@ -79,6 +91,7 @@ class MangadexCoverRepository(
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return null
         titleCache[title]?.let { return it }
+        if (isRateLimited()) return null
 
         return withContext(Dispatchers.IO) {
             try {
@@ -95,9 +108,13 @@ class MangadexCoverRepository(
                 if (dataArr.isEmpty()) {
                     val empty = MangadexMediaArtwork()
                     titleCache[title] = empty
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "MangaDex") {
+                        "No MangaDex results returned for '$title'"
+                    }
                     return@withContext null
                 }
 
+                val candidateSummaries = mutableListOf<String>()
                 val matchedMangaId = dataArr.firstNotNullOfOrNull { item ->
                     val obj = item.jsonObject
                     val id = obj["id"]?.jsonPrimitive?.content ?: return@firstNotNullOfOrNull null
@@ -109,19 +126,37 @@ class MangadexCoverRepository(
                     } ?: emptyList()
 
                     val allCandidateTitles = mainTitles + altTitlesList
+                    candidateSummaries.add(mainTitles.firstOrNull() ?: id)
                     if (isTitleMatch(title, allCandidateTitles)) id else null
                 }
 
                 if (matchedMangaId == null) {
                     val empty = MangadexMediaArtwork()
                     titleCache[title] = empty
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "MangaDex") {
+                        "No title match for '$title' among MangaDex candidates: $candidateSummaries"
+                    }
                     return@withContext null
                 }
 
                 val result = fetchCoversByMangaId(matchedMangaId) ?: MangadexMediaArtwork(matchedMangaId, emptyList())
                 titleCache[title] = result
+                ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "MangaDex") {
+                    "Found ${result.covers.size} MangaDex covers for '$title' (ID: $matchedMangaId)"
+                }
                 result
             } catch (e: Exception) {
+                val msg = e.message.orEmpty()
+                if (msg.contains("429") || msg.contains("Too Many Requests", ignoreCase = true)) {
+                    rateLimitedUntil = System.currentTimeMillis() + 60_000L
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "MangaDex") {
+                        "MangaDex rate limited (429). Pausing calls for 60s."
+                    }
+                } else {
+                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "MangaDex", e) {
+                        "Failed MangaDex search for '$title': ${e.message}"
+                    }
+                }
                 logcat(throwable = e) { "Failed to fetch MangaDex manga search for title: $title" }
                 null
             }
