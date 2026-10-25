@@ -192,7 +192,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                     val allowed = if (selectedTabIndex == 0) {
                         listOf(PROVIDER_MANGADEX, PROVIDER_BOOKWALKER, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_KITSU, PROVIDER_DEFAULT)
                     } else {
-                        listOf(PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_BANGUMI, PROVIDER_BOOKWALKER, PROVIDER_ANILIST, PROVIDER_KITSU, PROVIDER_DEFAULT)
+                        listOf(PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_KITSU)
                     }
 
                     val rawOrder = remember { orderPref.get() }

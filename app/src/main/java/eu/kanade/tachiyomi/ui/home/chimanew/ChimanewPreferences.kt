@@ -83,7 +83,7 @@ class ChimanewPreferences(
 
     fun artworkBannerOrder() = preferenceStore.getString(
         "pref_chimanew_artwork_banner_order",
-        "naver:true,kuaikan:true,bangumi:true,bookwalker:true,anilist:true,kitsu:true,default:true",
+        "naver:true,kuaikan:true,bangumi:true,anilist:true,kitsu:true",
     )
 
     fun artworkCoverOrder() = preferenceStore.getString(

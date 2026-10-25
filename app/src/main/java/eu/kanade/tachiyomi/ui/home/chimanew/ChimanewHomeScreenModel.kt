@@ -557,7 +557,8 @@ class ChimanewHomeScreenModel(
 
                 if (prefs.useAnilistArtwork) {
                     val missingHeroArt = heroItems.filter { item ->
-                        !artworkWaterfallRepository.isCached(item.title) && attemptedHeroTitles.add(item.title)
+                        val cached = artworkWaterfallRepository.getCached(item.title)
+                        (cached == null || cached.bannerUrl.isNullOrBlank()) && attemptedHeroTitles.add(item.title)
                     }
                     val missingLibraryArt = data.libraryList.filter { lib ->
                         val mTitle = lib.manga.ogTitle ?: lib.manga.title
