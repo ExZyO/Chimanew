@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toPersistentMap
+import tachiyomi.core.common.i18n.stringResource as contextStringResource
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -460,7 +461,7 @@ object SettingsNuvioScreen : SearchableSettings {
                         } else {
                             val count = eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.getLogs().size
                             context.copyToClipboard("Nuvio Diagnostics", text)
-                            context.toast(context.getString(MR.strings.pref_chimanew_diagnostics_copied, count))
+                            context.toast(context.contextStringResource(MR.strings.pref_chimanew_diagnostics_copied, count))
                         }
                     },
                 ),

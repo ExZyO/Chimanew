@@ -48,17 +48,9 @@ object ChimanewDiagnostics {
     private val _entriesFlow = MutableStateFlow<List<DiagnosticEntry>>(emptyList())
     val entriesFlow = _entriesFlow.asStateFlow()
 
-    private val preferences: ChimanewPreferences by lazy { Injekt.get() }
+    @PublishedApi internal val preferences: ChimanewPreferences by lazy { Injekt.get() }
 
     inline fun log(
-        category: DiagnosticCategory,
-        tag: String,
-        message: () -> String,
-    ) {
-        log(category, tag, null, message)
-    }
-
-    fun log(
         category: DiagnosticCategory,
         tag: String,
         throwable: Throwable? = null,
@@ -69,32 +61,48 @@ object ChimanewDiagnostics {
             val activeCategories = preferences.diagnosticCategories().get()
             if (category.code !in activeCategories) return
 
-            val msg = message()
-            val errString = throwable?.let { Log.getStackTraceString(it).trimEnd() }
-
-            // 1. Android Logcat output
-            if (errString != null) {
-                Log.e(LOGCAT_TAG, "[${category.code.uppercase()}] [$tag] $msg\n$errString")
-            } else {
-                Log.d(LOGCAT_TAG, "[${category.code.uppercase()}] [$tag] $msg")
-            }
-
-            // 2. Thread-safe Ring Buffer
-            val entry = DiagnosticEntry(
-                category = category,
-                tag = tag,
-                message = msg,
-                error = errString,
-            )
-            synchronized(lock) {
-                if (buffer.size >= MAX_ENTRIES) {
-                    buffer.removeFirst()
-                }
-                buffer.addLast(entry)
-                _entriesFlow.value = buffer.toList()
-            }
+            addEntry(category, tag, message(), throwable)
         } catch (_: Throwable) {
             // Fail silently to never disrupt core application functions
+        }
+    }
+
+    inline fun log(
+        category: DiagnosticCategory,
+        tag: String,
+        message: () -> String,
+    ) {
+        log(category, tag, null, message)
+    }
+
+    @PublishedApi internal fun addEntry(
+        category: DiagnosticCategory,
+        tag: String,
+        msg: String,
+        throwable: Throwable?,
+    ) {
+        val errString = throwable?.let { Log.getStackTraceString(it).trimEnd() }
+
+        // 1. Android Logcat output
+        if (errString != null) {
+            Log.e(LOGCAT_TAG, "[${category.code.uppercase()}] [$tag] $msg\n$errString")
+        } else {
+            Log.d(LOGCAT_TAG, "[${category.code.uppercase()}] [$tag] $msg")
+        }
+
+        // 2. Thread-safe Ring Buffer
+        val entry = DiagnosticEntry(
+            category = category,
+            tag = tag,
+            message = msg,
+            error = errString,
+        )
+        synchronized(lock) {
+            if (buffer.size >= MAX_ENTRIES) {
+                buffer.removeFirst()
+            }
+            buffer.addLast(entry)
+            _entriesFlow.value = buffer.toList()
         }
     }
 
