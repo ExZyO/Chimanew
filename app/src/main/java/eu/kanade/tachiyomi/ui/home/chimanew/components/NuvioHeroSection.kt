@@ -75,6 +75,7 @@ fun NuvioHeroSection(
 
     val preferences = remember { Injekt.get<ChimanewPreferences>() }
     val heroRequireSelectedArtwork by preferences.heroRequireSelectedArtwork().collectPrefAsState()
+    val heroStrictArtworkRequirements by preferences.heroStrictArtworkRequirements().collectPrefAsState()
     val heroArtworkPairing by preferences.heroArtworkPairing().collectPrefAsState()
 
     fun hasAuthenticBanner(item: HomeMangaItem): Boolean {
@@ -95,28 +96,26 @@ fun NuvioHeroSection(
         return hasHighRes || hasDefault
     }
 
-    val displayItems = remember(items, heroStyle, heroRequireSelectedArtwork, heroArtworkSources, heroArtworkPairing) {
+    val displayItems = remember(
+        items, heroStyle, heroRequireSelectedArtwork, heroStrictArtworkRequirements,
+        heroArtworkSources, heroArtworkPairing,
+    ) {
         if (!heroRequireSelectedArtwork) {
             items
         } else {
+            val enforceBanner = "banner" in heroStrictArtworkRequirements
+            val enforceCover = "cover" in heroStrictArtworkRequirements
+
             items.filter { item ->
                 val hasBanner = hasAuthenticBanner(item)
                 val hasCover = hasAuthenticCover(item)
-                when (heroStyle) {
-                    2 -> hasBanner && hasCover // Style 2 (Cover + Banner): strictly requires authentic widescreen banner AND cover!
-                    1 -> hasBanner             // Style 1 (Banner Alone): strictly requires authentic widescreen banner!
-                    0 -> {
-                        // Style 0 (Ambient Backdrop): strictly requires active hero artwork sources
-                        val needsBanner = "banner" in heroArtworkSources
-                        val needsCover = "cover" in heroArtworkSources || "default" in heroArtworkSources
-                        when {
-                            needsBanner && needsCover -> hasBanner && hasCover
-                            needsBanner -> hasBanner
-                            needsCover -> hasCover
-                            else -> hasBanner || hasCover
-                        }
-                    }
-                    else -> hasBanner && hasCover
+                val bannerPass = if (enforceBanner) hasBanner else true
+                val coverPass = if (enforceCover && heroStyle != 1) hasCover else true
+
+                if (!enforceBanner && !enforceCover) {
+                    hasBanner || hasCover
+                } else {
+                    bannerPass && coverPass
                 }
             }
         }
@@ -181,9 +180,10 @@ fun NuvioHeroSection(
             }
 
             val hasBanner = hasAuthenticBanner(item)
+            val enforceBanner = heroRequireSelectedArtwork && "banner" in heroStrictArtworkRequirements
             val bannerImageModel: Any? = when {
                 hasBanner && "banner" in heroArtworkSources -> item.highResBannerUrl
-                heroRequireSelectedArtwork -> null // Strict profile: never fall back to blurring cover if official banner is missing!
+                enforceBanner -> null // Strict banner profile: never fall back to blurring cover if official banner is missing!
                 heroArtworkPairing == 1 -> posterImageModel // Unified: same cover for both
                 heroAllowCroppedFallback -> posterImageModel
                 else -> null

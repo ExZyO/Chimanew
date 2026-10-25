@@ -59,6 +59,7 @@ object SettingsNuvioScreen : SearchableSettings {
         val heroStyle by preferences.heroStyle().collectPrefAsState()
         val useAnilistArtwork by preferences.useAnilistArtwork().collectPrefAsState()
         val showHero by preferences.showHeroCarousel().collectPrefAsState()
+        val heroRequireSelectedArtwork by preferences.heroRequireSelectedArtwork().collectPrefAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_nuvio_hero_section),
@@ -132,6 +133,16 @@ object SettingsNuvioScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_chimanew_hero_require_selected_artwork),
                     subtitle = stringResource(MR.strings.pref_chimanew_hero_require_selected_artwork_summary),
                     enabled = showHero && useAnilistArtwork,
+                ),
+                Preference.PreferenceItem.MultiSelectListPreference(
+                    preference = preferences.heroStrictArtworkRequirements(),
+                    entries = persistentMapOf(
+                        "banner" to stringResource(MR.strings.pref_chimanew_hero_strict_banner),
+                        "cover" to stringResource(MR.strings.pref_chimanew_hero_strict_cover),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_hero_strict_artwork_requirements),
+                    subtitle = stringResource(MR.strings.pref_chimanew_hero_strict_artwork_requirements_summary),
+                    enabled = showHero && useAnilistArtwork && heroRequireSelectedArtwork,
                 ),
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.heroArtworkPairing(),

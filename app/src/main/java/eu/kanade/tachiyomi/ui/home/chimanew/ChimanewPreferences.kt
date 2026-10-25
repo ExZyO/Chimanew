@@ -18,6 +18,11 @@ class ChimanewPreferences(
 
     fun heroRequireSelectedArtwork() = preferenceStore.getBoolean("pref_chimanew_hero_require_selected_artwork", false)
 
+    fun heroStrictArtworkRequirements() = preferenceStore.getStringSet(
+        "pref_chimanew_hero_strict_artwork_requirements",
+        setOf("banner", "cover"),
+    )
+
     fun useAnilistArtwork() = preferenceStore.getBoolean("pref_nuvio_use_anilist_artwork", true)
 
     fun homeShelfOrder() = preferenceStore.getString(

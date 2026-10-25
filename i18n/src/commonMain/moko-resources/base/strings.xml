@@ -63,7 +63,11 @@
     <string name="pref_nuvio_hero_allow_cropped_fallback">Allow artwork aspect fallback</string>
     <string name="pref_nuvio_hero_allow_cropped_fallback_summary">Zoom vertical covers to fill widescreen banner when no official banner is available</string>
     <string name="pref_chimanew_hero_require_selected_artwork">Strict Hero Artwork Requirements</string>
-    <string name="pref_chimanew_hero_require_selected_artwork_summary">Only showcase titles on the hero carousel if official artwork matches your chosen layout</string>
+    <string name="pref_chimanew_hero_require_selected_artwork_summary">Only showcase titles on the hero carousel if official artwork matches your requirements</string>
+    <string name="pref_chimanew_hero_strict_artwork_requirements">Enforce Strict Artwork For</string>
+    <string name="pref_chimanew_hero_strict_artwork_requirements_summary">Choose which artwork types are strictly required for titles to appear in the Hero carousel (%s)</string>
+    <string name="pref_chimanew_hero_strict_banner">Wide Landscape Banner</string>
+    <string name="pref_chimanew_hero_strict_cover">Portrait Cover</string>
     <string name="pref_nuvio_use_anilist_artwork">HD Artwork &amp; Banners</string>
     <string name="pref_nuvio_use_anilist_artwork_summary">Fetch high-resolution landscape banners and covers from your artwork sources</string>
     <string name="pref_chimanew_hero_artwork_sources">Hero Artwork Sources</string>

@@ -76,6 +76,7 @@ private data class CoreHeroPrefs(
     val heroSource: Int,
     val heroStyle: Int,
     val heroRequireSelectedArtwork: Boolean,
+    val heroStrictArtworkRequirements: Set<String>,
 )
 
 @Immutable
@@ -84,6 +85,7 @@ private data class HeroPrefs(
     val heroSource: Int,
     val heroStyle: Int,
     val heroRequireSelectedArtwork: Boolean,
+    val heroStrictArtworkRequirements: Set<String>,
     val useAnilistArtwork: Boolean,
     val heroArtworkSources: Set<String>,
     val heroTrackerStatuses: Set<String>,
@@ -114,6 +116,7 @@ private data class NuvioHomePrefs(
     val heroSource: Int,
     val heroStyle: Int,
     val heroRequireSelectedArtwork: Boolean,
+    val heroStrictArtworkRequirements: Set<String>,
     val useAnilistArtwork: Boolean,
     val heroArtworkSources: Set<String>,
     val heroCategories: Set<String>,
@@ -178,7 +181,8 @@ class ChimanewHomeScreenModel(
                     preferences.heroSource().changes(),
                     preferences.heroStyle().changes(),
                     preferences.heroRequireSelectedArtwork().changes(),
-                ) { show, source, style, requireArt -> CoreHeroPrefs(show, source, style, requireArt) },
+                    preferences.heroStrictArtworkRequirements().changes(),
+                ) { show, source, style, requireArt, strictReqs -> CoreHeroPrefs(show, source, style, requireArt, strictReqs) },
                 preferences.useAnilistArtwork().changes(),
                 preferences.heroArtworkSources().changes(),
                 preferences.heroTrackerStatuses().changes(),
@@ -189,6 +193,7 @@ class ChimanewHomeScreenModel(
                     heroSource = core.heroSource,
                     heroStyle = core.heroStyle,
                     heroRequireSelectedArtwork = core.heroRequireSelectedArtwork,
+                    heroStrictArtworkRequirements = core.heroStrictArtworkRequirements,
                     useAnilistArtwork = useAnilist,
                     heroArtworkSources = artworkSources,
                     heroTrackerStatuses = trackerStatuses,
@@ -222,6 +227,7 @@ class ChimanewHomeScreenModel(
                     heroSource = heroPrefs.heroSource,
                     heroStyle = heroPrefs.heroStyle,
                     heroRequireSelectedArtwork = heroPrefs.heroRequireSelectedArtwork,
+                    heroStrictArtworkRequirements = heroPrefs.heroStrictArtworkRequirements,
                     useAnilistArtwork = heroPrefs.useAnilistArtwork,
                     heroArtworkSources = heroPrefs.heroArtworkSources,
                     heroCategories = cardPrefs.heroCategories,
@@ -423,14 +429,20 @@ class ChimanewHomeScreenModel(
                 }
 
                 fun hasRequiredHeroArtwork(mangaId: Long, title: String, heroStyle: Int): Boolean {
-                    val artwork = getArtwork(mangaId, title) ?: return false
-                    val hasBanner = !artwork.bannerUrl.isNullOrBlank()
-                    val hasCover = !artwork.posterUrl.isNullOrBlank()
-                    return when (heroStyle) {
-                        2 -> hasBanner && hasCover // Cover and Banner style (both required)
-                        1 -> hasBanner             // Banner alone style (wide banner required)
-                        0 -> if ("banner" in prefs.heroArtworkSources) hasBanner && hasCover else hasCover
-                        else -> hasBanner && hasCover
+                    val artwork = getArtwork(mangaId, title)
+                    val hasBanner = artwork != null && !artwork.bannerUrl.isNullOrBlank()
+                    val hasCover = (artwork != null && !artwork.posterUrl.isNullOrBlank()) || ("default" in prefs.heroArtworkSources)
+
+                    val enforceBanner = "banner" in prefs.heroStrictArtworkRequirements
+                    val enforceCover = "cover" in prefs.heroStrictArtworkRequirements
+
+                    val bannerPass = if (enforceBanner) hasBanner else true
+                    val coverPass = if (enforceCover && heroStyle != 1) hasCover else true
+
+                    return if (!enforceBanner && !enforceCover) {
+                        hasBanner || hasCover
+                    } else {
+                        bannerPass && coverPass
                     }
                 }
 
@@ -575,6 +587,7 @@ class ChimanewHomeScreenModel(
                                 val art = artworkWaterfallRepository.resolveArtwork(
                                     rawTitle = item.title,
                                     mangaId = item.mangaId,
+                                    defaultCoverUrl = item.coverData.ogUrl,
                                     anilistRemoteId = aniListTrack?.remoteId?.takeIf { it > 0 },
                                     kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
                                     malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
@@ -598,6 +611,7 @@ class ChimanewHomeScreenModel(
                                 artworkWaterfallRepository.resolveArtwork(
                                     rawTitle = mTitle,
                                     mangaId = lib.manga.id,
+                                    defaultCoverUrl = lib.manga.thumbnailUrl,
                                     anilistRemoteId = alTrack?.remoteId?.takeIf { it > 0 },
                                     kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
                                     malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
