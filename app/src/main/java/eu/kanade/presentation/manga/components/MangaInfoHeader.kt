@@ -224,7 +224,6 @@ fun MangaInfoBox(
 
     val chosenArtworkModel: Any? = when {
         !customBannerUrl.isNullOrBlank() -> customBannerUrl
-        detailsPageLayout == 0 -> unifiedArtwork?.bannerUrl // Mode 0 (Nuvio Hero) is strictly BANNER ONLY, NO COVER!
         !useAnilistArtwork || unifiedArtwork == null -> if (heroAllowCroppedFallback) manga else null
         detailsBackdropArtwork == 0 && !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
         detailsBackdropArtwork == 1 && !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
@@ -248,9 +247,9 @@ fun MangaInfoBox(
 
     val activeStyle = detailsBackdropStyle
     val backdropAlpha = when (activeStyle) {
-        0 -> 0.55f // Cinematic Fade
-        1 -> 0.35f // Soft Blur
-        2 -> 0.85f // Full Opacity + Scrims
+        0 -> 0.88f // Cinematic Fade - Rich & Vibrant
+        1 -> 0.65f // Soft Blur
+        2 -> 0.95f // Full Opacity + Scrims
         else -> 0.20f
     }
 
@@ -258,10 +257,9 @@ fun MangaInfoBox(
         0 -> 0.dp // Cinematic Fade - Crisp
         1 -> 18.dp // Soft Atmospheric Blur
         2 -> 0.dp // Full Opacity - Crisp
-        else -> 7.dp
+        else -> 0.dp
     }
 
-    val detailsBackdropScale by chimanewPreferences.detailsBackdropScale().collectAsState()
     val primaryColor = MaterialTheme.colorScheme.primary
     val tertiaryColor = MaterialTheme.colorScheme.tertiary
     val surfaceTintColor = MaterialTheme.colorScheme.surfaceTint
@@ -282,8 +280,8 @@ fun MangaInfoBox(
         }
         var bannerAspectRatio by remember(effectiveArtworkModel) { mutableFloatStateOf(0f) }
 
-        key(effectiveArtworkModel, detailsBackdropStyle, detailsBackdropScale, detailsBackdropArtwork, activeStyle) {
-            when (detailsBackdropScale) {
+        key(effectiveArtworkModel, detailsBackdropStyle, detailsPageLayout, detailsBackdropArtwork, activeStyle) {
+            when (detailsPageLayout) {
                 0 -> {
                     // MODE 0: Nuvio Hero Edge-to-Edge with 7-Stop Silk Bottom Dissolve
                     if (effectiveArtworkModel != null) {
@@ -312,8 +310,8 @@ fun MangaInfoBox(
                                 .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
                                 .alpha(backdropAlpha),
                         )
-                    } else if (detailsPageLayout != 0) {
-                        // Ambient glow underlay fallback (only if not Nuvio Hero mode)
+                    } else {
+                        // Ambient glow underlay fallback
                         val underlayModel = ambientArtworkModel
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
@@ -357,7 +355,7 @@ fun MangaInfoBox(
                                     0.84f to backgroundColor.copy(alpha = 0.84f),
                                     1.00f to backgroundColor,
                                 ),
-                                startY = size.height * 0.30f,
+                                startY = size.height * 0.25f,
                                 endY = size.height,
                             ),
                         )
@@ -746,10 +744,11 @@ fun MangaInfoBox(
             if (!isTabletUi) {
                 when (detailsPageLayout) {
                     0 -> {
-                        // Mode 0: Nuvio Hero (Official Nuvio Mobile Architecture - Unblocked banner with centered title)
+                        // Mode 0: Nuvio Hero (Official Nuvio Mobile Architecture - Centered layout with portrait cover & banner)
                         MangaAndSourceTitlesNuvioHero(
                             appBarPadding = appBarPadding,
                             manga = manga,
+                            coverModel = effectiveCoverModel,
                             sourceName = sourceName,
                             isStubSource = isStubSource,
                             readingTime = readingTime,
@@ -758,6 +757,8 @@ fun MangaInfoBox(
                             librarySearch = librarySearch,
                             onSourceClick = onSourceClick,
                             onCoverClick = onCoverClick,
+                            onCoverLoaded = onCoverLoaded,
+                            coverRatio = coverRatio,
                             communityRatings = effectiveRatings,
                             communityRatingFormat = communityRatingFormat,
                         )
@@ -1179,11 +1180,12 @@ private fun MangaAndSourceTitlesLarge(
     }
 }
 
-// EaZy Nuvio+ / Chimanew: Official Nuvio Mobile presentation (unblocked banner, centered titles)
+// EaZy Nuvio+ / Chimanew: Official Nuvio Mobile presentation (unblocked banner, centered titles & portrait cover)
 @Composable
 private fun MangaAndSourceTitlesNuvioHero(
     appBarPadding: Dp,
     manga: Manga,
+    coverModel: Any = manga,
     sourceName: String,
     isStubSource: Boolean,
     readingTime: String?,
@@ -1192,6 +1194,8 @@ private fun MangaAndSourceTitlesNuvioHero(
     librarySearch: (query: String) -> Unit,
     onSourceClick: () -> Unit,
     onCoverClick: () -> Unit,
+    onCoverLoaded: (DomainMangaCover) -> Unit,
+    coverRatio: MutableFloatState,
     communityRatings: List<CommunityRating> = emptyList(),
     communityRatingFormat: Int = 0,
 ) {
@@ -1230,10 +1234,32 @@ private fun MangaAndSourceTitlesNuvioHero(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, top = appBarPadding + 110.dp, end = 20.dp, bottom = 12.dp),
+            .padding(start = 20.dp, top = appBarPadding + 20.dp, end = 20.dp, bottom = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // Portrait Book Cover (official Nuvio Mobile book styling)
+        MangaCover.Book(
+            modifier = Modifier
+                .width(112.dp)
+                .aspectRatio(2f / 3f)
+                .shadow(16.dp, RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp)),
+            data = ImageRequest.Builder(LocalContext.current)
+                .data(coverModel)
+                .crossfade(true)
+                .build(),
+            contentDescription = stringResource(MR.strings.manga_cover),
+            onClick = onCoverClick,
+            onCoverLoaded = { mangaCover, result ->
+                val image = result.result.image
+                coverRatio.floatValue = image.height.toFloat() / image.width
+                onCoverLoaded(mangaCover)
+            },
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
         // Centered Title typography
         Text(
             text = title.ifBlank { stringResource(MR.strings.unknown_title) },
