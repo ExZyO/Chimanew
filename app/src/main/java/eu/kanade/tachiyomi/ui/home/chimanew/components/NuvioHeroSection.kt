@@ -291,6 +291,7 @@ fun NuvioHeroSection(
             val heroDimBanner by preferences.heroDimBanner().collectPrefAsState()
             val heroAllowCroppedFallback by preferences.heroAllowCroppedFallback().collectPrefAsState()
             val ambientCanvasStyle by preferences.ambientCanvasStyle().collectPrefAsState()
+            val heroMetadataLayout by preferences.heroMetadataLayout().collectPrefAsState()
 
             val posterImageModel: Any = when {
                 "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
@@ -411,6 +412,7 @@ fun NuvioHeroSection(
                                 heroShowUnreadBadge = heroShowUnreadBadge,
                                 showRatingsOnHero = showRatingsOnHero && showCommunityRatings,
                                 communityRatingFormat = communityRatingFormat,
+                                heroMetadataLayout = heroMetadataLayout,
                                 onResumeClick = onResumeClick,
                                 onQuickStatusClick = onQuickStatusClick,
                             )
@@ -501,6 +503,7 @@ fun NuvioHeroSection(
                                 heroShowUnreadBadge = heroShowUnreadBadge,
                                 showRatingsOnHero = showRatingsOnHero && showCommunityRatings,
                                 communityRatingFormat = communityRatingFormat,
+                                heroMetadataLayout = heroMetadataLayout,
                                 onResumeClick = onResumeClick,
                                 onQuickStatusClick = onQuickStatusClick,
                             )
@@ -811,6 +814,7 @@ private fun HeroAmbientForegroundContent(
     heroShowUnreadBadge: Boolean,
     showRatingsOnHero: Boolean = true,
     communityRatingFormat: Int = 0,
+    heroMetadataLayout: Int = 0,
     onResumeClick: (HomeMangaItem) -> Unit,
     onQuickStatusClick: (HomeMangaItem) -> Unit = {},
 ) {
@@ -845,33 +849,105 @@ private fun HeroAmbientForegroundContent(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            // Genres chips
-            if (item.genres.isNotEmpty()) {
+            val progressText = buildString {
+                if (item.lastChapterNumber != null) {
+                    append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
+                    if (item.totalChapters > 0) {
+                        append(" / ${item.totalChapters}")
+                    }
+                } else if (item.totalChapters > 0) {
+                    append("${item.totalChapters} Chapters")
+                }
+            }
+
+            val compactProgressText = buildString {
+                if (item.lastChapterNumber != null) {
+                    append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
+                    if (item.totalChapters > 0) {
+                        append(" / ${item.totalChapters}")
+                    }
+                } else if (item.totalChapters > 0) {
+                    append("${item.totalChapters} Ch.")
+                }
+            }
+
+            val showUnread = heroShowUnreadBadge && item.unreadCount > 0 &&
+                (item.lastChapterNumber != null || item.unreadCount != item.totalChapters)
+
+            // 1. Genres (+ Chapter Progress if Option 0: Clean Separation)
+            if (item.genres.isNotEmpty() || (heroMetadataLayout == 0 && progressText.isNotBlank())) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(bottom = 2.dp),
                 ) {
-                    item.genres.take(2).forEach { genre ->
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color.Black.copy(alpha = 0.55f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                        ) {
+                    if (item.genres.isNotEmpty()) {
+                        item.genres.take(2).forEach { genre ->
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color.Black.copy(alpha = 0.55f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                            ) {
+                                Text(
+                                    text = genre,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White.copy(alpha = 0.90f),
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+
+                    // Option 0 (Recommended): Place chapter count alongside genres
+                    if (heroMetadataLayout == 0 && progressText.isNotBlank()) {
+                        if (item.genres.isNotEmpty()) {
                             Text(
-                                text = genre,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White.copy(alpha = 0.90f),
+                                text = "•",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    fontSize = 11.sp,
                                 ),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                             )
+                        }
+                        Text(
+                            text = progressText,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 11.sp,
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.80f),
+                                    blurRadius = 4f,
+                                ),
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (showUnread) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = accentColor.copy(alpha = 0.25f),
+                                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f)),
+                            ) {
+                                Text(
+                                    text = "+${item.unreadCount}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        color = accentColor,
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Title
+            // 2. Manga Title
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -886,57 +962,115 @@ private fun HeroAmbientForegroundContent(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            // Progress, Unread & Community Ratings
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (showRatingsOnHero && item.communityRatings.isNotEmpty()) {
-                    CommunityRatingBadge(
-                        ratings = item.communityRatings,
-                        format = communityRatingFormat,
-                    )
-                }
-
-                val progressText = buildString {
-                    if (item.lastChapterNumber != null) {
-                        append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
-                        if (item.totalChapters > 0) {
-                            append(" / ${item.totalChapters}")
-                        }
-                    } else if (item.totalChapters > 0) {
-                        append("${item.totalChapters} Chapters")
+            // 3. Middle Tier: Ratings and/or Progress depending on heroMetadataLayout
+            when (heroMetadataLayout) {
+                0 -> {
+                    // Option 0: Dedicated Ratings Ribbon (unconstrained width, never wraps)
+                    if (showRatingsOnHero && item.communityRatings.isNotEmpty()) {
+                        CommunityRatingBadge(
+                            ratings = item.communityRatings,
+                            format = communityRatingFormat,
+                        )
                     }
                 }
-                if (progressText.isNotBlank()) {
-                    Text(
-                        text = progressText,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color.White.copy(alpha = 0.75f),
-                            shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.80f),
-                                blurRadius = 4f,
-                            ),
-                        ),
-                    )
+                1 -> {
+                    // Option 1: Stacked - Ratings first, then progress row below
+                    if (showRatingsOnHero && item.communityRatings.isNotEmpty()) {
+                        CommunityRatingBadge(
+                            ratings = item.communityRatings,
+                            format = communityRatingFormat,
+                        )
+                    }
+                    if (progressText.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = progressText,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White.copy(alpha = 0.80f),
+                                    fontSize = 11.sp,
+                                    shadow = Shadow(
+                                        color = Color.Black.copy(alpha = 0.80f),
+                                        blurRadius = 4f,
+                                    ),
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (showUnread) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = accentColor.copy(alpha = 0.25f),
+                                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f)),
+                                ) {
+                                    Text(
+                                        text = "+${item.unreadCount}",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
+                                            color = accentColor,
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-
-                val showUnread = heroShowUnreadBadge && item.unreadCount > 0 &&
-                    (item.lastChapterNumber != null || item.unreadCount != item.totalChapters)
-                if (showUnread) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = accentColor.copy(alpha = 0.25f),
-                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f)),
+                2 -> {
+                    // Option 2: Compact - Capped to 2 badges + abbreviated 'Ch.'
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text(
-                            text = "+${item.unreadCount}",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp,
-                                color = accentColor,
-                            ),
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                        if (showRatingsOnHero && item.communityRatings.isNotEmpty()) {
+                            CommunityRatingBadge(
+                                ratings = item.communityRatings.take(2),
+                                format = communityRatingFormat,
+                            )
+                        }
+                        if (compactProgressText.isNotBlank()) {
+                            Text(
+                                text = compactProgressText,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White.copy(alpha = 0.75f),
+                                    fontSize = 11.sp,
+                                    shadow = Shadow(
+                                        color = Color.Black.copy(alpha = 0.80f),
+                                        blurRadius = 4f,
+                                    ),
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (showUnread) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = accentColor.copy(alpha = 0.25f),
+                                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f)),
+                            ) {
+                                Text(
+                                    text = "+${item.unreadCount}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        color = accentColor,
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+                3 -> {
+                    // Option 3: Ratings alone; Progress is integrated directly into the Action Button
+                    if (showRatingsOnHero && item.communityRatings.isNotEmpty()) {
+                        CommunityRatingBadge(
+                            ratings = item.communityRatings,
+                            format = communityRatingFormat,
                         )
                     }
                 }
@@ -944,10 +1078,16 @@ private fun HeroAmbientForegroundContent(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            val buttonText = if (item.lastChapterNumber != null) {
+            val baseButtonText = if (item.lastChapterNumber != null) {
                 "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
             } else {
                 "Start Reading"
+            }
+
+            val buttonText = if (heroMetadataLayout == 3 && compactProgressText.isNotBlank()) {
+                "$baseButtonText • $compactProgressText"
+            } else {
+                baseButtonText
             }
 
             // Action Row: Resume Button + Quick Status
@@ -997,6 +1137,24 @@ private fun HeroAmbientForegroundContent(
                         contentDescription = "Quick Status",
                         modifier = Modifier.size(18.dp),
                     )
+                }
+
+                if (heroMetadataLayout == 3 && showUnread) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = accentColor.copy(alpha = 0.25f),
+                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f)),
+                    ) {
+                        Text(
+                            text = "+${item.unreadCount}",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                color = accentColor,
+                            ),
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                        )
+                    }
                 }
             }
         }

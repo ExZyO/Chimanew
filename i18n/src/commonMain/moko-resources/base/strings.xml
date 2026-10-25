@@ -58,6 +58,12 @@
     <string name="pref_nuvio_hero_style_ambient">Ambient Glow</string>
     <string name="pref_nuvio_hero_style_fullbleed">Widescreen Banner</string>
     <string name="pref_nuvio_hero_style_crisp_ambient">Banner with Ambient Glow (Recommended)</string>
+    <string name="pref_chimanew_hero_metadata_layout">Hero metadata layout</string>
+    <string name="pref_chimanew_hero_metadata_layout_summary">Customize how genres, ratings, and chapter counts are arranged</string>
+    <string name="pref_chimanew_hero_layout_clean_separation">Clean Separation (Recommended)</string>
+    <string name="pref_chimanew_hero_layout_stacked_progress">Separate Progress Row</string>
+    <string name="pref_chimanew_hero_layout_compact_hero">Compact Ratings &amp; Ch.</string>
+    <string name="pref_chimanew_hero_layout_integrated_button">Button-Integrated Progress</string>
     <string name="pref_nuvio_hero_dim_banner">Dim background banner</string>
     <string name="pref_nuvio_hero_dim_banner_summary">Softens background banner brightness to make cover artwork and text stand out</string>
     <string name="pref_nuvio_hero_allow_cropped_fallback">Allow artwork aspect fallback</string>

@@ -111,6 +111,17 @@ object SettingsNuvioScreen : SearchableSettings {
                     ),
                     title = stringResource(MR.strings.pref_nuvio_hero_style),
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.heroMetadataLayout(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.pref_chimanew_hero_layout_clean_separation),
+                        1 to stringResource(MR.strings.pref_chimanew_hero_layout_stacked_progress),
+                        2 to stringResource(MR.strings.pref_chimanew_hero_layout_compact_hero),
+                        3 to stringResource(MR.strings.pref_chimanew_hero_layout_integrated_button),
+                    ),
+                    title = stringResource(MR.strings.pref_chimanew_hero_metadata_layout),
+                    subtitle = stringResource(MR.strings.pref_chimanew_hero_metadata_layout_summary),
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.heroDimBanner(),
                     title = stringResource(MR.strings.pref_nuvio_hero_dim_banner),

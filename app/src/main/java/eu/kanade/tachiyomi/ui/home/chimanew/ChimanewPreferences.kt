@@ -12,6 +12,8 @@ class ChimanewPreferences(
 
     fun heroStyle() = preferenceStore.getInt("pref_nuvio_hero_style", 0)
 
+    fun heroMetadataLayout() = preferenceStore.getInt("pref_chimanew_hero_metadata_layout", 0)
+
     fun heroDimBanner() = preferenceStore.getBoolean("pref_nuvio_hero_dim_banner", true)
 
     fun heroAllowCroppedFallback() = preferenceStore.getBoolean("pref_nuvio_hero_allow_cropped_fallback", true)

@@ -26,8 +26,8 @@ android {
         // EaZy Nuvio+ / Chimanew
         applicationId = "app.chimanew"
 
-        versionCode = releaseVersionCode ?: 20624
-        versionName = releaseVersionName ?: "2.6.24"
+        versionCode = releaseVersionCode ?: 20625
+        versionName = releaseVersionName ?: "2.6.25"
         // KMK <--
 
         // EaZy Nuvio+ / Chimanew: Dynamically extract client ID prefix for Google OAuth callback
