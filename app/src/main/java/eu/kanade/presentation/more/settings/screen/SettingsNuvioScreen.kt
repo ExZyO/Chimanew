@@ -345,6 +345,7 @@ object SettingsNuvioScreen : SearchableSettings {
 
     @Composable
     private fun getArtworkGroup(preferences: ChimanewPreferences, navigator: Navigator): Preference.PreferenceGroup {
+        val context = androidx.compose.ui.platform.LocalContext.current
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_chimanew_artwork_category),
             preferenceItems = persistentListOf(
@@ -358,6 +359,15 @@ object SettingsNuvioScreen : SearchableSettings {
                     subtitle = stringResource(MR.strings.pref_chimanew_artwork_waterfall_summary),
                     onClick = {
                         navigator.push(ArtworkPriorityCustomizerScreen())
+                    },
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_chimanew_reset_artwork_cache),
+                    subtitle = stringResource(MR.strings.pref_chimanew_reset_artwork_cache_summary),
+                    onClick = {
+                        val repo: eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository = Injekt.get()
+                        repo.clearCache()
+                        context.toast(MR.strings.pref_chimanew_artwork_cache_cleared)
                     },
                 ),
                 Preference.PreferenceItem.ListPreference(

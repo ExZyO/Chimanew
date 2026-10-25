@@ -259,6 +259,18 @@ class ArtworkWaterfallRepository(
         }
     }
 
+    fun clearCache() {
+        cache.clear()
+        try {
+            if (cacheFile.exists()) {
+                cacheFile.delete()
+            }
+        } catch (_: Exception) {}
+        ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Cache") {
+            "Cleared entire persistent artwork waterfall cache"
+        }
+    }
+
     suspend fun resolveArtwork(
         rawTitle: String,
         anilistRemoteId: Long? = null,
@@ -269,12 +281,16 @@ class ArtworkWaterfallRepository(
     ): UnifiedArtwork = withContext(Dispatchers.IO) {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return@withContext UnifiedArtwork()
-        cache[title]?.let {
-            val cached = getEffectiveArtwork(it, defaultCoverUrl)
-            ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
-                "Resolved from cache for '$title': banner=${cached?.bannerUrl}, poster=${cached?.posterUrl}"
+        val cachedEntry = cache[title]
+        if (cachedEntry != null) {
+            val cached = getEffectiveArtwork(cachedEntry, defaultCoverUrl)
+            val hasBanner = !cached.bannerUrl.isNullOrBlank()
+            if (hasBanner) {
+                ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
+                    "Resolved from cache for '$title': banner=${cached.bannerUrl}, poster=${cached.posterUrl}"
+                }
+                return@withContext cached
             }
-            return@withContext cached
         }
 
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
@@ -482,23 +498,28 @@ class ArtworkWaterfallRepository(
             bannerOptions.add(ArtworkBannerOption(url = defaultCoverUrl, source = "DEFAULT"))
         }
 
+        val mergedBanners = (banners + (cachedEntry?.allAvailableBanners ?: emptyList())).distinct()
+        val mergedCovers = (covers + (cachedEntry?.allAvailableCovers ?: emptyList())).distinctBy { it.url }
+        val mergedBannerOptions = (bannerOptions + (cachedEntry?.bannerOptions ?: emptyList())).distinctBy { it.url }
+        val mergedRatings = (ratings + (cachedEntry?.ratings ?: emptyList())).distinctBy { it.source }
+
         val rawResult = UnifiedArtwork(
             bannerUrl = null,
             posterUrl = null,
-            allAvailableBanners = banners.distinct(),
-            allAvailableCovers = covers.distinctBy { it.url },
-            bannerOptions = bannerOptions.distinctBy { it.url },
-            ratings = ratings.distinctBy { it.source },
+            allAvailableBanners = mergedBanners,
+            allAvailableCovers = mergedCovers,
+            bannerOptions = mergedBannerOptions,
+            ratings = mergedRatings,
         )
-        if (banners.isNotEmpty() || covers.isNotEmpty() || ratings.isNotEmpty()) {
+        if (mergedBanners.isNotEmpty() || mergedCovers.isNotEmpty() || mergedRatings.isNotEmpty()) {
             cache[title] = rawResult
             scheduleSaveToDisk()
         }
         val effective = getEffectiveArtwork(rawResult, defaultCoverUrl)
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
-            "Network discovery completed for '$title' -> banner=${effective.bannerUrl}, cover=${effective.posterUrl} (covers=${covers.size}, banners=${banners.size})"
+            "Network discovery completed for '$title' -> banner=${effective.bannerUrl}, cover=${effective.posterUrl} (covers=${mergedCovers.size}, banners=${mergedBanners.size})"
         }
-        logcat(priority = LogPriority.INFO) { "Resolved waterfall artwork for '$title': banner=${effective.bannerUrl}, cover=${effective.posterUrl}, coversCount=${covers.size}, bannersCount=${banners.size}" }
+        logcat(priority = LogPriority.INFO) { "Resolved waterfall artwork for '$title': banner=${effective.bannerUrl}, cover=${effective.posterUrl}, coversCount=${mergedCovers.size}, bannersCount=${mergedBanners.size}" }
         return@withContext effective
     }
 

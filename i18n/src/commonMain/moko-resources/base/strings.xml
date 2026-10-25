@@ -221,6 +221,9 @@
     <string name="pref_chimanew_diagnostics_cleared">Diagnostic logs cleared</string>
     <string name="pref_chimanew_diagnostics_copied">Copied %d diagnostic log events to clipboard</string>
     <string name="pref_chimanew_diagnostics_empty">No diagnostic log events recorded yet</string>
+    <string name="pref_chimanew_reset_artwork_cache">Reset Artwork Cache</string>
+    <string name="pref_chimanew_reset_artwork_cache_summary">Flush cached artwork to re-query active sources for all series</string>
+    <string name="pref_chimanew_artwork_cache_cleared">Artwork cache cleared successfully</string>
     <string name="label_more">More</string>
     <string name="label_settings">Settings</string>
     <string name="label_download_queue">Download queue</string>

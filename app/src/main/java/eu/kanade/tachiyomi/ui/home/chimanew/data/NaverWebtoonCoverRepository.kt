@@ -48,26 +48,45 @@ class NaverWebtoonCoverRepository(
         cache[key]?.let { return it }
         if (isRateLimited()) return null
 
+        val isHangul = containsHangul(query)
         return withContext(Dispatchers.IO) {
             try {
-                // Step 1: Query Naver Webtoon API (Best for native Hangul names)
-                val naverResult = fetchFromNaverComic(query)
-                if (naverResult != null && (naverResult.bannerUrl != null || naverResult.coverUrl != null)) {
-                    cache[key] = naverResult
-                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Naver") {
-                        "Found Naver Comic artwork for '$query': banner=${naverResult.bannerUrl}, cover=${naverResult.coverUrl}"
+                if (isHangul) {
+                    val naverResult = fetchFromNaverComic(query)
+                    if (naverResult != null && (naverResult.bannerUrl != null || naverResult.coverUrl != null)) {
+                        cache[key] = naverResult
+                        ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Naver") {
+                            "Found Naver Comic artwork for '$query': banner=${naverResult.bannerUrl}, cover=${naverResult.coverUrl}"
+                        }
+                        return@withContext naverResult
                     }
-                    return@withContext naverResult
-                }
 
-                // Step 2: Query WEBTOON Global portal (Best for English titles & official localized manhwas)
-                val globalResult = fetchFromWebtoonsGlobal(query)
-                if (globalResult != null && (globalResult.bannerUrl != null || globalResult.coverUrl != null)) {
-                    cache[key] = globalResult
-                    ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "NaverGlobal") {
-                        "Found Webtoons Global artwork for '$query': banner=${globalResult.bannerUrl}, cover=${globalResult.coverUrl}"
+                    val globalResult = fetchFromWebtoonsGlobal(query)
+                    if (globalResult != null && (globalResult.bannerUrl != null || globalResult.coverUrl != null)) {
+                        cache[key] = globalResult
+                        ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "NaverGlobal") {
+                            "Found Webtoons Global artwork for '$query': banner=${globalResult.bannerUrl}, cover=${globalResult.coverUrl}"
+                        }
+                        return@withContext globalResult
                     }
-                    return@withContext globalResult
+                } else {
+                    val globalResult = fetchFromWebtoonsGlobal(query)
+                    if (globalResult != null && (globalResult.bannerUrl != null || globalResult.coverUrl != null)) {
+                        cache[key] = globalResult
+                        ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "NaverGlobal") {
+                            "Found Webtoons Global artwork for '$query': banner=${globalResult.bannerUrl}, cover=${globalResult.coverUrl}"
+                        }
+                        return@withContext globalResult
+                    }
+
+                    val naverResult = fetchFromNaverComic(query)
+                    if (naverResult != null && (naverResult.bannerUrl != null || naverResult.coverUrl != null)) {
+                        cache[key] = naverResult
+                        ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Naver") {
+                            "Found Naver Comic artwork for '$query': banner=${naverResult.bannerUrl}, cover=${naverResult.coverUrl}"
+                        }
+                        return@withContext naverResult
+                    }
                 }
 
                 val empty = NaverWebtoonArtwork()
@@ -119,8 +138,13 @@ class NaverWebtoonCoverRepository(
             val queryClean = query.replace(" ", "").lowercase()
             val matchedObj = webtoonList.firstOrNull { elem ->
                 val name = elem.jsonObject["titleName"]?.jsonPrimitive?.content.orEmpty().replace(" ", "").lowercase()
-                name == queryClean || name.contains(queryClean) || queryClean.contains(name)
-            }?.jsonObject ?: if (containsHangul(query)) webtoonList.first().jsonObject else null
+                name == queryClean || (queryClean.length >= 4 && (name.startsWith(queryClean) || queryClean.startsWith(name)))
+            }?.jsonObject ?: if (containsHangul(query)) {
+                webtoonList.firstOrNull { elem ->
+                    val name = elem.jsonObject["titleName"]?.jsonPrimitive?.content.orEmpty()
+                    name.contains(query.trim())
+                }?.jsonObject
+            } else null
 
             if (matchedObj != null) {
                 titleId = matchedObj["titleId"]?.jsonPrimitive?.content?.toLongOrNull()
@@ -205,10 +229,15 @@ class NaverWebtoonCoverRepository(
             if (cardMatches.isEmpty()) return null
 
             val qClean = query.replace(" ", "").lowercase()
-            val seriesUrl = cardMatches.firstOrNull { m ->
-                val u = m.groupValues[1].lowercase()
-                u.contains(qClean.take(6)) || qClean.split(Regex("""[^a-z0-9]+""")).any { it.length >= 4 && u.contains(it) }
-            }?.groupValues?.get(1) ?: cardMatches.first().groupValues[1]
+            val queryWords = query.lowercase().split(Regex("""[^a-z0-9]+""")).filter { it.length >= 3 }
+            val seriesUrl = cardMatches.map { it.groupValues[1] }.firstOrNull { u ->
+                val slug = u.substringAfter("/en/").substringAfter("/").substringBefore("/list")
+                val cleanSlug = slug.replace("-", "").lowercase()
+                cleanSlug == qClean ||
+                    (queryWords.size >= 2 && queryWords.count { slug.contains(it) } >= (queryWords.size * 0.7).toInt().coerceAtLeast(2)) ||
+                    (queryWords.size == 1 && cleanSlug == queryWords[0])
+            }
+            if (seriesUrl == null) return null
 
             val seriesReq = GET(
                 seriesUrl,
