@@ -258,6 +258,11 @@ class ReaderViewModel @JvmOverloads constructor(
 
     private var lastMangaStatsTime: Long = SystemClock.elapsedRealtime()
     private var currentMangaStatsPage: ReaderPage? = null
+
+    // Set on Main, flushed from the chapter load too
+    @Volatile
+    private var pendingProgressChapter: ReaderChapter? = null
+    private var pendingProgressSave: Job? = null
     private val consumedMangaStatsPages = mutableSetOf<Int>()
 
     var mangaStatsSessionCharacters: Int = 0
@@ -497,6 +502,7 @@ class ReaderViewModel @JvmOverloads constructor(
     }
 
     override fun onCleared() {
+        saveChapterProgress()
         val currentChapters = state.value.viewerChapters
         if (currentChapters != null) {
             currentChapters.unref()
@@ -514,6 +520,7 @@ class ReaderViewModel @JvmOverloads constructor(
      * trigger deletion of the downloaded chapters.
      */
     fun onActivityFinish() {
+        saveChapterProgress()
         trackMangaStats(null)
         deletePendingChapters()
     }
@@ -820,9 +827,7 @@ class ReaderViewModel @JvmOverloads constructor(
         val pages = selectedChapter.pages ?: return
 
         // Save last page read and mark as read if needed
-        viewModelScope.launchNonCancellable {
-            updateChapterProgress(selectedChapter, page/* SY --> */, hasExtraPage/* SY <-- */)
-        }
+        updateChapterProgress(selectedChapter, page/* SY --> */, hasExtraPage/* SY <-- */)
 
         trackMangaStats(page)
 
@@ -940,8 +945,11 @@ class ReaderViewModel @JvmOverloads constructor(
     /**
      * Saves the chapter progress (last read page and whether it's read)
      * if incognito mode isn't on.
+     *
+     * Completing a chapter is saved right away. Other page changes are saved once the reader settles on a page, or
+     * when [saveChapterProgress] is called, so flipping through pages doesn't write to the database on every page.
      */
-    private suspend fun updateChapterProgress(
+    private fun updateChapterProgress(
         readerChapter: ReaderChapter,
         page: Page,
         // SY -->
@@ -949,8 +957,6 @@ class ReaderViewModel @JvmOverloads constructor(
         // SY <--
     ) {
         val pageIndex = page.index
-        val syncTriggerOpt = syncPreferences.getSyncTriggerOptions()
-        val isSyncEnabled = syncPreferences.isSyncEnabled()
 
         mutableState.update {
             it.copy(currentPage = pageIndex + 1)
@@ -958,14 +964,49 @@ class ReaderViewModel @JvmOverloads constructor(
         readerChapter.requestedPage = pageIndex
         chapterPageIndex = pageIndex
 
-        if (!incognitoMode && page.status !is Page.State.Error) {
-            readerChapter.chapter.last_page_read = pageIndex
+        if (incognitoMode || page.status is Page.State.Error) return
 
-            if (readerChapter.pages?.lastIndex == pageIndex ||
-                // SY -->
-                (hasExtraPage && readerChapter.pages?.lastIndex?.minus(1) == page.index)
-                // SY <--
-            ) {
+        val isComplete = readerChapter.chapter.read ||
+            readerChapter.pages?.lastIndex == pageIndex ||
+            // SY -->
+            (hasExtraPage && readerChapter.pages?.lastIndex?.minus(1) == page.index)
+            // SY <--
+
+        // A page change in another chapter would replace that chapter's pending save
+        if (pendingProgressChapter != readerChapter) saveChapterProgress()
+        readerChapter.chapter.last_page_read = pageIndex
+        pendingProgressSave?.cancel()
+
+        if (isComplete) {
+            pendingProgressChapter = null
+            writeChapterProgress(readerChapter, isComplete = true)
+        } else {
+            pendingProgressChapter = readerChapter
+            pendingProgressSave = viewModelScope.launch {
+                delay(PROGRESS_SAVE_DELAY)
+                saveChapterProgress()
+            }
+        }
+    }
+
+    /**
+     * Writes the progress of the chapter whose page change hasn't been saved yet.
+     */
+    private fun saveChapterProgress() {
+        val readerChapter = pendingProgressChapter ?: return
+        pendingProgressChapter = null
+        writeChapterProgress(readerChapter, isComplete = false)
+    }
+
+    /**
+     * Writes the progress of [readerChapter] on viewModelScope non-cancellable, so it's saved even when leaving.
+     */
+    private fun writeChapterProgress(readerChapter: ReaderChapter, isComplete: Boolean) {
+        viewModelScope.launchNonCancellable {
+            val syncTriggerOpt = syncPreferences.getSyncTriggerOptions()
+            val isSyncEnabled = syncPreferences.isSyncEnabled()
+
+            if (isComplete) {
                 updateChapterProgressOnComplete(readerChapter)
 
                 // SY -->
@@ -976,17 +1017,18 @@ class ReaderViewModel @JvmOverloads constructor(
                 // SY <--
             }
 
+            val chapter = readerChapter.chapter
             updateChapter.await(
                 ChapterUpdate(
-                    id = readerChapter.chapter.id!!,
-                    read = readerChapter.chapter.read,
-                    lastPageRead = readerChapter.chapter.last_page_read.toLong(),
+                    id = chapter.id!!,
+                    read = chapter.read,
+                    lastPageRead = chapter.last_page_read.toLong(),
                 ),
             )
 
             // SY -->
             // Check if syncing is enabled for chapter open:
-            if (isSyncEnabled && syncTriggerOpt.syncOnChapterOpen && readerChapter.chapter.last_page_read == 0) {
+            if (isSyncEnabled && syncTriggerOpt.syncOnChapterOpen && chapter.last_page_read == 0) {
                 SyncDataJob.startNow(Injekt.get<Application>())
             }
             // SY <--
@@ -1041,6 +1083,7 @@ class ReaderViewModel @JvmOverloads constructor(
      * Saves the chapter last read history if incognito mode isn't on.
      */
     suspend fun updateHistory() {
+        saveChapterProgress()
         getCurrentChapter()?.let { readerChapter ->
             if (incognitoMode) return@let
 
@@ -2938,6 +2981,7 @@ private fun chimahon.ocr.OcrTextBlock.toViewerBlock(): eu.kanade.tachiyomi.ui.re
 }
 
 private const val OCR_SCAN_WORKERS = 2
+private const val PROGRESS_SAVE_DELAY = 2000L
 
 private fun OcrTextBlock.toCacheBlock() = chimahon.ocr.OcrTextBlock(
     xmin = xmin,

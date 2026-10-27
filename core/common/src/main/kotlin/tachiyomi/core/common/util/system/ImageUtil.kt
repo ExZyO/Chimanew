@@ -385,11 +385,22 @@ object ImageUtil {
      */
     fun chooseBackground(context: Context, imageSource: BufferedSource): Drawable {
         val decoder = ImageDecoder.newInstance(imageSource.inputStream())
-        val image = decoder?.decode()
-        decoder?.recycle()
+        val image = try {
+            decoder?.decode()
+        } finally {
+            decoder?.recycle()
+        }
 
+        if (image == null) return Color.WHITE.toDrawable()
+        return try {
+            chooseBackground(context, image)
+        } finally {
+            image.recycle()
+        }
+    }
+
+    private fun chooseBackground(context: Context, image: Bitmap): Drawable {
         val whiteColor = Color.WHITE
-        if (image == null) return whiteColor.toDrawable()
         if (image.width < 50 || image.height < 50) {
             return whiteColor.toDrawable()
         }

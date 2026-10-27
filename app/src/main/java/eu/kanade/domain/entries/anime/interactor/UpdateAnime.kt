@@ -119,6 +119,21 @@ class UpdateAnime(
         return animeRepository.update(AnimeUpdate(id = animeId, lastUpdate = Instant.now().toEpochMilli()))
     }
 
+    /**
+     * Updates the fetch interval and marks the episode list as changed in a single write.
+     */
+    suspend fun awaitUpdateFetchIntervalAndLastUpdate(
+        anime: Anime,
+        dateTime: ZonedDateTime = ZonedDateTime.now(),
+        window: Pair<Long, Long> = fetchInterval.getWindow(dateTime),
+    ): Boolean {
+        return animeRepository.update(
+            fetchInterval.toAnimeUpdate(anime, dateTime, window).copy(
+                lastUpdate = Instant.now().toEpochMilli(),
+            ),
+        )
+    }
+
     suspend fun awaitUpdateCoverLastModified(animeId: Long): Boolean {
         return animeRepository.update(AnimeUpdate(id = animeId, coverLastModified = Instant.now().toEpochMilli()))
     }

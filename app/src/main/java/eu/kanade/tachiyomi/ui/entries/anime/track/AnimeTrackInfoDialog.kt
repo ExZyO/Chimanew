@@ -61,6 +61,8 @@ import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -770,6 +772,8 @@ data class TrackServiceSearchScreen(
         private val tracker: Tracker,
     ) : StateScreenModel<Model.State>(State()) {
 
+        private var searchJob: Job? = null
+
         val supportsPrivateTracking = tracker.supportsPrivateTracking
 
         init {
@@ -780,7 +784,8 @@ data class TrackServiceSearchScreen(
         }
 
         fun trackingSearch(query: String) {
-            screenModelScope.launch {
+            searchJob?.cancel()
+            searchJob = screenModelScope.launch {
                 // To show loading state
                 mutableState.update { it.copy(queryResult = null, selected = null) }
 
@@ -789,6 +794,7 @@ data class TrackServiceSearchScreen(
                         val results = (tracker as AnimeTracker).searchAnime(query)
                         Result.success(results)
                     } catch (e: Throwable) {
+                        if (e is CancellationException) throw e
                         Result.failure(e)
                     }
                 }

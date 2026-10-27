@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -28,6 +29,8 @@ import eu.kanade.tachiyomi.util.system.getBitmapOrNull
 import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.pluralStringResource
 import tachiyomi.core.common.i18n.stringResource
@@ -87,37 +90,49 @@ class LibraryUpdateNotifier(
         }
     }
 
+    private val progressLock = Mutex()
+    private var lastProgressNotificationTime = 0L
+
     /**
      * Shows the notification containing the currently updating manga and the progress.
+     *
+     * Called from several update coroutines at once, so it shares the builder under a lock and skips updates that
+     * come faster than the system would show them anyway.
      *
      * @param manga the manga that are being updated.
      * @param current the current progress.
      * @param total the total progress.
      */
     suspend fun showProgressNotification(manga: List<Manga>, current: Int, total: Int) {
-        progressNotificationBuilder
-            .setContentTitle(
-                context.stringResource(
-                    MR.strings.notification_updating_progress,
-                    percentFormatter.format(current.toFloat() / total),
-                ),
-            )
+        progressLock.withLock {
+            val now = SystemClock.elapsedRealtime()
+            if (current < total && now - lastProgressNotificationTime < NOTIF_PROGRESS_INTERVAL_MS) return
+            lastProgressNotificationTime = now
 
-        // KMK -->
-        libraryUpdateStatus.updateProgress(current.toFloat() / total)
-        // KMK <--
-
-        if (!securityPreferences.hideNotificationContent().get()) {
-            val updatingText = manga.joinToString("\n") { it.title.chop(40) }
-            progressNotificationBuilder.setStyle(NotificationCompat.BigTextStyle().bigText(updatingText))
-        }
-
-        context.notify(
-            Notifications.ID_LIBRARY_PROGRESS,
             progressNotificationBuilder
-                .setProgress(total, current, false)
-                .build(),
-        )
+                .setContentTitle(
+                    context.stringResource(
+                        MR.strings.notification_updating_progress,
+                        percentFormatter.format(current.toFloat() / total),
+                    ),
+                )
+
+            // KMK -->
+            libraryUpdateStatus.updateProgress(current.toFloat() / total)
+            // KMK <--
+
+            if (!securityPreferences.hideNotificationContent().get()) {
+                val updatingText = manga.joinToString("\n") { it.title.chop(40) }
+                progressNotificationBuilder.setStyle(NotificationCompat.BigTextStyle().bigText(updatingText))
+            }
+
+            context.notify(
+                Notifications.ID_LIBRARY_PROGRESS,
+                progressNotificationBuilder
+                    .setProgress(total, current, false)
+                    .build(),
+            )
+        }
     }
 
     /**
@@ -410,3 +425,4 @@ private const val NOTIF_MAX_CHAPTERS = 5
 private const val NOTIF_TITLE_MAX_LEN = 45
 private const val NOTIF_ICON_SIZE = 192
 private const val MANGA_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 60
+private const val NOTIF_PROGRESS_INTERVAL_MS = 500L

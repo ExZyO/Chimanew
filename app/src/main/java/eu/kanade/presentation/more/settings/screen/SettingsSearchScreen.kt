@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.rememberCoroutineScope
 import eu.kanade.presentation.components.SearchHistoryRow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.domain.history.interactor.DeleteSearchHistory
 import tachiyomi.domain.history.interactor.GetSearchHistory
@@ -42,6 +43,7 @@ import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -206,7 +208,7 @@ class SettingsSearchScreen : Screen() {
             },
         ) { contentPadding ->
             SearchResult(
-                searchKey = textFieldState.text.toString(),
+                searchKey = { textFieldState.text.toString() },
                 listState = listState,
                 contentPadding = contentPadding,
             ) { result ->
@@ -219,62 +221,20 @@ class SettingsSearchScreen : Screen() {
 
 @Composable
 private fun SearchResult(
-    searchKey: String,
+    searchKey: () -> String,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     contentPadding: PaddingValues = PaddingValues(),
     onItemClick: (SearchResultItem) -> Unit,
 ) {
-    if (searchKey.isEmpty()) return
-
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
 
     val index = getIndex()
-    val result by produceState<List<SearchResultItem>?>(initialValue = null, searchKey) {
-        value = index.asSequence()
-            .flatMap { settingsData ->
-                settingsData.contents.asSequence()
-                    // Only search from enabled prefs and one with valid title
-                    .filter { it.enabled && it.title.isNotBlank() }
-                    // Flatten items contained inside *enabled* PreferenceGroup
-                    .flatMap { p ->
-                        when (p) {
-                            is Preference.PreferenceGroup -> {
-                                if (p.enabled) {
-                                    p.preferenceItems.asSequence()
-                                        .filter { it.enabled && it.title.isNotBlank() }
-                                        .map { p.title to it }
-                                } else {
-                                    emptySequence()
-                                }
-                            }
-                            is Preference.PreferenceItem<*, *> -> sequenceOf(null to p)
-                        }
-                    }
-                    // Don't show info preference
-                    .filterNot { it.second is Preference.PreferenceItem.InfoPreference }
-                    // Filter by search query
-                    .filter { (_, p) ->
-                        val inTitle = p.title.contains(searchKey, true)
-                        val inSummary = p.subtitle?.contains(searchKey, true) ?: false
-                        inTitle || inSummary
-                    }
-                    // Map result data
-                    .map { (categoryTitle, p) ->
-                        SearchResultItem(
-                            route = settingsData.route,
-                            title = p.title,
-                            breadcrumbs = getLocalizedBreadcrumb(
-                                path = settingsData.title,
-                                node = categoryTitle,
-                                isLtr = isLtr,
-                            ),
-                            highlightKey = p.title,
-                        )
-                    }
-            }
-            .take(10) // Just take top 10 result for quicker result
-            .toList()
+    // The query is read here rather than in composition, so typing doesn't rebuild the index on every key
+    val result by produceState<List<SearchResultItem>?>(initialValue = null, index) {
+        snapshotFlow(searchKey).collectLatest { key ->
+            value = if (key.isEmpty()) null else search(index, key, isLtr)
+        }
     }
 
     Crossfade(targetState = result) {
@@ -320,6 +280,53 @@ private fun SearchResult(
             }
         }
     }
+}
+
+private fun search(index: List<SettingsData>, searchKey: String, isLtr: Boolean): List<SearchResultItem> {
+    return index.asSequence()
+        .flatMap { settingsData ->
+            settingsData.contents.asSequence()
+                // Only search from enabled prefs and one with valid title
+                .filter { it.enabled && it.title.isNotBlank() }
+                // Flatten items contained inside *enabled* PreferenceGroup
+                .flatMap { p ->
+                    when (p) {
+                        is Preference.PreferenceGroup -> {
+                            if (p.enabled) {
+                                p.preferenceItems.asSequence()
+                                    .filter { it.enabled && it.title.isNotBlank() }
+                                    .map { p.title to it }
+                            } else {
+                                emptySequence()
+                            }
+                        }
+                        is Preference.PreferenceItem<*, *> -> sequenceOf(null to p)
+                    }
+                }
+                // Don't show info preference
+                .filterNot { it.second is Preference.PreferenceItem.InfoPreference }
+                // Filter by search query
+                .filter { (_, p) ->
+                    val inTitle = p.title.contains(searchKey, true)
+                    val inSummary = p.subtitle?.contains(searchKey, true) ?: false
+                    inTitle || inSummary
+                }
+                // Map result data
+                .map { (categoryTitle, p) ->
+                    SearchResultItem(
+                        route = settingsData.route,
+                        title = p.title,
+                        breadcrumbs = getLocalizedBreadcrumb(
+                            path = settingsData.title,
+                            node = categoryTitle,
+                            isLtr = isLtr,
+                        ),
+                        highlightKey = p.title,
+                    )
+                }
+        }
+        .take(10) // Just take top 10 result for quicker result
+        .toList()
 }
 
 @Composable

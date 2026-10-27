@@ -183,11 +183,9 @@ class SyncEpisodesWithSource(
             val episodeUpdates = updatedEpisodes.map { it.toEpisodeUpdate() }
             updateEpisode.awaitAll(episodeUpdates)
         }
-        updateAnime.awaitUpdateFetchInterval(anime, now, fetchWindow)
-
         // Set this anime as updated since episodes were changed
         // Note that last_update actually represents last time the episode list changed at all
-        updateAnime.awaitUpdateLastUpdate(anime.id)
+        updateAnime.awaitUpdateFetchIntervalAndLastUpdate(anime, now, fetchWindow)
 
         val reAddedUrls = reAdded.map { it.url }.toHashSet()
 
