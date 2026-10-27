@@ -79,30 +79,41 @@ object ChimahonWidgetManager {
             }
         }
 
-        runCatching {
-            Injekt.get<GetHistory>()
-                .subscribe(
-                    query = "",
-                    unfinishedManga = null,
-                    unfinishedChapter = null,
-                    nonLibraryEntries = null,
-                )
-                .map { list ->
-                    list.take(HISTORY_SIGNATURE_LIMIT).map { item ->
-                        HistorySignature(
-                            chapterId = item.chapterId,
-                            mangaId = item.mangaId,
-                            chapterNumber = item.chapterNumber,
-                            readAtMillis = item.readAt?.time,
-                        )
-                    }
+        scope.launch(Dispatchers.Default) {
+            val hasHistoryWidgets = runCatching {
+                val manager = androidx.glance.appwidget.GlanceAppWidgetManager(app)
+                WidgetTarget.HistoryRelated.any { target ->
+                    manager.getGlanceIds(target.createWidget().javaClass).isNotEmpty()
                 }
-                .distinctUntilChanged()
-                .onEach { enqueue(WidgetTarget.HistoryRelated) }
-                .flowOn(Dispatchers.Default)
-                .launchIn(scope)
-        }.onFailure { e ->
-            logcat(LogPriority.ERROR, e) { "Failed to subscribe history for widgets" }
+            }.getOrDefault(true)
+
+            if (hasHistoryWidgets) {
+                runCatching {
+                    Injekt.get<GetHistory>()
+                        .subscribe(
+                            query = "",
+                            unfinishedManga = null,
+                            unfinishedChapter = null,
+                            nonLibraryEntries = null,
+                        )
+                        .map { list ->
+                            list.take(HISTORY_SIGNATURE_LIMIT).map { item ->
+                                HistorySignature(
+                                    chapterId = item.chapterId,
+                                    mangaId = item.mangaId,
+                                    chapterNumber = item.chapterNumber,
+                                    readAtMillis = item.readAt?.time,
+                                )
+                            }
+                        }
+                        .distinctUntilChanged()
+                        .onEach { enqueue(WidgetTarget.HistoryRelated) }
+                        .flowOn(Dispatchers.Default)
+                        .launchIn(scope)
+                }.onFailure { e ->
+                    logcat(LogPriority.ERROR, e) { "Failed to subscribe history for widgets" }
+                }
+            }
         }
 
         runCatching {

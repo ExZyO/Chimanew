@@ -688,9 +688,8 @@ class LibraryScreenModel(
         // SY <--
 
         val sortAlphabetically: (LibraryItem, LibraryItem) -> Int = { manga1, manga2 ->
-            val title1 = manga1.libraryManga.manga.title.lowercase()
-            val title2 = manga2.libraryManga.manga.title.lowercase()
-            title1.compareToWithCollator(title2)
+            // The collator already ignores case, and lowercasing on every comparison is slow on large libraries
+            manga1.libraryManga.manga.title.compareToWithCollator(manga2.libraryManga.manga.title)
         }
 
         val defaultTrackerScoreSortValue = -1.0
@@ -836,6 +835,11 @@ class LibraryScreenModel(
             getLibraryItemPreferencesFlow(),
             downloadCache.changes,
         ) { libraryManga, preferences, _ ->
+            val downloadCounts = if (preferences.downloadBadge) {
+                downloadManager.getDownloadCounts(libraryManga.map { it.manga })
+            } else {
+                emptyMap()
+            }
             libraryManga.map { manga ->
                 // Display mode based on user preference: take it from global library setting or category
                 // KMK -->
@@ -852,7 +856,7 @@ class LibraryScreenModel(
                                 .sumOf { downloadManager.getDownloadCount(it) }.toLong()
                         } else {
                             // SY <--
-                            downloadManager.getDownloadCount(manga.manga).toLong()
+                            downloadCounts[manga.manga.id]?.toLong() ?: 0L
                         }
                     } else {
                         0
