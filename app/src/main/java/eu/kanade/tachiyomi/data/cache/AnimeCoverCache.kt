@@ -2,6 +2,9 @@ package eu.kanade.tachiyomi.data.cache
 
 import android.content.Context
 import eu.kanade.tachiyomi.util.storage.DiskUtil
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import tachiyomi.domain.entries.anime.model.Anime
 import java.io.File
 import java.io.IOException
@@ -25,7 +28,7 @@ class AnimeCoverCache(private val context: Context) {
     private var customCoversIndexed = false
 
     init {
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.IO).launch {
             val names = customCoverCacheDir.list().orEmpty()
             synchronized(customCoverNames) {
                 names.filterNotTo(customCoverNames) { it in deletedWhileIndexing }
