@@ -22,11 +22,10 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,16 +37,16 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.drop
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.plus
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -145,6 +144,10 @@ class HomeRowsCustomizerScreen : Screen() {
                 } else if (id in allValidIds && id !in seen) {
                     parsed.add(id to enabled)
                     seen.add(id)
+                } else if (categories.isEmpty() && id.startsWith(CATEGORY_PREFIX) && id !in seen) {
+                    // Guard against dropping custom categories if categories list hasn't finished loading
+                    parsed.add(id to enabled)
+                    seen.add(id)
                 }
             }
 
@@ -176,9 +179,37 @@ class HomeRowsCustomizerScreen : Screen() {
         val navigator = LocalNavigator.currentOrThrow
         val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
         val getCategories = remember { Injekt.get<GetCategories>() }
-        val categories by getCategories.subscribe().collectAsState(initial = emptyList())
+        val categoriesNullable by getCategories.subscribe().collectAsState(initial = null)
         val orderPref = chimanewPreferences.homeShelfOrder()
 
+        Scaffold(
+            topBar = { scrollBehavior ->
+                AppBar(
+                    title = stringResource(MR.strings.pref_nuvio_reorder_shelves),
+                    navigateUp = navigator::pop,
+                    scrollBehavior = scrollBehavior,
+                )
+            },
+        ) { contentPadding ->
+            val categories = categoriesNullable
+            if (categories == null) {
+                LoadingScreen(modifier = Modifier.padding(contentPadding))
+            } else {
+                CustomizerListContent(
+                    categories = categories,
+                    orderPref = orderPref,
+                    contentPadding = contentPadding,
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun CustomizerListContent(
+        categories: List<Category>,
+        orderPref: Preference<String>,
+        contentPadding: PaddingValues,
+    ) {
         val standardTitles = mapOf(
             SHELF_CONTINUE_READING to stringResource(MR.strings.pref_nuvio_shelf_continue_reading),
             SHELF_READING to stringResource(MR.strings.pref_nuvio_shelf_reading),
@@ -192,11 +223,14 @@ class HomeRowsCustomizerScreen : Screen() {
         )
         val categoryPrefixStr = stringResource(MR.strings.pref_chimanew_shelf_category_prefix)
 
-        val itemsState = remember(categories) {
-            val rawOrder = orderPref.get()
-            val categoryTitleMap = categories.associate { cat ->
+        val categoryTitleMap = remember(categories) {
+            categories.associate { cat ->
                 "$CATEGORY_PREFIX${cat.id}" to categoryPrefixStr.replace("%s", cat.name.ifBlank { "Default" })
             }
+        }
+
+        val itemsState = remember {
+            val rawOrder = orderPref.get()
             parseOrder(rawOrder, categories).map { (id, enabled) ->
                 HomeShelfItem(
                     id = id,
@@ -206,122 +240,110 @@ class HomeRowsCustomizerScreen : Screen() {
             }.toMutableStateList()
         }
 
+        fun saveOrder() {
+            val serialized = serializeOrder(itemsState.map { it.id to it.enabled })
+            orderPref.set(serialized)
+        }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                saveOrder()
+            }
+        }
+
         val lazyListState = rememberLazyListState()
 
         val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
             if (from.index in itemsState.indices && to.index in itemsState.indices) {
-                itemsState.apply {
-                    add(to.index, removeAt(from.index))
-                }
+                val item = itemsState.removeAt(from.index)
+                itemsState.add(to.index, item)
+                saveOrder()
             }
-        }
-
-        // Persist when dragging completes
-        LaunchedEffect(reorderableState) {
-            snapshotFlow { reorderableState.isAnyItemDragging }
-                .drop(1)
-                .collectLatest { isDragging ->
-                    if (!isDragging) {
-                        val serialized = serializeOrder(itemsState.map { it.id to it.enabled })
-                        orderPref.set(serialized)
-                    }
-                }
         }
 
         fun toggleVisibility(index: Int) {
             if (index in itemsState.indices) {
                 val current = itemsState[index]
                 itemsState[index] = current.copy(enabled = !current.enabled)
-                val serialized = serializeOrder(itemsState.map { it.id to it.enabled })
-                orderPref.set(serialized)
+                saveOrder()
             }
         }
 
-        Scaffold(
-            topBar = { scrollBehavior ->
-                AppBar(
-                    title = stringResource(MR.strings.pref_nuvio_reorder_shelves),
-                    navigateUp = navigator::pop,
-                    scrollBehavior = scrollBehavior,
-                )
-            },
-        ) { contentPadding ->
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = lazyListState,
-                contentPadding = contentPadding + PaddingValues(
-                    horizontal = MaterialTheme.padding.medium,
-                    vertical = MaterialTheme.padding.small,
-                ),
-                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-            ) {
-                items(
-                    items = itemsState,
-                    key = { it.id },
-                ) { item ->
-                    ReorderableItem(
-                        state = reorderableState,
-                        key = item.id,
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = lazyListState,
+            contentPadding = contentPadding + PaddingValues(
+                horizontal = MaterialTheme.padding.medium,
+                vertical = MaterialTheme.padding.small,
+            ),
+            verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        ) {
+            items(
+                items = itemsState,
+                key = { it.id },
+            ) { item ->
+                ReorderableItem(
+                    state = reorderableState,
+                    key = item.id,
+                ) {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateItem(),
                     ) {
-                        ElevatedCard(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .animateItem(),
+                                .padding(
+                                    start = MaterialTheme.padding.small,
+                                    end = MaterialTheme.padding.medium,
+                                    top = MaterialTheme.padding.small,
+                                    bottom = MaterialTheme.padding.small,
+                                ),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Row(
+                            Icon(
+                                imageVector = Icons.Outlined.DragHandle,
+                                contentDescription = null,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(
-                                        start = MaterialTheme.padding.small,
-                                        end = MaterialTheme.padding.medium,
-                                        top = MaterialTheme.padding.small,
-                                        bottom = MaterialTheme.padding.small,
+                                    .padding(MaterialTheme.padding.medium)
+                                    .draggableHandle(),
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 4.dp),
+                            ) {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
                                     ),
-                                verticalAlignment = Alignment.CenterVertically,
+                                    color = LocalContentColor.current.let {
+                                        if (item.enabled) it else it.copy(alpha = 0.5f)
+                                    },
+                                    textDecoration = TextDecoration.LineThrough.takeIf { !item.enabled },
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    val idx = itemsState.indexOfFirst { it.id == item.id }
+                                    if (idx != -1) toggleVisibility(idx)
+                                },
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.DragHandle,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .padding(MaterialTheme.padding.medium)
-                                        .draggableHandle(),
-                                )
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = 4.dp),
-                                ) {
-                                    Text(
-                                        text = item.title,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                        ),
-                                        color = LocalContentColor.current.let {
-                                            if (item.enabled) it else it.copy(alpha = 0.5f)
-                                        },
-                                        textDecoration = TextDecoration.LineThrough.takeIf { !item.enabled },
-                                    )
-                                }
-                                IconButton(
-                                    onClick = {
-                                        val idx = itemsState.indexOfFirst { it.id == item.id }
-                                        if (idx != -1) toggleVisibility(idx)
+                                    imageVector = if (item.enabled) {
+                                        Icons.Outlined.Visibility
+                                    } else {
+                                        Icons.Outlined.VisibilityOff
                                     },
-                                ) {
-                                    Icon(
-                                        imageVector = if (item.enabled) {
-                                            Icons.Outlined.Visibility
-                                        } else {
-                                            Icons.Outlined.VisibilityOff
-                                        },
-                                        contentDescription = null,
-                                        tint = if (item.enabled) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.outline
-                                        },
-                                    )
-                                }
+                                    contentDescription = null,
+                                    tint = if (item.enabled) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.outline
+                                    },
+                                )
                             }
                         }
                     }
