@@ -641,6 +641,11 @@ object SettingsReaderScreen : SearchableSettings {
                     title = stringResource(SYMR.strings.aggressively_load_pages),
                     subtitle = stringResource(SYMR.strings.aggressively_load_pages_summary),
                 ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = readerPreferences.loadAheadOnlyOverWifi(),
+                    title = stringResource(MR.strings.pref_load_ahead_only_over_wifi),
+                    subtitle = stringResource(MR.strings.pref_load_ahead_only_over_wifi_summary),
+                ),
             ),
         )
     }

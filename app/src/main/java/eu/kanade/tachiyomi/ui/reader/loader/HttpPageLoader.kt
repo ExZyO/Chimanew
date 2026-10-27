@@ -10,31 +10,24 @@ import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import exh.source.isEhBasedSource
 import exh.util.DataSaver
-import exh.util.DataSaver.Companion.getImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.runInterruptible
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.concurrent.PriorityBlockingQueue
-import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.concurrent.atomics.incrementAndFetch
-import kotlin.math.min
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Loader used to load chapters from an online source.
  */
-@OptIn(DelicateCoroutinesApi::class)
 internal class HttpPageLoader(
     private val chapter: ReaderChapter,
     private val source: HttpSource,
@@ -43,45 +36,20 @@ internal class HttpPageLoader(
     private val readerPreferences: ReaderPreferences = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     // SY <--
+    private val canLoadAhead: () -> Boolean = { true },
 ) : PageLoader() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val chunkProcessLock = Any()
+    private var chunkProcessJob: Job? = null
+    private val downloadJobs = ConcurrentHashMap<Int, Job>()
 
-    /**
-     * A queue used to manage requests one by one while allowing priorities.
-     */
-    private val queue = PriorityBlockingQueue<PriorityPage>()
-
-    private val preloadSize = /* SY --> */ readerPreferences.preloadSize().get() // SY <--
+    override var isLocal: Boolean = false
 
     // SY -->
     private val dataSaver = DataSaver(source, sourcePreferences)
     // SY <--
 
-    init {
-        // EXH -->
-        repeat(readerPreferences.readerThreads().get()) {
-            // EXH <--
-            scope.launchIO {
-                flow {
-                    while (true) {
-                        emit(runInterruptible { queue.take() }.page)
-                    }
-                }
-                    .filter { it.status == Page.State.Queue }
-                    .collect(::internalLoadPage)
-            }
-            // EXH -->
-        }
-        // EXH <--
-    }
-
-    override var isLocal: Boolean = false
-
-    /**
-     * Returns the page list for a chapter. It tries to return the page list from the local cache,
-     * otherwise fallbacks to network.
-     */
     override suspend fun getPages(): List<ReaderPage> {
         val pages = try {
             chapterCache.getPageListFromCache(chapter.chapter.toDomainChapter()!!)
@@ -91,20 +59,15 @@ internal class HttpPageLoader(
             }
             source.getPageList(chapter.chapter)
         }
-        // SY -->
-        val rp = pages.mapIndexed { index, page ->
+        return pages.mapIndexed { index, page ->
             // Don't trust sources and use our own indexing
-            ReaderPage(index, page.url, page.imageUrl)
-        }
-        if (readerPreferences.aggressivePageLoading().get()) {
-            rp.forEach {
-                if (it.status == Page.State.Queue) {
-                    queue.offer(PriorityPage(it, 0))
-                }
+            ReaderPage(index, page.url, page.imageUrl).also {
+                // Loading starts below, before ChapterLoader gets to set this, and chapter is a lateinit
+                it.chapter = chapter
             }
+        }.also {
+            it.loadByRollingChunked(0, 1, 1)
         }
-        return rp
-        // SY <--
     }
 
     /**
@@ -123,48 +86,41 @@ internal class HttpPageLoader(
             page.status = Page.State.Queue
         }
 
-        val queuedPages = mutableListOf<PriorityPage>()
-        if (page.status == Page.State.Queue) {
-            queuedPages += PriorityPage(page, 1).also { queue.offer(it) }
-        }
-        queuedPages += preloadNextPages(page, preloadSize)
-
-        suspendCancellableCoroutine<Nothing> { continuation ->
-            continuation.invokeOnCancellation {
-                queuedPages.forEach {
-                    if (it.page.status == Page.State.Queue) {
-                        queue.remove(it)
-                    }
-                }
-            }
-        }
+        val pages = page.chapter.pages ?: return@withIOContext
+        pages.loadByRollingChunked(page.index, 1, 2)
     }
 
     /**
      * Retries a page. This method is only called from user interaction on the viewer.
      */
     override fun retryPage(page: ReaderPage) {
+        val pages = page.chapter.pages ?: return
         if (page.status is Page.State.Error) {
             page.status = Page.State.Queue
         }
-        // EXH -->
         // Grab a new image URL on EXH sources
         if (source.isEhBasedSource()) {
             page.imageUrl = null
         }
+        boostPage(page)
+        pages.loadByRollingChunked(page.index, 1, 2)
+    }
 
-        if (readerPreferences.readerInstantRetry().get()) { // EXH <--
-            boostPage(page)
-        } else {
-            // EXH <--
-            queue.offer(PriorityPage(page, 2))
+    fun boostPage(page: ReaderPage) {
+        if (page.status == Page.State.Queue || page.status is Page.State.Error) {
+            scope.launch {
+                internalLoadPage(page, force = true)
+            }
         }
     }
 
     override fun recycle() {
         super.recycle()
         scope.cancel()
-        queue.clear()
+        synchronized(chunkProcessLock) {
+            chunkProcessJob?.cancel()
+        }
+        downloadJobs.clear()
 
         // Cache current page list progress for online chapters to allow a faster reopen
         chapter.pages?.let { pages ->
@@ -182,25 +138,81 @@ internal class HttpPageLoader(
         }
     }
 
-    /**
-     * Preloads the given [amount] of pages after the [currentPage] with a lower priority.
-     *
-     * @return a list of [PriorityPage] that were added to the [queue]
-     */
-    private fun preloadNextPages(currentPage: ReaderPage, amount: Int): List<PriorityPage> {
-        val pageIndex = currentPage.index
-        val pages = currentPage.chapter.pages ?: return emptyList()
-        if (pageIndex == pages.lastIndex) return emptyList()
+    private fun launchLoadOnce(page: ReaderPage): Job? {
+        val pageIndex = page.index
+        downloadJobs[pageIndex]?.takeIf { it.isActive }?.let { return it }
+        if (page.status !is Page.State.Queue && page.status !is Page.State.Error) return null
 
-        return pages
-            .subList(pageIndex + 1, min(pageIndex + 1 + amount, pages.size))
-            .mapNotNull {
-                if (it.status == Page.State.Queue) {
-                    PriorityPage(it, 0).apply { queue.offer(this) }
-                } else {
-                    null
+        val job = scope.launch(start = CoroutineStart.LAZY) { internalLoadPage(page) }
+        val running = downloadJobs.putIfAbsent(pageIndex, job)
+        if (running != null) {
+            job.cancel()
+            // Hand back the in flight job so the chunk still waits for this page and the chunk size keeps bounding
+            // how many downloads run at once
+            return running
+        }
+        job.invokeOnCompletion { downloadJobs.remove(pageIndex, job) }
+        job.start()
+        return job
+    }
+
+    private fun List<ReaderPage>.loadByRollingChunked(
+        index: Int,
+        chunkStartSize: Int,
+        chunkEndSize: Int,
+        onNewChunks: (List<List<ReaderPage>>) -> Unit = {},
+    ) {
+        val items = this
+        // When loading ahead isn't allowed, only the pages around the one being read load
+        val window = if (canLoadAhead()) items.indices else (index - 1)..(index + LIMITED_PAGES_AHEAD)
+        val chunks = buildList {
+            items.getOrNull(index)?.let(::add)
+            items.getOrNull(index - 1)?.let(::add)
+            items.getOrNull(index + 1)?.let(::add)
+            // `items.lastIndex`, not the list being built, whose lastIndex is at most 2 here
+            if (index < items.lastIndex - 1) {
+                items.subList(index + 2, items.size).let(::addAll)
+            }
+            if (index > 1) {
+                items.subList(0, index - 1).reversed().let(::addAll)
+            }
+        }
+            .filter { it.index in window }
+            .rollingChunked(chunkStartSize, chunkEndSize)
+            .also(onNewChunks)
+
+        // Every visible page holder calls loadPage, so this runs concurrently
+        synchronized(chunkProcessLock) {
+            chunkProcessJob?.cancel()
+            chunkProcessJob = scope.launch {
+                for (chunk in chunks) {
+                    val jobs = chunk.mapNotNull { page -> launchLoadOnce(page) }
+                    jobs.joinAll()
                 }
             }
+        }
+    }
+
+    /**
+     * Splits the list into chunks with rolling sizes between a starting size and an ending size.
+     *
+     * The chunking process starts with the given `startSize` and increases by 1 until it reaches
+     * the `endSize`, at which point it continues with the `endSize` size for the remaining items.
+     */
+    private fun <T> List<T>.rollingChunked(startSize: Int, endSize: Int): List<List<T>> {
+        // A start size of 0 never advances the index
+        require(startSize >= 1) { "startSize must be at least 1, was $startSize" }
+        val thisSize = this.size
+        val result = ArrayList<List<T>>()
+        var chunkSize = startSize
+        var index = 0
+        while (index < thisSize) {
+            val localChunkSize = chunkSize.coerceAtMost(thisSize - index)
+            result.add(List(localChunkSize) { this[it + index] })
+            index += chunkSize
+            if (chunkSize < endSize) chunkSize += 1
+        }
+        return result
     }
 
     /**
@@ -209,9 +221,9 @@ internal class HttpPageLoader(
      *
      * @param page the page whose source image has to be downloaded.
      */
-    private suspend fun internalLoadPage(page: ReaderPage) {
+    private suspend fun internalLoadPage(page: ReaderPage, force: Boolean = false) {
         try {
-            if (page.imageUrl.isNullOrEmpty()) {
+            if (page.imageUrl.isNullOrEmpty() || force) {
                 page.status = Page.State.LoadPage
                 page.imageUrl = source.getImageUrl(page)
             }
@@ -226,40 +238,15 @@ internal class HttpPageLoader(
             page.stream = { chapterCache.getImageFile(imageUrl).inputStream() }
             page.status = Page.State.Ready
         } catch (e: Throwable) {
-            page.status = Page.State.Error(e)
             if (e is CancellationException) {
+                // Chunk chains get cancelled on every page turn, so a cancelled page isn't an error. Put it back in
+                // the queue, otherwise it's stuck in a state no later pass will pick up.
+                page.status = Page.State.Queue
                 throw e
             }
+            page.status = Page.State.Error(e)
         }
     }
-
-    // EXH -->
-    fun boostPage(page: ReaderPage) {
-        if (page.status == Page.State.Queue) {
-            scope.launchIO {
-                loadPage(page)
-            }
-        }
-    }
-    // EXH <--
 }
 
-/**
- * Data class used to keep ordering of pages in order to maintain priority.
- */
-@OptIn(ExperimentalAtomicApi::class)
-private class PriorityPage(
-    val page: ReaderPage,
-    val priority: Int,
-) : Comparable<PriorityPage> {
-    companion object {
-        private val idGenerator = AtomicInt(0)
-    }
-
-    private val identifier = idGenerator.incrementAndFetch()
-
-    override fun compareTo(other: PriorityPage): Int {
-        val p = other.priority.compareTo(priority)
-        return if (p != 0) p else identifier.compareTo(other.identifier)
-    }
-}
+private const val LIMITED_PAGES_AHEAD = 4

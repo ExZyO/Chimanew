@@ -14,10 +14,15 @@ import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistMediaArtwork
 import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.UnifiedArtwork
+import android.os.SystemClock
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.category.interactor.GetCategories
@@ -161,6 +166,7 @@ class ChimanewHomeScreenModel(
     // EaZy Nuvio+ / Chimanew: prevent infinite re-query loops for hero art
     private val attemptedHeroTitles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var lastArtworkConfigKey: String? = null
+    private var persistentHeroMangaIds: List<Long> = emptyList()
 
     @Immutable
     data class State(
@@ -185,7 +191,7 @@ class ChimanewHomeScreenModel(
                 artworkRefreshTrigger,
             ) { historyList: List<HistoryWithRelations>, libraryList: List<LibraryManga>, categories: List<Category>, tracks: List<Track>, _ ->
                 DataBundle(historyList, libraryList, categories, tracks)
-            }
+            }.throttleLatest(1000L)
 
             val heroPrefsFlow = combine(
                 combine(
@@ -266,9 +272,10 @@ class ChimanewHomeScreenModel(
             }
 
             combine(dataFlow, prefsFlow) { data, prefs ->
-                val currentConfigKey = "${prefs.artworkWaterfallOrder}|${prefs.artworkBannerOrder}|${prefs.artworkCoverOrder}|${prefs.heroArtworkSources}|${prefs.heroRequireSelectedArtwork}|${prefs.heroStrictArtworkRequirements}"
+                val currentConfigKey = "${prefs.showHero}|${prefs.heroSource}|${prefs.heroCategories}|${prefs.heroTrackerStatuses}|${prefs.heroStyle}|${prefs.artworkWaterfallOrder}|${prefs.artworkBannerOrder}|${prefs.artworkCoverOrder}|${prefs.heroArtworkSources}|${prefs.heroRequireSelectedArtwork}|${prefs.heroStrictArtworkRequirements}"
                 if (lastArtworkConfigKey != null && lastArtworkConfigKey != currentConfigKey) {
                     attemptedHeroTitles.clear()
+                    persistentHeroMangaIds = emptyList()
                 }
                 lastArtworkConfigKey = currentConfigKey
 
@@ -520,21 +527,27 @@ class ChimanewHomeScreenModel(
                     } else {
                         candidateList
                     }
-                    filteredCandidates
-                        .shuffled()
-                        .take(7)
-                        .map { lib ->
-                            createHomeItem(
-                                mangaId = lib.manga.id,
-                                title = lib.manga.title,
-                                coverData = lib.manga.asMangaCover(),
-                                totalChapters = lib.totalChapters,
-                                readChapters = lib.readCount,
-                                unreadCount = lib.unreadCount,
-                                genres = lib.manga.ogGenre ?: emptyList(),
-                                description = lib.manga.ogDescription,
-                            )
-                        }
+                    val candidateMap = filteredCandidates.associateBy { it.manga.id }
+                    val stableIds = persistentHeroMangaIds.filter { it in candidateMap }
+                    val finalIds = if (stableIds.size < 7) {
+                        val remaining = filteredCandidates.filter { it.manga.id !in stableIds.toSet() }.shuffled()
+                        stableIds + remaining.take(7 - stableIds.size).map { it.manga.id }
+                    } else {
+                        stableIds.take(7)
+                    }
+                    persistentHeroMangaIds = finalIds
+                    finalIds.mapNotNull { candidateMap[it] }.map { lib ->
+                        createHomeItem(
+                            mangaId = lib.manga.id,
+                            title = lib.manga.title,
+                            coverData = lib.manga.asMangaCover(),
+                            totalChapters = lib.totalChapters,
+                            readChapters = lib.readCount,
+                            unreadCount = lib.unreadCount,
+                            genres = lib.manga.ogGenre ?: emptyList(),
+                            description = lib.manga.ogDescription,
+                        )
+                    }
                 } else if (prefs.heroSource == 2) {
                     // Selected Tracker Statuses
                     val chosenStatuses = prefs.heroTrackerStatuses
@@ -570,7 +583,16 @@ class ChimanewHomeScreenModel(
                     } else {
                         candidateList
                     }
-                    filteredCandidates.shuffled().take(7)
+                    val candidateMap = filteredCandidates.associateBy { it.mangaId }
+                    val stableIds = persistentHeroMangaIds.filter { it in candidateMap }
+                    val finalIds = if (stableIds.size < 7) {
+                        val remaining = filteredCandidates.filter { it.mangaId !in stableIds.toSet() }.shuffled()
+                        stableIds + remaining.take(7 - stableIds.size).map { it.mangaId }
+                    } else {
+                        stableIds.take(7)
+                    }
+                    persistentHeroMangaIds = finalIds
+                    finalIds.mapNotNull { candidateMap[it] }
                 } else {
                     // Default: in-progress history with library fallback
                     val eligibleHistory = if (prefs.heroRequireSelectedArtwork) {
@@ -598,27 +620,38 @@ class ChimanewHomeScreenModel(
                         )
                     }
                     if (heroFromHistory.size < 5 && data.libraryList.isNotEmpty()) {
-                        val additional = data.libraryList
-                            .filter { lib ->
-                                lib.id !in heroFromHistory.map { item -> item.mangaId } &&
-                                (!prefs.heroRequireSelectedArtwork || hasRequiredHeroArtwork(lib.manga.id, lib.manga.ogTitle ?: lib.manga.title, prefs.heroStyle))
-                            }
-                            .sortedByDescending { it.unreadCount.coerceAtLeast(0L) }
-                            .take(7 - heroFromHistory.size)
-                            .map { lib ->
-                                createHomeItem(
-                                    mangaId = lib.manga.id,
-                                    title = lib.manga.title,
-                                    coverData = lib.manga.asMangaCover(),
-                                    totalChapters = lib.totalChapters,
-                                    readChapters = lib.readCount,
-                                    unreadCount = lib.unreadCount,
-                                    genres = lib.manga.ogGenre ?: emptyList(),
-                                    description = lib.manga.ogDescription,
-                                )
-                            }
-                        heroFromHistory + additional
+                        val historyIds = heroFromHistory.map { it.mangaId }.toSet()
+                        val libraryCandidates = data.libraryList.filter { lib ->
+                            lib.id !in historyIds &&
+                            (!prefs.heroRequireSelectedArtwork || hasRequiredHeroArtwork(lib.manga.id, lib.manga.ogTitle ?: lib.manga.title, prefs.heroStyle))
+                        }
+                        val candidateMap = libraryCandidates.associateBy { it.manga.id }
+                        val needed = 7 - heroFromHistory.size
+                        val stableFallbackIds = persistentHeroMangaIds.filter { it in candidateMap && it !in historyIds }
+                        val finalFallbackIds = if (stableFallbackIds.size < needed) {
+                            val sorted = libraryCandidates
+                                .filter { it.manga.id !in stableFallbackIds.toSet() }
+                                .sortedByDescending { it.unreadCount.coerceAtLeast(0L) }
+                            stableFallbackIds + sorted.take(needed - stableFallbackIds.size).map { it.manga.id }
+                        } else {
+                            stableFallbackIds.take(needed)
+                        }
+                        val fallbackItems = finalFallbackIds.mapNotNull { candidateMap[it] }.map { lib ->
+                            createHomeItem(
+                                mangaId = lib.manga.id,
+                                title = lib.manga.title,
+                                coverData = lib.manga.asMangaCover(),
+                                totalChapters = lib.totalChapters,
+                                readChapters = lib.readCount,
+                                unreadCount = lib.unreadCount,
+                                genres = lib.manga.ogGenre ?: emptyList(),
+                                description = lib.manga.ogDescription,
+                            )
+                        }
+                        persistentHeroMangaIds = heroFromHistory.map { it.mangaId } + finalFallbackIds
+                        heroFromHistory + fallbackItems
                     } else {
+                        persistentHeroMangaIds = heroFromHistory.map { it.mangaId }
                         heroFromHistory
                     }
                 }
@@ -930,3 +963,32 @@ class ChimanewHomeScreenModel(
         }
     }
 }
+
+private fun <T> kotlinx.coroutines.flow.Flow<T>.throttleLatest(periodMillis: Long): kotlinx.coroutines.flow.Flow<T> =
+    flow {
+        var lastEmitTime = 0L
+        var latestValue: T? = null
+        var emitJob: Job? = null
+
+        coroutineScope {
+            collect { value ->
+                latestValue = value
+                val currentTime = SystemClock.elapsedRealtime()
+                val elapsed = currentTime - lastEmitTime
+
+                if (elapsed >= periodMillis || lastEmitTime == 0L) {
+                    emitJob?.cancel()
+                    lastEmitTime = currentTime
+                    emit(value)
+                } else if (emitJob?.isActive != true) {
+                    emitJob = launch {
+                        delay(periodMillis - elapsed)
+                        latestValue?.let {
+                            lastEmitTime = SystemClock.elapsedRealtime()
+                            emit(it)
+                        }
+                    }
+                }
+            }
+        }
+    }

@@ -274,6 +274,11 @@ fun NuvioHeroSection(
     ) {
         HorizontalPager(
             state = pagerState,
+            key = { page ->
+                val actualIndex = if (isLooping) page % displayItems.size else page
+                val item = displayItems.getOrNull(actualIndex)
+                "${page}_${item?.mangaId ?: actualIndex}"
+            },
             modifier = Modifier.fillMaxSize(),
         ) { page ->
             val actualIndex = if (isLooping) page % displayItems.size else page
