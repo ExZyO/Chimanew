@@ -16,13 +16,14 @@ import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.UnifiedArtwork
 import android.os.SystemClock
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.category.interactor.GetCategories
@@ -965,13 +966,14 @@ class ChimanewHomeScreenModel(
 }
 
 private fun <T> kotlinx.coroutines.flow.Flow<T>.throttleLatest(periodMillis: Long): kotlinx.coroutines.flow.Flow<T> =
-    flow {
+    channelFlow {
         var lastEmitTime = 0L
+        val mutex = Mutex()
         var latestValue: T? = null
         var emitJob: Job? = null
 
-        coroutineScope {
-            collect { value ->
+        collect { value ->
+            mutex.withLock {
                 latestValue = value
                 val currentTime = SystemClock.elapsedRealtime()
                 val elapsed = currentTime - lastEmitTime
@@ -979,13 +981,15 @@ private fun <T> kotlinx.coroutines.flow.Flow<T>.throttleLatest(periodMillis: Lon
                 if (elapsed >= periodMillis || lastEmitTime == 0L) {
                     emitJob?.cancel()
                     lastEmitTime = currentTime
-                    emit(value)
+                    send(value)
                 } else if (emitJob?.isActive != true) {
                     emitJob = launch {
                         delay(periodMillis - elapsed)
-                        latestValue?.let {
-                            lastEmitTime = SystemClock.elapsedRealtime()
-                            emit(it)
+                        mutex.withLock {
+                            latestValue?.let {
+                                lastEmitTime = SystemClock.elapsedRealtime()
+                                send(it)
+                            }
                         }
                     }
                 }
