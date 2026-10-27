@@ -305,15 +305,15 @@ class Downloader(
         // KMK <--
 
         val wasEmpty = queueState.value.isEmpty()
+        val downloadedChapterIds = provider.findDownloadedChapterIds(chapters, manga, source)
+        val queuedChapterIds = queueState.value.mapTo(HashSet()) { it.chapter.id }
         val chaptersToQueue = chapters.asSequence()
             // Filter out those already downloaded.
-            .filter {
-                provider.findChapterDir(it.name, it.scanlator, it.url, /* SY --> */ manga.ogTitle /* SY <-- */, source) == null
-            }
+            .filter { it.id !in downloadedChapterIds }
             // Add chapters to queue from the start.
             .sortedByDescending { it.sourceOrder }
             // Filter out those already enqueued.
-            .filter { chapter -> queueState.value.none { it.chapter.id == chapter.id } }
+            .filter { it.id !in queuedChapterIds }
             // Create a download for each one.
             .map { Download(source, manga, it) }
             .toList()
@@ -728,12 +728,14 @@ class Downloader(
     }
 
     private fun addAllToQueue(downloads: List<Download>) {
-        _queueState.update {
-            downloads.forEach { download ->
+        _queueState.update { queue ->
+            val queuedChapterIds = queue.mapTo(HashSet()) { it.chapter.id }
+            val toAdd = downloads.filter { it.chapter.id !in queuedChapterIds }
+            toAdd.forEach { download ->
                 download.status = Download.State.QUEUE
             }
-            store.addAll(downloads)
-            it + downloads
+            store.addAll(toAdd)
+            queue + toAdd
         }
     }
 

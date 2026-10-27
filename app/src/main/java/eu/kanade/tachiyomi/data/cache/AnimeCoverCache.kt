@@ -18,6 +18,29 @@ class AnimeCoverCache(private val context: Context) {
 
     private val customCoverCacheDir = getCacheDir(CUSTOM_COVERS_DIR)
 
+    private val customCoverNames = mutableSetOf<String>()
+    private val deletedWhileIndexing = mutableSetOf<String>()
+
+    @Volatile
+    private var customCoversIndexed = false
+
+    init {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val names = customCoverCacheDir.list().orEmpty()
+            synchronized(customCoverNames) {
+                names.filterNotTo(customCoverNames) { it in deletedWhileIndexing }
+                deletedWhileIndexing.clear()
+                customCoversIndexed = true
+            }
+        }
+    }
+
+    fun hasCustomCover(animeId: Long?): Boolean {
+        val file = getCustomCoverFile(animeId)
+        if (!customCoversIndexed) return file.exists()
+        return synchronized(customCoverNames) { file.name in customCoverNames }
+    }
+
     fun getCoverFile(animeThumbnailUrl: String?): File? {
         return animeThumbnailUrl?.let {
             File(cacheDir, DiskUtil.hashKeyForDisk(it))
@@ -30,8 +53,13 @@ class AnimeCoverCache(private val context: Context) {
 
     @Throws(IOException::class)
     fun setCustomCoverToCache(anime: Anime, inputStream: InputStream) {
-        getCustomCoverFile(anime.id).outputStream().use {
+        val file = getCustomCoverFile(anime.id)
+        file.outputStream().use {
             inputStream.copyTo(it)
+        }
+        synchronized(customCoverNames) {
+            customCoverNames.add(file.name)
+            deletedWhileIndexing.remove(file.name)
         }
     }
 
@@ -50,9 +78,13 @@ class AnimeCoverCache(private val context: Context) {
     }
 
     fun deleteCustomCover(animeId: Long?): Boolean {
-        return getCustomCoverFile(animeId).let {
-            it.exists() && it.delete()
+        val file = getCustomCoverFile(animeId)
+        val deleted = file.exists() && file.delete()
+        synchronized(customCoverNames) {
+            customCoverNames.remove(file.name)
+            if (!customCoversIndexed) deletedWhileIndexing.add(file.name)
         }
+        return deleted
     }
 
     private fun getCacheDir(dir: String): File {

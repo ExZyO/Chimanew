@@ -30,6 +30,32 @@ class CoverCache(private val context: Context) {
 
     private val customCoverCacheDir = getCacheDir(CUSTOM_COVERS_DIR)
 
+    private val customCoverNames = mutableSetOf<String>()
+    private val deletedWhileIndexing = mutableSetOf<String>()
+
+    @Volatile
+    private var customCoversIndexed = false
+
+    init {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val names = customCoverCacheDir.list().orEmpty()
+            synchronized(customCoverNames) {
+                names.filterNotTo(customCoverNames) { it in deletedWhileIndexing }
+                deletedWhileIndexing.clear()
+                customCoversIndexed = true
+            }
+        }
+    }
+
+    /**
+     * Checks if a custom cover exists without hitting the disk on every check.
+     */
+    fun hasCustomCover(mangaId: Long?): Boolean {
+        val file = getCustomCoverFile(mangaId)
+        if (!customCoversIndexed) return file.exists()
+        return synchronized(customCoverNames) { file.name in customCoverNames }
+    }
+
     /**
      * Returns the cover from cache.
      *
@@ -61,15 +87,25 @@ class CoverCache(private val context: Context) {
      */
     @Throws(IOException::class)
     fun setCustomCoverToCache(manga: Manga, inputStream: InputStream) {
-        getCustomCoverFile(manga.id).outputStream().use {
+        val file = getCustomCoverFile(manga.id)
+        file.outputStream().use {
             inputStream.copyTo(it)
+        }
+        synchronized(customCoverNames) {
+            customCoverNames.add(file.name)
+            deletedWhileIndexing.remove(file.name)
         }
     }
 
     @Throws(IOException::class)
     fun setCustomCoverToCache(anime: Anime, inputStream: InputStream) {
-        getCustomCoverFile(anime.id).outputStream().use {
+        val file = getCustomCoverFile(anime.id)
+        file.outputStream().use {
             inputStream.copyTo(it)
+        }
+        synchronized(customCoverNames) {
+            customCoverNames.add(file.name)
+            deletedWhileIndexing.remove(file.name)
         }
     }
 
@@ -115,9 +151,13 @@ class CoverCache(private val context: Context) {
      * @return whether the cover was deleted.
      */
     fun deleteCustomCover(mangaId: Long?): Boolean {
-        return getCustomCoverFile(mangaId).let {
-            it.exists() && it.delete()
+        val file = getCustomCoverFile(mangaId)
+        val deleted = file.exists() && file.delete()
+        synchronized(customCoverNames) {
+            customCoverNames.remove(file.name)
+            if (!customCoversIndexed) deletedWhileIndexing.add(file.name)
         }
+        return deleted
     }
 
     private fun getCacheDir(dir: String): File {

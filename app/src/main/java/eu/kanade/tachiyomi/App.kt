@@ -121,6 +121,14 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     @SuppressLint("LaunchActivityFromNotification")
     override fun onCreate() {
         super<Application>.onCreate()
+
+        // Preload default preferences on another thread to avoid blocking UI thread on disk read
+        kotlin.concurrent.thread(name = "PreferencesPreload") {
+            androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        }
+        // Warm up Dispatchers.Main service loader ahead of time
+        kotlin.concurrent.thread(name = "MainDispatcherPreload") { Dispatchers.Main }
+
         patchInjekt()
 
         // KMK -->

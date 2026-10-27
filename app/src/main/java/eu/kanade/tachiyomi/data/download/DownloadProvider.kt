@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.download
 
+import android.content.ContentResolver
 import android.content.Context
 import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.source.Source
@@ -132,24 +133,57 @@ class DownloadProvider(
      */
     fun findChapterDirs(chapters: List<Chapter>, manga: Manga, source: Source): Pair<UniFile?, List<UniFile>> {
         val mangaDir = findMangaDir(/* SY --> */ manga.ogTitle /* SY <-- */, source) ?: return null to emptyList()
-        return mangaDir to chapters.mapNotNull { chapter ->
-            // KMK -->
-            if (source.isLocal()) {
-                val splitUrl = chapter.url.split('/', limit = 2)
-                if (splitUrl.size < 2) {
-                    null
-                } else {
-                    val (mangaDirName, chapterDirName) = splitUrl
-                    mangaDir.findFile(chapterDirName)
-                        ?: storageManager.getLocalSourceDirectory()?.findFile(mangaDirName)?.findFile(chapterDirName)
-                }
+        return mangaDir to findChapterDirsMap(chapters, mangaDir, source).values.toList()
+    }
+
+    /**
+     * Returns the ids of the chapters whose download directory exists.
+     *
+     * @param chapters the chapters to query.
+     * @param manga the manga of the chapters.
+     * @param source the source of the chapters.
+     */
+    fun findDownloadedChapterIds(
+        chapters: List<Chapter>,
+        manga: Manga,
+        source: Source,
+    ): Set<Long> {
+        val mangaDir = findMangaDir(/* SY --> */ manga.ogTitle /* SY <-- */, source) ?: return emptySet()
+        return findChapterDirsMap(chapters, mangaDir, source).keys
+    }
+
+    /**
+     * Returns the download directory of each chapter that has one, keyed by chapter id.
+     */
+    private fun findChapterDirsMap(chapters: List<Chapter>, mangaDir: UniFile, source: Source): Map<Long, UniFile> {
+        val isDocumentTree = mangaDir.uri.scheme == ContentResolver.SCHEME_CONTENT
+        if (isDocumentTree && chapters.size >= LIST_CHAPTER_DIRS_MIN_CHAPTERS) {
+            val chapterDirs = mangaDir.listFiles().orEmpty()
+                .filter { it.name != null }
+                .associateByTo(sortedMapOf(String.CASE_INSENSITIVE_ORDER)) { it.name!! }
+            return chapters
+                .mapNotNull { chapter -> chapter.findDir(mangaDir, source) { chapterDirs[it] }?.let { chapter.id to it } }
+                .toMap()
+        }
+        return chapters
+            .mapNotNull { chapter ->
+                chapter.findDir(mangaDir, source, mangaDir::findFile)?.let { chapter.id to it }
+            }
+            .toMap()
+    }
+
+    private fun Chapter.findDir(mangaDir: UniFile, source: Source, find: (String) -> UniFile?): UniFile? {
+        if (source.isLocal()) {
+            val splitUrl = url.split('/', limit = 2)
+            if (splitUrl.size < 2) {
+                return null
             } else {
-                // KMK <--
-                getValidChapterDirNames(chapter.name, chapter.scanlator, chapter.url).asSequence()
-                    .mapNotNull { mangaDir.findFile(it) }
-                    .firstOrNull()
+                val (mangaDirName, chapterDirName) = splitUrl
+                return mangaDir.findFile(chapterDirName)
+                    ?: storageManager.getLocalSourceDirectory()?.findFile(mangaDirName)?.findFile(chapterDirName)
             }
         }
+        return getValidChapterDirNames(name, scanlator, url).firstNotNullOfOrNull(find)
     }
 
     // SY -->
@@ -313,3 +347,5 @@ class DownloadProvider(
         }
     }
 }
+
+private const val LIST_CHAPTER_DIRS_MIN_CHAPTERS = 50
