@@ -65,12 +65,20 @@ jobs:
         run: |
           tag="v$(grep -E 'versionName\s*=\s*' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')"
           echo "Publishing or updating release for $tag..."
+          if [ -f RELEASE_NOTES.md ]; then
+            NOTES_ARGS="--notes-file RELEASE_NOTES.md"
+          else
+            NOTES_ARGS="--notes \"Chimanew $tag\""
+          fi
           if gh release view "$tag" > /dev/null 2>&1; then
-            echo "Release $tag already exists, updating assets..."
+            echo "Release $tag already exists, updating assets and notes..."
             gh release upload "$tag" app/build/outputs/apk/release/*.apk --clobber
+            if [ -f RELEASE_NOTES.md ]; then
+              gh release edit "$tag" --notes-file RELEASE_NOTES.md
+            fi
           else
             echo "Creating release $tag..."
             gh release create "$tag" app/build/outputs/apk/release/*.apk \
               --title "Chimanew ($tag)" \
-              --notes "Chimanew $tag: Nuvio Liquid Glass dynamic dock, in-memory direct Google Drive sync, AniList 50+ batching, and stability fixes."
+              $NOTES_ARGS
           fi
