@@ -19,6 +19,7 @@ import org.jsoup.Jsoup
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 
 class CloudflareInterceptor(
@@ -28,6 +29,7 @@ class CloudflareInterceptor(
 ) : WebViewInterceptor(context, defaultUserAgentProvider) {
 
     private val executor = ContextCompat.getMainExecutor(context)
+    private val activeChallenges = ConcurrentHashMap<String, CountDownLatch>()
 
     override fun shouldIntercept(response: Response): Boolean {
         // Check if Cloudflare anti-bot is on
@@ -50,6 +52,30 @@ class CloudflareInterceptor(
         request: Request,
         response: Response,
     ): Response {
+        val host = request.url.host
+
+        // Deduplicate concurrent challenges for the same host so only one WebView is launched
+        val existingLatch = activeChallenges[host]
+        if (existingLatch != null) {
+            response.close()
+            try {
+                existingLatch.await()
+            } catch (_: InterruptedException) {
+            }
+            return chain.proceed(request)
+        }
+
+        val newLatch = CountDownLatch(1)
+        val competingLatch = activeChallenges.putIfAbsent(host, newLatch)
+        if (competingLatch != null) {
+            response.close()
+            try {
+                competingLatch.await()
+            } catch (_: InterruptedException) {
+            }
+            return chain.proceed(request)
+        }
+
         try {
             response.close()
             cookieManager.remove(request.url, COOKIE_NAMES, 0)
@@ -65,6 +91,9 @@ class CloudflareInterceptor(
             throw IOException(context.stringResource(MR.strings.information_cloudflare_bypass_failure), e)
         } catch (e: Exception) {
             throw IOException(e)
+        } finally {
+            activeChallenges.remove(host)
+            newLatch.countDown()
         }
     }
 
