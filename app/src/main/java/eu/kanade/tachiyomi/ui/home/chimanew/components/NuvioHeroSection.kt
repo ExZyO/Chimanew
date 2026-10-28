@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalIconButton
@@ -81,6 +82,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -719,8 +722,8 @@ fun NuvioHeroSection(
                                 ),
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.BookmarkBorder,
-                                    contentDescription = "Quick Status",
+                                    imageVector = Icons.Outlined.Sync,
+                                    contentDescription = stringResource(MR.strings.manga_tracking_tab),
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
@@ -1138,8 +1141,8 @@ private fun HeroAmbientForegroundContent(
                     ),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.BookmarkBorder,
-                        contentDescription = "Quick Status",
+                        imageVector = Icons.Outlined.Sync,
+                        contentDescription = stringResource(MR.strings.manga_tracking_tab),
                         modifier = Modifier.size(18.dp),
                     )
                 }

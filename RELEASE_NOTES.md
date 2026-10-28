@@ -4,6 +4,13 @@ Welcome to the latest release of **Chimanew**! Here is a summary of all optimiza
 
 ---
 
+### 🛠️ UI Fixes & Navigation Polish (v2.6.35)
+* **Library Add Button Position**: Fixed the floating `+` button in your Manga and Novel libraries being partially hidden behind the floating bottom dock. It is now elevated comfortably above the navigation bar so you can always tap it effortlessly.
+* **Full Scrolling in 'More' Tab**: Added extra bottom scroll padding so the *"Star me on GitHub"* button and bottom options are completely visible and never trapped behind the bottom navigation dock.
+* **Home Hero Tracker Button**: The tracker button on the Home screen's featured Hero banner now opens the full native tracking menu (the exact same bottom sheet from the series details page) where you can update your AniList, MyAnimeList, Kitsu, and MangaUpdates reading progress with one tap.
+
+---
+
 ### 🚀 Speed & Reader Performance Overhaul
 * **Parallel Rolling-Chunk Loading**: The reader no longer downloads pages one-by-one in a slow line. It now pulls rolling batches of upcoming pages simultaneously so your reading is never interrupted by loading spinners.
 * **Predictive Next-Chapter Buffering**: When you reach the last few pages of a chapter, the app quietly begins loading the next chapter in the background so page 1 displays the second you swipe.

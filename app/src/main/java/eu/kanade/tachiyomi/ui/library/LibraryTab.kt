@@ -467,6 +467,7 @@ data object LibraryTab : Tab {
                     exit = fadeOut(),
                 ) {
                     FloatingActionButton(
+                        modifier = Modifier.padding(bottom = 80.dp),
                         onClick = { importState.showImportDialog = true },
                     ) {
                         Icon(

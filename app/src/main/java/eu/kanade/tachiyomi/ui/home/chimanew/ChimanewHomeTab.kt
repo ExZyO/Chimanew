@@ -68,21 +68,28 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.more.settings.screen.SettingsNuvioScreen
 import eu.kanade.presentation.util.Tab
+import eu.kanade.tachiyomi.data.track.EnhancedTracker
+import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioHeroSection
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioMangaShelf
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioQuickTrackerSheet
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.manga.track.TrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 data object ChimanewHomeTab : Tab {
     private fun readResolve(): Any = ChimanewHomeTab
@@ -115,6 +122,16 @@ data object ChimanewHomeTab : Tab {
         var selectedLongPressItem by remember { mutableStateOf<HomeMangaItem?>(null) }
         var quickTrackerItem by remember { mutableStateOf<HomeMangaItem?>(null) }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        val trackerManager = remember { Injekt.get<TrackerManager>() }
+        val onTrackerClick: (HomeMangaItem) -> Unit = { item ->
+            val hasLoggedInTrackers = trackerManager.loggedInTrackers().any { it !is EnhancedTracker }
+            if (!hasLoggedInTrackers) {
+                navigator.push(SettingsScreen(SettingsScreen.Destination.Tracking))
+            } else {
+                quickTrackerItem = item
+            }
+        }
 
         val onResumeClick: (HomeMangaItem) -> Unit = { item ->
             // EaZy Nuvio+ / Chimanew: Instant launch if chapter ID is in progress; zero DB query delay
@@ -195,7 +212,7 @@ data object ChimanewHomeTab : Tab {
                             heroArtworkSources = state.heroArtworkSources,
                             onItemClick = onCardClick,
                             onResumeClick = onResumeClick,
-                            onQuickStatusClick = { item -> quickTrackerItem = item },
+                            onQuickStatusClick = onTrackerClick,
                         )
                     }
                 }
@@ -394,21 +411,16 @@ data object ChimanewHomeTab : Tab {
                 }
             }
 
-            // EaZy Nuvio+ / Chimanew: Quick-Action Tracker Modal Bottom Sheet
+            // Tracking Modal Sheet (Identical to Entry Details screen)
             quickTrackerItem?.let { item ->
-                NuvioQuickTrackerSheet(
-                    item = item,
+                NavigatorAdaptiveSheet(
+                    screen = TrackInfoDialogHomeScreen(
+                        mangaId = item.mangaId,
+                        mangaTitle = item.title,
+                        sourceId = item.coverData.sourceId,
+                    ),
+                    enableSwipeDismiss = { it.lastItem is TrackInfoDialogHomeScreen },
                     onDismissRequest = { quickTrackerItem = null },
-                    onStatusSelected = { status ->
-                        screenModel.updateMangaTrackStatus(item.mangaId, status)
-                    },
-                    onToggleLibrary = {
-                        screenModel.toggleLibraryBookmark(item.mangaId)
-                    },
-                    onOpenFullDetails = {
-                        quickTrackerItem = null
-                        onDetailsClick(item)
-                    },
                 )
             }
         }

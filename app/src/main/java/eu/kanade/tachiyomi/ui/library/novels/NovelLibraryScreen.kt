@@ -386,6 +386,7 @@ fun Screen.NovelLibraryScreen(
                 exit = androidx.compose.animation.fadeOut(),
             ) {
                 FloatingActionButton(
+                    modifier = Modifier.padding(bottom = 80.dp),
                     onClick = { epubPicker.launch("application/epub+zip") },
                 ) {
                     Icon(
