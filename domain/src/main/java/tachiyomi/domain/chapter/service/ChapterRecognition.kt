@@ -8,10 +8,10 @@ object ChapterRecognition {
     private const val NUMBER_PATTERN = """([0-9]+)(\.[0-9]+)?(\.?[a-z]+)?"""
 
     /**
-     * All cases with Ch.xx
+     * All cases with Ch.xx, Chapter xx, Chap xx, Ep.xx, Episode xx
      * Mokushiroku Alice Vol.1 Ch. 4: Misrepresentation -R> 4
      */
-    private val basic = Regex("""(?<=ch\.) *$NUMBER_PATTERN""")
+    private val basic = Regex("""(?<=\b(?:ch|chapter|chap|ep|episode)\.?) *$NUMBER_PATTERN""")
 
     /**
      * Example: Bleach 567: Down With Snowwhite -R> 567

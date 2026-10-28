@@ -26,7 +26,7 @@ class ReaderPreferences(
 
     fun loadAheadOnlyOverWifi() = preferenceStore.getBoolean(
         "pref_reader_load_ahead_only_over_wifi",
-        true,
+        false,
     )
 
     fun flashOnPageChange() = preferenceStore.getBoolean(Preference.appStateKey("pref_reader_flash"), false)
