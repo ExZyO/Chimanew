@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -212,6 +213,20 @@ data object ChimanewHomeTab : Tab {
                         onItemClick = if (shelf.isResumeOnTap) onResumeClick else onCardClick,
                         onLongClick = onLongClickItem,
                     )
+                }
+
+                // 4. Loading State
+                if (state.isLoading && state.heroItems.isEmpty() && state.shelves.isEmpty()) {
+                    item(key = "loading_state") {
+                        Box(
+                            modifier = Modifier.fillParentMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                 }
 
                 // 5. Empty State

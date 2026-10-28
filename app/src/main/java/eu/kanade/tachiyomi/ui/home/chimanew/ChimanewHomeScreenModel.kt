@@ -161,13 +161,19 @@ class ChimanewHomeScreenModel(
     private val trackerManager: TrackerManager = Injekt.get(),
     private val anilistCoverRepository: AnilistCoverRepository = Injekt.get(),
     private val artworkWaterfallRepository: ArtworkWaterfallRepository = Injekt.get(),
-) : StateScreenModel<ChimanewHomeScreenModel.State>(State()) {
+) : StateScreenModel<ChimanewHomeScreenModel.State>(cachedState ?: State()) {
+
+    companion object {
+        @Volatile
+        private var cachedState: State? = null
+    }
 
     private val artworkRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
     // EaZy Nuvio+ / Chimanew: prevent infinite re-query loops for hero art
     private val attemptedHeroTitles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var lastArtworkConfigKey: String? = null
     private var persistentHeroMangaIds: List<Long> = emptyList()
+    private var artworkBatchPrefetchJob: Job? = null
 
     @Immutable
     data class State(
@@ -311,12 +317,24 @@ class ChimanewHomeScreenModel(
                     emptyList()
                 }
 
-                if (aniListRemoteIds.isNotEmpty()) {
-                    anilistCoverRepository.fetchBatch(aniListRemoteIds)
-                }
-
-                if (malRemoteIds.isNotEmpty()) {
-                    anilistCoverRepository.fetchBatchByMalIds(malRemoteIds)
+                // EaZy Nuvio+ / Chimanew: Asynchronously fetch AniList & MAL high-res artwork in background
+                // NEVER block local Home Screen rendering waiting for external GraphQL network responses!
+                if (aniListRemoteIds.isNotEmpty() || malRemoteIds.isNotEmpty()) {
+                    artworkBatchPrefetchJob?.cancel()
+                    artworkBatchPrefetchJob = screenModelScope.launchIO {
+                        var anyUpdated = false
+                        if (aniListRemoteIds.isNotEmpty()) {
+                            val res = anilistCoverRepository.fetchBatch(aniListRemoteIds)
+                            if (res.isNotEmpty()) anyUpdated = true
+                        }
+                        if (malRemoteIds.isNotEmpty()) {
+                            val res = anilistCoverRepository.fetchBatchByMalIds(malRemoteIds)
+                            if (res.isNotEmpty()) anyUpdated = true
+                        }
+                        if (anyUpdated) {
+                            artworkRefreshTrigger.value = System.currentTimeMillis()
+                        }
+                    }
                 }
 
                 val libraryByMangaId = data.libraryList.associateBy { it.manga.id }
@@ -875,6 +893,7 @@ class ChimanewHomeScreenModel(
                     shelfTapAction = prefs.shelfTapAction,
                 )
             }.collectLatest { newState ->
+                cachedState = newState
                 mutableState.update { newState }
 
                 // EaZy Nuvio+ / Chimanew: Pre-resolve waterfall for hero items to ensure 100% visual continuity with Details
