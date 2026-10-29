@@ -254,7 +254,11 @@ object ImageUtil {
     private fun isTallImage(imageSource: BufferedSource): Boolean {
         val options = extractImageOptions(imageSource)
 
-        return (options.outHeight / options.outWidth) > 3
+        return TallImageSplitCalculator.shouldSplit(
+            imageWidth = options.outWidth,
+            imageHeight = options.outHeight,
+            optimalImageHeight = optimalImageHeight,
+        )
     }
 
     /**
@@ -327,7 +331,7 @@ object ImageUtil {
             val imageWidth = outWidth
 
             // -1 so it doesn't try to split when imageHeight = optimalImageHeight
-            val partCount = (imageHeight - 1) / optimalImageHeight + 1
+            val partCount = TallImageSplitCalculator.calculatePartCount(imageHeight, optimalImageHeight)
             val optimalSplitHeight = imageHeight / partCount
 
             logcat {

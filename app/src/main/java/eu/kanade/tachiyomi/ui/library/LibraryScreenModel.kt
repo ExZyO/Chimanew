@@ -519,7 +519,7 @@ class LibraryScreenModel(
                             .sumOf { manga -> downloadManager.getDownloadCount(manga) } > 0
                     } else {
                         // KMK <--
-                        downloadManager.getDownloadCount(it.libraryManga.manga) > 0
+                        false
                     }
             }
         }

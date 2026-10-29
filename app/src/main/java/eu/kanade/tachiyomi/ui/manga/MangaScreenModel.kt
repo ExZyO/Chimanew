@@ -97,6 +97,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filter
@@ -382,11 +383,12 @@ class MangaScreenModel(
                 ) { state, mergedData ->
                     state.copy(mergedData = mergedData)
                 }
-                .combine(downloadCache.changes) { state, _ -> state }
-                .combine(downloadManager.queueState) { state, _ -> state }
+                .combine(downloadCache.changes.sample(300.milliseconds)) { state, _ -> state }
+                .combine(downloadManager.queueState.sample(300.milliseconds)) { state, _ -> state }
                 // SY <--
                 .flowWithLifecycle(lifecycle)
-                .collectLatest { (manga, chapters /* SY --> */, flatMetadata, mergedData /* SY <-- */) ->
+                .conflate()
+                .collect { (manga, chapters /* SY --> */, flatMetadata, mergedData /* SY <-- */) ->
                     val chapterItems = chapters.toChapterListItems(manga /* SY --> */, mergedData /* SY <-- */)
                     updateSuccessState {
                         it.copy(
@@ -398,7 +400,9 @@ class MangaScreenModel(
                             // SY <--
                         )
                     }
-                    reindexDownloadedOcrStatus(manga, chapters, mergedData)
+                    launchIO {
+                        reindexDownloadedOcrStatus(manga, chapters, mergedData)
+                    }
                 }
         }
 
