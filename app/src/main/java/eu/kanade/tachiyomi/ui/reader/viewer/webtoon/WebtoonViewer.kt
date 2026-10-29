@@ -617,5 +617,5 @@ class WebtoonViewer(
     }
 }
 
-// Double the cache size to reduce rebinds/recycles incurred by the extra layout space on scroll direction changes
-private const val RECYCLER_VIEW_CACHE_SIZE = 4
+// Expand cache size to 8 to allow background pre-decoding of upcoming webtoon pages ahead of scroll
+private const val RECYCLER_VIEW_CACHE_SIZE = 8

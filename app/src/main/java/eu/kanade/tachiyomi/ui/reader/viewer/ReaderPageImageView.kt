@@ -37,7 +37,9 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.request.crossfade
+import coil3.size.Dimension
 import coil3.size.Precision
+import coil3.size.Size
 import coil3.size.ViewSizeResolver
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
@@ -669,7 +671,16 @@ open class ReaderPageImageView @JvmOverloads constructor(
                             onImageLoadError(result.throwable)
                         },
                     )
-                    .size(ViewSizeResolver(this@ReaderPageImageView))
+                    .size(
+                        if (width > 0) {
+                            ViewSizeResolver(this@ReaderPageImageView)
+                        } else {
+                            Size(
+                                Dimension(context.resources.displayMetrics.widthPixels),
+                                Dimension.Undefined,
+                            )
+                        },
+                    )
                     .precision(Precision.INEXACT)
                     .cropBorders(config.cropBorders)
                     .customDecoder(true)

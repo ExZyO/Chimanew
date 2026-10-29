@@ -1590,9 +1590,12 @@ class MangaScreenModel(
         // SY -->
         val state = successState ?: return
         if (state.source is MergedSource) {
-            chapters.groupBy { it.mangaId }.forEach { map ->
-                val manga = state.mergedData?.manga?.get(map.key) ?: return@forEach
-                downloadManager.downloadChapters(manga, map.value)
+            val batch = chapters.groupBy { it.mangaId }.mapNotNull { map ->
+                val manga = state.mergedData?.manga?.get(map.key) ?: return@mapNotNull null
+                manga to map.value
+            }.toMap()
+            if (batch.isNotEmpty()) {
+                downloadManager.downloadChapters(batch)
             }
         } else {
             // SY <--

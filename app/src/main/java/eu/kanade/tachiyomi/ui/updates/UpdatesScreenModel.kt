@@ -326,14 +326,16 @@ class UpdatesScreenModel(
      */
     private fun downloadChapters(updatesItem: List<UpdatesItem>) {
         screenModelScope.launchNonCancellable {
-            val groupedUpdates = updatesItem.groupBy { it.update.mangaId }.values
-            for (updates in groupedUpdates) {
+            val batch = updatesItem.groupBy { it.update.mangaId }.values.mapNotNull { updates ->
                 val mangaId = updates.first().update.mangaId
-                val manga = getManga.await(mangaId) ?: continue
+                val manga = getManga.await(mangaId) ?: return@mapNotNull null
                 // Don't download if source isn't available
-                sourceManager.get(manga.source) ?: continue
+                sourceManager.get(manga.source) ?: return@mapNotNull null
                 val chapters = updates.mapNotNull { getChapter.await(it.update.chapterId) }
-                downloadManager.downloadChapters(manga, chapters)
+                manga to chapters
+            }.toMap()
+            if (batch.isNotEmpty()) {
+                downloadManager.downloadChapters(batch)
             }
         }
     }

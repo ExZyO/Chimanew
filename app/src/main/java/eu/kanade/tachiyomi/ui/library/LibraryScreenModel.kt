@@ -966,6 +966,7 @@ class LibraryScreenModel(
     private fun downloadNextChapters(amount: Int?) {
         val mangas = state.value.selectedManga
         screenModelScope.launchNonCancellable {
+            val batch = mutableMapOf<Manga, List<Chapter>>()
             mangas.forEach { manga ->
                 // SY -->
                 if (manga.source == MERGED_SOURCE_ID) {
@@ -987,7 +988,7 @@ class LibraryScreenModel(
                                     )
                             }
 
-                            downloadManager.downloadChapters(mergedManga, downloadChapters)
+                            batch[mergedManga] = downloadChapters
                         }
 
                     return@forEach
@@ -1009,7 +1010,10 @@ class LibraryScreenModel(
                     }
                     .let { if (amount != null) it.take(amount) else it }
 
-                downloadManager.downloadChapters(manga, chapters)
+                batch[manga] = chapters
+            }
+            if (batch.isNotEmpty()) {
+                downloadManager.downloadChapters(batch)
             }
         }
     }
@@ -1017,6 +1021,7 @@ class LibraryScreenModel(
     private fun downloadBookmarkedChapters() {
         val mangas = state.value.selectedManga
         screenModelScope.launchNonCancellable {
+            val batch = mutableMapOf<Manga, List<Chapter>>()
             mangas.forEach { manga ->
                 // SY -->
                 if (manga.source == MERGED_SOURCE_ID) {
@@ -1037,7 +1042,7 @@ class LibraryScreenModel(
                                     )
                             }
 
-                            downloadManager.downloadChapters(mergedManga, downloadChapters)
+                            batch[mergedManga] = downloadChapters
                         }
 
                     return@forEach
@@ -1057,7 +1062,10 @@ class LibraryScreenModel(
                                 manga.source,
                             )
                     }
-                downloadManager.downloadChapters(manga, chapters)
+                batch[manga] = chapters
+            }
+            if (batch.isNotEmpty()) {
+                downloadManager.downloadChapters(batch)
             }
         }
     }

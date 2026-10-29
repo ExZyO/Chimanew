@@ -87,6 +87,9 @@ data class ComicInfo(
     // SY -->
     val padding: PaddingTachiyomiSY?,
     // SY <--
+    val year: Year? = null,
+    val month: Month? = null,
+    val day: Day? = null,
 ) {
     @XmlElement(false)
     @XmlSerialName("xmlns:xsd", "", "")
@@ -170,6 +173,18 @@ data class ComicInfo(
     @XmlSerialName("PaddingTachiyomiSY", "http://www.w3.org/2001/XMLSchema", "tysy")
     data class PaddingTachiyomiSY(@XmlValue(true) val value: String = "")
     // SY <--
+
+    @Serializable
+    @XmlSerialName("Year", "", "")
+    data class Year(@XmlValue(true) val value: String = "")
+
+    @Serializable
+    @XmlSerialName("Month", "", "")
+    data class Month(@XmlValue(true) val value: String = "")
+
+    @Serializable
+    @XmlSerialName("Day", "", "")
+    data class Day(@XmlValue(true) val value: String = "")
 }
 
 enum class ComicInfoPublishingStatus(

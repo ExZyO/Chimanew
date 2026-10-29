@@ -296,30 +296,51 @@ class Downloader(
      * @param autoStart whether to start the downloader after enqueing the chapters.
      */
     fun queueChapters(manga: Manga, chapters: List<Chapter>, autoStart: Boolean) {
-        if (chapters.isEmpty()) return
+        queueChapters(mapOf(manga to chapters), autoStart)
+    }
 
-        val source = sourceManager.get(manga.source) as? HttpSource ?: return
-
-        // KMK -->
-        if (source.id == MERGED_SOURCE_ID) return
-        // KMK <--
+    /**
+     * Tells the downloader to begin downloading chapters across multiple manga in a single batch.
+     *
+     * @param items map of manga to chapters to download.
+     * @param autoStart whether to start the downloader after enqueing the chapters.
+     */
+    fun queueChapters(items: Map<Manga, List<Chapter>>, autoStart: Boolean) {
+        if (items.isEmpty()) return
 
         val wasEmpty = queueState.value.isEmpty()
-        val downloadedChapterIds = provider.findDownloadedChapterIds(chapters, manga, source)
         val queuedChapterIds = queueState.value.mapTo(HashSet()) { it.chapter.id }
-        val chaptersToQueue = chapters.asSequence()
-            // Filter out those already downloaded.
-            .filter { it.id !in downloadedChapterIds }
-            // Add chapters to queue from the start.
-            .sortedByDescending { it.sourceOrder }
-            // Filter out those already enqueued.
-            .filter { it.id !in queuedChapterIds }
-            // Create a download for each one.
-            .map { Download(source, manga, it) }
-            .toList()
+        val allChaptersToQueue = mutableListOf<Download>()
 
-        if (chaptersToQueue.isNotEmpty()) {
-            addAllToQueue(chaptersToQueue)
+        for ((manga, chapters) in items) {
+            if (chapters.isEmpty()) continue
+
+            val source = sourceManager.get(manga.source) as? HttpSource ?: continue
+
+            // KMK -->
+            if (source.id == MERGED_SOURCE_ID) continue
+            // KMK <--
+
+            val downloadedChapterIds = provider.findDownloadedChapterIds(chapters, manga, source)
+            val toQueue = chapters.asSequence()
+                // Filter out those already downloaded.
+                .filter { it.id !in downloadedChapterIds }
+                // Add chapters to queue from the start.
+                .sortedByDescending { it.sourceOrder }
+                // Filter out those already enqueued.
+                .filter { it.id !in queuedChapterIds }
+                // Create a download for each one.
+                .map { Download(source, manga, it) }
+                .toList()
+
+            for (download in toQueue) {
+                queuedChapterIds.add(download.chapter.id)
+                allChaptersToQueue.add(download)
+            }
+        }
+
+        if (allChaptersToQueue.isNotEmpty()) {
+            addAllToQueue(allChaptersToQueue)
 
             // Start downloader if needed
             if (autoStart && wasEmpty) {

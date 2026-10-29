@@ -146,6 +146,10 @@ class DownloadManager(
         downloader.queueChapters(manga, chapters, autoStart)
     }
 
+    fun downloadChapters(items: Map<Manga, List<Chapter>>, autoStart: Boolean = true) {
+        downloader.queueChapters(items, autoStart)
+    }
+
     fun downloadChaptersWithOcr(manga: Manga, chapters: List<Chapter>) {
         val uniqueChapters = chapters.distinctBy { it.id }
         if (uniqueChapters.isEmpty()) return

@@ -360,6 +360,22 @@ class LocalSource(
         comicInfo.title?.let { chapter.name = it.value }
         comicInfo.number?.value?.toFloatOrNull()?.let { chapter.chapter_number = it }
         comicInfo.translator?.let { chapter.scanlator = it.value }
+
+        val year = comicInfo.year?.value?.toIntOrNull()
+        if (year != null && year > 0) {
+            val month = (comicInfo.month?.value?.toIntOrNull() ?: 1).coerceIn(1, 12)
+            val day = (comicInfo.day?.value?.toIntOrNull() ?: 1).coerceIn(1, 31)
+            val cal = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.YEAR, year)
+                set(java.util.Calendar.MONTH, month - 1)
+                set(java.util.Calendar.DAY_OF_MONTH, day)
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            chapter.date_upload = cal.timeInMillis
+        }
     }
 
     // Chapters
