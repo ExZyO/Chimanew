@@ -97,6 +97,7 @@ import tachiyomi.domain.category.repository.CategoryRepository
 import tachiyomi.domain.chapter.interactor.GetBookmarkedChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.chapter.interactor.GetChapterByUrlAndMangaId
+import tachiyomi.domain.chapter.interactor.GetChapterSummaryByMangaId
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.chapter.interactor.ShouldUpdateDbChapter
@@ -217,6 +218,7 @@ class DomainModule : InjektModule {
 
         addSingletonFactory<ChapterRepository> { ChapterRepositoryImpl(get()) }
         addFactory { GetChapter(get()) }
+        addFactory { GetChapterSummaryByMangaId(get()) }
         addFactory { GetChaptersByMangaId(get()) }
         addFactory { GetBookmarkedChaptersByMangaId(get(), get(), get()) }
         addFactory { GetChapterByUrlAndMangaId(get()) }

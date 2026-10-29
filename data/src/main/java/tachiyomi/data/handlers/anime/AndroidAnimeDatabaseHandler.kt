@@ -8,6 +8,7 @@ import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import app.cash.sqldelight.db.SqlDriver
+import tachiyomi.core.common.util.lang.pausedWhileUnsubscribed
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -63,15 +64,15 @@ class AndroidAnimeDatabaseHandler(
     }
 
     override fun <T : Any> subscribeToList(block: AnimeDatabase.() -> Query<T>): Flow<List<T>> {
-        return block(db).asFlow().mapToList(queryDispatcher)
+        return block(db).asFlow().pausedWhileUnsubscribed().mapToList(queryDispatcher)
     }
 
     override fun <T : Any> subscribeToOne(block: AnimeDatabase.() -> Query<T>): Flow<T> {
-        return block(db).asFlow().mapToOne(queryDispatcher)
+        return block(db).asFlow().pausedWhileUnsubscribed().mapToOne(queryDispatcher)
     }
 
     override fun <T : Any> subscribeToOneOrNull(block: AnimeDatabase.() -> Query<T>): Flow<T?> {
-        return block(db).asFlow().mapToOneOrNull(queryDispatcher)
+        return block(db).asFlow().pausedWhileUnsubscribed().mapToOneOrNull(queryDispatcher)
     }
 
     override fun <T : Any> subscribeToPagingSource(

@@ -7,6 +7,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.data.MemoColumnAdapter
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.chapter.model.ChapterSummary
 import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.manga.model.Manga
@@ -122,6 +123,14 @@ class ChapterRepositoryImpl(
 
     override suspend fun getChapterById(id: Long): Chapter? {
         return handler.awaitOneOrNull { chaptersQueries.getChapterById(id, ChapterMapper::mapChapter) }
+    }
+
+    override suspend fun getChapterSummaryByMangaId(mangaId: Long): ChapterSummary {
+        return handler.awaitOne {
+            chaptersQueries.getChapterSummaryByMangaId(mangaId) { total, latestChapterNumber ->
+                ChapterSummary(total, latestChapterNumber)
+            }
+        }
     }
 
     override suspend fun getChapterByMangaIdAsFlow(mangaId: Long, applyFilter: Boolean): Flow<List<Chapter>> {

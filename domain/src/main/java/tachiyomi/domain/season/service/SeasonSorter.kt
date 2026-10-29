@@ -5,7 +5,7 @@ import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.SeasonAnime
 
 val seasonSortAlphabetically: (SeasonAnime, SeasonAnime) -> Int = { i1, i2 ->
-    i1.anime.title.lowercase().compareToWithCollator(i2.anime.title.lowercase())
+    i1.anime.title.compareToWithCollator(i2.anime.title)
 }
 
 /**

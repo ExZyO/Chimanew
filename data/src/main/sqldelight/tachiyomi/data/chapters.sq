@@ -78,6 +78,11 @@ AND (
     -- KMK <--
 );
 
+getChapterSummaryByMangaId:
+SELECT count(*) AS total, max(chapter_number) AS latestChapterNumber
+FROM chapters
+WHERE manga_id = :mangaId;
+
 getScanlatorsByMangaId:
 SELECT scanlator
 FROM chapters
