@@ -194,6 +194,15 @@ class AppUpdateDownloadJob(private val context: Context, workerParams: WorkerPar
             } else {
                 // KMK <--
                 notifier.promptInstall(apkFile.getUriCompat(context))
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(apkFile.getUriCompat(context), "application/vnd.android.package-archive")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    xLogE("Failed to launch installer directly:", e)
+                }
             }
         } catch (e: Exception) {
             xLogE("App update stopped:", e)
@@ -265,6 +274,15 @@ class AppUpdateDownloadJob(private val context: Context, workerParams: WorkerPar
             context.toast(error.message)
             notifier.cancelInstallNotification()
             notifier.promptInstall(file.getUriCompat(context))
+            try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(file.getUriCompat(context), "application/vnd.android.package-archive")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                xLogE("Failed to launch installer directly:", e)
+            }
         }
     }
     // KMK <--

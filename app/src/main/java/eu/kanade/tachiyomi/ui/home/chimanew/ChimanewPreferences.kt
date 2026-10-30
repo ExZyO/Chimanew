@@ -116,6 +116,22 @@ class ChimanewPreferences(
 
     fun mangaCustomBannerUrl(mangaId: Long) = preferenceStore.getString("pref_chimanew_manga_banner_$mangaId", "")
 
+    // Per-entry artwork source exclusion (covers and banners separated) // EaZy Nuvio+ / Chimanew
+    fun mangaExcludedCoverSources(mangaId: Long) = preferenceStore.getStringSet(
+        "pref_chimanew_manga_excluded_cover_sources_$mangaId",
+        emptySet(),
+    )
+
+    fun mangaExcludedBannerSources(mangaId: Long) = preferenceStore.getStringSet(
+        "pref_chimanew_manga_excluded_banner_sources_$mangaId",
+        emptySet(),
+    )
+
+    fun mangaExcludedArtworkSources(mangaId: Long) = mangaExcludedCoverSources(mangaId)
+
+    // Artwork priority order tracking for smart re-evaluation on reorder // EaZy Nuvio+ / Chimanew
+    fun artworkPriorityOrderHash() = preferenceStore.getString("pref_chimanew_artwork_priority_order_hash", "")
+
     // Media sections toggle // EaZy Nuvio+ / Chimanew
     fun enableAnimeModule() = preferenceStore.getBoolean("pref_chimanew_enable_anime", true)
     fun enableNovelModule() = preferenceStore.getBoolean("pref_chimanew_enable_novels", true)

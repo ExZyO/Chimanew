@@ -9,6 +9,9 @@ import eu.kanade.presentation.more.NewUpdateScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.data.updater.AppUpdateDownloadJob
 import eu.kanade.tachiyomi.util.system.openInBrowser
+import eu.kanade.tachiyomi.util.system.toast
+import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.i18n.MR
 
 class NewUpdateScreen(
     private val versionName: String,
@@ -31,6 +34,7 @@ class NewUpdateScreen(
             onOpenInBrowser = { context.openInBrowser(releaseLink) },
             onRejectUpdate = navigator::pop,
             onAcceptUpdate = {
+                context.toast(context.stringResource(MR.strings.update_check_notification_download_in_progress))
                 AppUpdateDownloadJob.start(
                     context = context,
                     url = downloadLink,

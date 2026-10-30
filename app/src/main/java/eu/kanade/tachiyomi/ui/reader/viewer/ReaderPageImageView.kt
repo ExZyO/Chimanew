@@ -671,16 +671,18 @@ open class ReaderPageImageView @JvmOverloads constructor(
                             onImageLoadError(result.throwable)
                         },
                     )
-                    .size(
+                    .let { builder ->
                         if (width > 0) {
-                            ViewSizeResolver(this@ReaderPageImageView)
+                            builder.size(ViewSizeResolver(this@ReaderPageImageView))
                         } else {
-                            Size(
-                                Dimension(context.resources.displayMetrics.widthPixels),
-                                Dimension.Undefined,
+                            builder.size(
+                                Size(
+                                    Dimension(context.resources.displayMetrics.widthPixels),
+                                    Dimension.Undefined,
+                                ),
                             )
-                        },
-                    )
+                        }
+                    }
                     .precision(Precision.INEXACT)
                     .cropBorders(config.cropBorders)
                     .customDecoder(true)

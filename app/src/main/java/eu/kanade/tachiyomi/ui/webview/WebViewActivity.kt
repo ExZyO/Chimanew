@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.core.net.toUri
 import eu.kanade.presentation.webview.WebViewScreenContent
@@ -94,6 +95,11 @@ class WebViewActivity : BaseActivity() {
         with(DiscordRPCService) {
             discordScope.launchIO { setScreen(this@WebViewActivity) }
         }
+        try {
+            CookieManager.getInstance().flush()
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Failed to flush CookieManager on exit" }
+        }
         super.onDestroy()
     }
     // <-- AM (DISCORD)
@@ -104,6 +110,11 @@ class WebViewActivity : BaseActivity() {
     }
 
     override fun finish() {
+        try {
+            CookieManager.getInstance().flush()
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Failed to flush CookieManager on finish" }
+        }
         super.finish()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             overrideActivityTransition(

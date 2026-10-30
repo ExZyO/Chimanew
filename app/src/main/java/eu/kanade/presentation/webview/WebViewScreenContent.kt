@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.Message
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
+import androidx.core.net.toUri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -96,6 +97,8 @@ fun WebViewScreenContent(
     var currentUrl by remember { mutableStateOf(url) }
     var showCloudflareHelp by remember { mutableStateOf(false) }
 
+    val headersHost = remember { url.toUri().host }
+
     val webClient = remember {
         object : AccompanistWebViewClient() {
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
@@ -134,6 +137,9 @@ fun WebViewScreenContent(
 
                 // Ignore intents urls
                 if (url.startsWith("intent://")) return true
+
+                // Only send source headers to the source itself
+                if (request.url.host != headersHost) return false
 
                 // Only open valid web urls
                 if (url.startsWith("http") || url.startsWith("https")) {
@@ -303,7 +309,11 @@ fun WebViewScreenContent(
                         WebView.setWebContentsDebuggingEnabled(true)
                     }
 
-                    headers["user-agent"]?.let {
+                    val customUserAgent = headers.entries
+                        .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
+                        ?.value
+                        ?.takeIf { it.isNotBlank() }
+                    customUserAgent?.let {
                         webView.settings.userAgentString = it
                     }
                 },

@@ -130,6 +130,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
+        val waterfallRepo = remember { Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository>() }
         var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
         val providerTitles = mapOf(
@@ -223,6 +224,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                                 if (!isDragging) {
                                     val serialized = serializeOrder(itemsState.map { it.id to it.enabled })
                                     orderPref.set(serialized)
+                                    waterfallRepo.checkAndHandlePriorityChange()
                                 }
                             }
                     }
@@ -233,6 +235,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                             itemsState[index] = current.copy(enabled = !current.enabled)
                             val serialized = serializeOrder(itemsState.map { it.id to it.enabled })
                             orderPref.set(serialized)
+                            waterfallRepo.checkAndHandlePriorityChange()
                         }
                     }
 

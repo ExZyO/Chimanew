@@ -37,6 +37,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -113,28 +114,47 @@ fun ArtworkPickerBottomSheet(
     val customBannerPref = remember(manga.id) { preferences.mangaCustomBannerUrl(manga.id) }
     val currentCustomBanner by customBannerPref.collectPrefAsState()
 
+    val excludedCoversPref = remember(manga.id) { preferences.mangaExcludedCoverSources(manga.id) }
+    val excludedBannersPref = remember(manga.id) { preferences.mangaExcludedBannerSources(manga.id) }
+    val excludedCovers by excludedCoversPref.collectPrefAsState()
+    val excludedBanners by excludedBannersPref.collectPrefAsState()
+
     var selectedTab by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
     var isApplying by remember { mutableStateOf(false) }
     var artwork by remember { mutableStateOf<UnifiedArtwork?>(null) }
 
-    LaunchedEffect(manga.id) {
-        isLoading = true
-        withContext(Dispatchers.IO) {
-            val trackerManager = Injekt.get<TrackerManager>()
-            val getTracks = Injekt.get<GetTracks>()
-            val tracks = getTracks.await(manga.id)
-            val anilistTrack = tracks.firstOrNull { it.trackerId == trackerManager.aniList.id }
-            val kitsuTrack = tracks.firstOrNull { it.trackerId == trackerManager.kitsu.id }
-            val title = manga.ogTitle ?: manga.title
-            val res = waterfallRepo.resolveArtwork(
-                rawTitle = title,
-                anilistRemoteId = anilistTrack?.remoteId?.takeIf { it > 0 },
-                kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
-            )
-            artwork = res
+    val fetchArtwork: (Boolean) -> Unit = { force ->
+        scope.launch {
+            isLoading = true
+            withContext(Dispatchers.IO) {
+                val trackerManager = Injekt.get<TrackerManager>()
+                val getTracks = Injekt.get<GetTracks>()
+                val tracks = getTracks.await(manga.id)
+                val anilistTrack = tracks.firstOrNull { it.trackerId == trackerManager.aniList.id }
+                val kitsuTrack = tracks.firstOrNull { it.trackerId == trackerManager.kitsu.id }
+                val malTrack = tracks.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
+                val title = manga.ogTitle ?: manga.title
+                val res = waterfallRepo.resolveArtwork(
+                    rawTitle = title,
+                    anilistRemoteId = anilistTrack?.remoteId?.takeIf { it > 0 },
+                    kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
+                    malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
+                    mangaId = manga.id,
+                    defaultCoverUrl = manga.thumbnailUrl,
+                    forceRefresh = force,
+                )
+                artwork = res
+            }
+            isLoading = false
+            if (force) {
+                context.toast("Artwork refreshed")
+            }
         }
-        isLoading = false
+    }
+
+    LaunchedEffect(manga.id) {
+        fetchArtwork(false)
     }
 
     AdaptiveSheet(
@@ -161,6 +181,15 @@ fun ArtworkPickerBottomSheet(
                     ),
                     modifier = Modifier.weight(1f),
                 )
+                IconButton(
+                    onClick = { fetchArtwork(true) },
+                    enabled = !isLoading,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = "Refresh artwork",
+                    )
+                }
                 IconButton(onClick = onDismissRequest) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
@@ -204,9 +233,41 @@ fun ArtworkPickerBottomSheet(
                         )
                     },
                 )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = {
+                        Text(
+                            text = "Exclusions",
+                            fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Medium,
+                        )
+                    },
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+
+            val displayedCovers = remember(artwork, excludedCovers) {
+                val all = artwork?.allAvailableCovers ?: emptyList()
+                if (excludedCovers.contains("ALL")) {
+                    all.filter { it.source.equals("Default", ignoreCase = true) }
+                } else {
+                    all.filterNot { it.source.uppercase() in excludedCovers }
+                }
+            }
+
+            val displayedBanners = remember(artwork, excludedBanners) {
+                if (excludedBanners.contains("ALL")) {
+                    emptyList()
+                } else {
+                    val filteredOpts = artwork?.bannerOptions?.filterNot { it.source.uppercase() in excludedBanners }
+                    if (!filteredOpts.isNullOrEmpty()) {
+                        filteredOpts.map { it.url }
+                    } else {
+                        artwork?.allAvailableBanners ?: emptyList()
+                    }
+                }
+            }
 
             if (isLoading) {
                 Box(
@@ -230,7 +291,7 @@ fun ArtworkPickerBottomSheet(
                         )
                     }
                 }
-            } else if (artwork == null || (selectedTab == 0 && artwork!!.allAvailableCovers.isEmpty()) || (selectedTab == 1 && artwork!!.allAvailableBanners.isEmpty())) {
+            } else if (selectedTab != 2 && (artwork == null || (selectedTab == 0 && displayedCovers.isEmpty()) || (selectedTab == 1 && displayedBanners.isEmpty()))) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -248,7 +309,13 @@ fun ArtworkPickerBottomSheet(
                             modifier = Modifier.size(48.dp),
                         )
                         Text(
-                            text = stringResource(MR.strings.pref_chimanew_artwork_picker_no_art),
+                            text = if (selectedTab == 0 && excludedCovers.contains("ALL")) {
+                                "All remote cover sources are excluded for this entry."
+                            } else if (selectedTab == 1 && excludedBanners.contains("ALL")) {
+                                "All remote banner sources are excluded for this entry."
+                            } else {
+                                stringResource(MR.strings.pref_chimanew_artwork_picker_no_art)
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -269,7 +336,7 @@ fun ArtworkPickerBottomSheet(
                         // Covers Tab
                         CoversTabContent(
                             manga = manga,
-                            covers = artwork!!.allAvailableCovers,
+                            covers = displayedCovers,
                             isApplying = isApplying,
                             onApplyCover = { coverUrl ->
                                 scope.launch {
@@ -314,7 +381,7 @@ fun ArtworkPickerBottomSheet(
                     1 -> {
                         // Banners Tab
                         BannersTabContent(
-                            banners = artwork!!.allAvailableBanners,
+                            banners = displayedBanners,
                             currentCustomBanner = currentCustomBanner,
                             onSelectBanner = { bannerUrl ->
                                 customBannerPref.set(bannerUrl)
@@ -323,6 +390,17 @@ fun ArtworkPickerBottomSheet(
                             onResetBanner = {
                                 customBannerPref.delete()
                                 context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_reset_banner))
+                            },
+                        )
+                    }
+                    2 -> {
+                        // Excluded Sources Tab
+                        ArtworkExclusionsTabContent(
+                            mangaId = manga.id,
+                            preferences = preferences,
+                            onExclusionsChanged = {
+                                fetchArtwork(false)
+                                onCoverUpdated()
                             },
                         )
                     }
@@ -555,6 +633,186 @@ private fun BannersTabContent(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ArtworkExclusionsTabContent(
+    mangaId: Long,
+    preferences: ChimanewPreferences,
+    onExclusionsChanged: () -> Unit,
+) {
+    val coverExclusionsPref = remember(mangaId) { preferences.mangaExcludedCoverSources(mangaId) }
+    val bannerExclusionsPref = remember(mangaId) { preferences.mangaExcludedBannerSources(mangaId) }
+
+    val excludedCovers by coverExclusionsPref.collectPrefAsState()
+    val excludedBanners by bannerExclusionsPref.collectPrefAsState()
+
+    val coverProviders = listOf(
+        "ALL" to "All Sources (Keep default cover only)",
+        "ANILIST" to "AniList",
+        "KITSU" to "Kitsu",
+        "MANGADEX" to "MangaDex",
+        "NAVER" to "Naver Webtoon",
+        "KUAIKAN" to "Kuaikan Manhua",
+        "BANGUMI" to "Bangumi",
+        "BOOKWALKER" to "BookWalker",
+    )
+
+    val bannerProviders = listOf(
+        "ALL" to "All Sources (No landscape banner)",
+        "ANILIST" to "AniList",
+        "KITSU" to "Kitsu",
+        "NAVER" to "Naver Webtoon",
+        "KUAIKAN" to "Kuaikan Manhua",
+        "BANGUMI" to "Bangumi",
+    )
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(380.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        // Section: Cover / Poster Exclusions
+        item {
+            Text(
+                text = "Exclude Cover / Poster Sources",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+            )
+            Text(
+                text = "Checked sources will not be queried or used for this manga's cover.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+
+        items(coverProviders, key = { "cover_${it.first}" }) { (id, label) ->
+            val isChecked = if (id == "ALL") {
+                excludedCovers.contains("ALL")
+            } else {
+                excludedCovers.contains("ALL") || excludedCovers.contains(id)
+            }
+            val isIndividuallyDisabled = id != "ALL" && excludedCovers.contains("ALL")
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(enabled = !isIndividuallyDisabled) {
+                        val current = excludedCovers.toMutableSet()
+                        if (id == "ALL") {
+                            if (current.contains("ALL")) {
+                                current.remove("ALL")
+                            } else {
+                                current.clear()
+                                current.add("ALL")
+                            }
+                        } else {
+                            if (current.contains(id)) {
+                                current.remove(id)
+                            } else {
+                                current.add(id)
+                            }
+                        }
+                        coverExclusionsPref.set(current)
+                        onExclusionsChanged()
+                    }
+                    .padding(vertical = 4.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = isChecked,
+                    onCheckedChange = null,
+                    enabled = !isIndividuallyDisabled,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isIndividuallyDisabled) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
+        }
+
+        // Section: Landscape Banner Exclusions
+        item {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Exclude Banner Sources",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+            )
+            Text(
+                text = "Checked sources will not be queried or used for this manga's banner.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+
+        items(bannerProviders, key = { "banner_${it.first}" }) { (id, label) ->
+            val isChecked = if (id == "ALL") {
+                excludedBanners.contains("ALL")
+            } else {
+                excludedBanners.contains("ALL") || excludedBanners.contains(id)
+            }
+            val isIndividuallyDisabled = id != "ALL" && excludedBanners.contains("ALL")
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(enabled = !isIndividuallyDisabled) {
+                        val current = excludedBanners.toMutableSet()
+                        if (id == "ALL") {
+                            if (current.contains("ALL")) {
+                                current.remove("ALL")
+                            } else {
+                                current.clear()
+                                current.add("ALL")
+                            }
+                        } else {
+                            if (current.contains(id)) {
+                                current.remove(id)
+                            } else {
+                                current.add(id)
+                            }
+                        }
+                        bannerExclusionsPref.set(current)
+                        onExclusionsChanged()
+                    }
+                    .padding(vertical = 4.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = isChecked,
+                    onCheckedChange = null,
+                    enabled = !isIndividuallyDisabled,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isIndividuallyDisabled) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
