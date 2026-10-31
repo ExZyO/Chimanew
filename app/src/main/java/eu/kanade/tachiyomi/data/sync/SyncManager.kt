@@ -22,6 +22,7 @@ import logcat.logcat
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.Chapters
 import tachiyomi.data.DatabaseHandler
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import tachiyomi.data.manga.MangaMapper.mapManga
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
@@ -49,6 +50,7 @@ class SyncManager(
     },
     private val getCategories: GetCategories = Injekt.get(),
     private val getCustomMangaInfo: GetCustomMangaInfo = Injekt.get(),
+    private val coverCache: CoverCache = Injekt.get(),
 ) {
     private val backupCreator: BackupCreator = BackupCreator(context, false)
     private val notifier: SyncNotifier = SyncNotifier(context)
@@ -295,7 +297,9 @@ class SyncManager(
     }
 
     private suspend fun getAllMangaThatNeedsSync(): List<Manga> {
-        return handler.awaitList { mangasQueries.getMangasWithFavoriteTimestamp(::mapManga) }
+        val favorites = handler.awaitList { mangasQueries.getFavorites(::mapManga) }
+        val withTimestamp = handler.awaitList { mangasQueries.getMangasWithFavoriteTimestamp(::mapManga) }
+        return (favorites + withTimestamp).distinctBy { it.id }
     }
 
     private suspend fun isMangaDifferent(localManga: Manga, remoteManga: BackupManga): Boolean {
@@ -331,7 +335,7 @@ class SyncManager(
         if (localCustom?.title != remoteManga.customTitle) {
             return true
         }
-        if (localManga.coverLastModified != remoteManga.lastModifiedAt) {
+        if (remoteManga.customThumbnailUrl != null && !coverCache.getCustomCoverFile(localManga.id).exists()) {
             return true
         }
 
@@ -373,13 +377,13 @@ class SyncManager(
         val elapsedTimeMillis = measureTimeMillis {
             val databaseManga = getAllMangaFromDB()
             val localMangaMap = databaseManga.associateBy {
-                Triple(it.source, it.url, it.title)
+                Pair(it.source, it.url)
             }
 
             logcat(LogPriority.DEBUG, logTag) { "Starting to filter favorites and non-favorites from backup data." }
 
             backup.backupManga.forEach { remoteManga ->
-                val compositeKey = Triple(remoteManga.source, remoteManga.url, remoteManga.title)
+                val compositeKey = Pair(remoteManga.source, remoteManga.url)
                 val localManga = localMangaMap[compositeKey]
                 when {
                     // Checks if the manga is in favorites and needs updating or adding
@@ -417,10 +421,10 @@ class SyncManager(
     private suspend fun updateNonFavorites(nonFavorites: List<BackupManga>) {
         val localMangaList = getAllMangaFromDB()
 
-        val localMangaMap = localMangaList.associateBy { Triple(it.source, it.url, it.title) }
+        val localMangaMap = localMangaList.associateBy { Pair(it.source, it.url) }
 
         nonFavorites.forEach { nonFavorite ->
-            val key = Triple(nonFavorite.source, nonFavorite.url, nonFavorite.title)
+            val key = Pair(nonFavorite.source, nonFavorite.url)
             localMangaMap[key]?.let { localManga ->
                 if (localManga.favorite != nonFavorite.favorite) {
                     val updatedManga = localManga.copy(favorite = nonFavorite.favorite)

@@ -1,5 +1,16 @@
 package eu.kanade.tachiyomi.data.backup.restore.restorers
 
+import android.content.Context
+import coil3.imageLoader
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.awaitSuccess
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
+
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupChapter
@@ -55,8 +66,10 @@ class MangaRestorer(
     private val coverCache: CoverCache = Injekt.get(),
     private val insertFlatMetadata: InsertFlatMetadata = Injekt.get(),
     private val getFlatMetadataById: GetFlatMetadataById = Injekt.get(),
+    private val context: Context = Injekt.get(),
     // SY <--
 ) {
+    private val scope = CoroutineScope(Dispatchers.IO)
     private var now = ZonedDateTime.now()
     private var currentFetchWindow = fetchInterval.getWindow(now)
 
@@ -580,11 +593,29 @@ class MangaRestorer(
     private fun restoreEditedInfo(mangaJson: CustomMangaInfo?) {
         mangaJson ?: return
         val existing = getCustomMangaInfo.get(mangaJson.id)
-        if (existing?.thumbnailUrl != mangaJson.thumbnailUrl) {
+        val coverUrl = mangaJson.thumbnailUrl
+        if (existing?.thumbnailUrl != coverUrl) {
             coverCache.deleteCustomCover(mangaJson.id)
             ChimanewHomeScreenModel.triggerRefresh()
         }
         setCustomMangaInfo.set(mangaJson)
+
+        // EaZy Nuvio+ / Chimanew: Immediately download custom cover to disk cache on receiving device
+        if (!coverUrl.isNullOrBlank() && (coverUrl.startsWith("http://") || coverUrl.startsWith("https://"))) {
+            scope.launch {
+                try {
+                    val client = Injekt.get<NetworkHelper>().client
+                    val response = client.newCall(GET(coverUrl)).awaitSuccess()
+                    response.body.byteStream().use { stream ->
+                        coverCache.setCustomCoverToCache(mangaJson.id, stream)
+                    }
+                    context.imageLoader.memoryCache?.clear()
+                    ChimanewHomeScreenModel.triggerRefresh()
+                } catch (e: Exception) {
+                    logcat(LogPriority.WARN, e) { "Failed to cache custom cover from URL: $coverUrl" }
+                }
+            }
+        }
     }
 
     private fun BackupManga.getCustomMangaInfo(): CustomMangaInfo? {

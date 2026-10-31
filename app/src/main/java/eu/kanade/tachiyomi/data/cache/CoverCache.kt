@@ -7,6 +7,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -54,9 +57,12 @@ class CoverCache(private val context: Context) {
      * Checks if a custom cover exists without hitting the disk on every check.
      */
     fun hasCustomCover(mangaId: Long?): Boolean {
+        if (mangaId == null) return false
         val file = getCustomCoverFile(mangaId)
-        if (!customCoversIndexed) return file.exists()
-        return synchronized(customCoverNames) { file.name in customCoverNames }
+        val fileExists = if (!customCoversIndexed) file.exists() else synchronized(customCoverNames) { file.name in customCoverNames }
+        if (fileExists) return true
+        val getCustomMangaInfo = runCatching { Injekt.get<GetCustomMangaInfo>() }.getOrNull()
+        return !getCustomMangaInfo?.get(mangaId)?.thumbnailUrl.isNullOrBlank()
     }
 
     /**
@@ -88,6 +94,18 @@ class CoverCache(private val context: Context) {
      * @param inputStream the stream to copy.
      * @throws IOException if there's any error.
      */
+    @Throws(IOException::class)
+    fun setCustomCoverToCache(mangaId: Long, inputStream: InputStream) {
+        val file = getCustomCoverFile(mangaId)
+        file.outputStream().use {
+            inputStream.copyTo(it)
+        }
+        synchronized(customCoverNames) {
+            customCoverNames.add(file.name)
+            deletedWhileIndexing.remove(file.name)
+        }
+    }
+
     @Throws(IOException::class)
     fun setCustomCoverToCache(manga: Manga, inputStream: InputStream) {
         val file = getCustomCoverFile(manga.id)

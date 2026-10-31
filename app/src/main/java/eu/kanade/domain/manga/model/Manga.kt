@@ -10,6 +10,7 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.metadata.comicinfo.ComicInfo
 import tachiyomi.core.metadata.comicinfo.ComicInfoPublishingStatus
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -80,8 +81,12 @@ fun Manga.copyFrom(other: SManga): Manga {
     )
 }
 
-fun Manga.hasCustomCover(coverCache: CoverCache = Injekt.get()): Boolean {
-    return coverCache.getCustomCoverFile(id).exists()
+fun Manga.hasCustomCover(
+    coverCache: CoverCache = Injekt.get(),
+    getCustomMangaInfo: GetCustomMangaInfo = Injekt.get(),
+): Boolean {
+    return coverCache.getCustomCoverFile(id).exists() ||
+        !getCustomMangaInfo.get(id)?.thumbnailUrl.isNullOrBlank()
 }
 
 /**
