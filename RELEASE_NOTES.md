@@ -1,14 +1,12 @@
-# What's New in Chimanew v2.6.42
+# What's New in Chimanew v2.6.43
 
-### ⚡ Instant Cover Application & Zero-Lag Switching
-* **Instant Sub-Millisecond Cover Switching**: Selecting a cover or backdrop in the Artwork Picker now instantly clones the image directly from Coil's local disk cache. This eliminates redundant network downloads and network lag completely when picking already previewed artwork.
-* **Non-Blocking Artwork Application**: Removed background source re-scraping when applying custom artwork so you are returned to your manga details page instantly without freezing or waiting.
+### 📱 Tablet Mode Navigation Rail Overlap Fix
+* **Clean Side Rail Insets**: Fixed an issue on tablets, foldables, and wide desktop windows where the left Navigation Rail overlapped and covered the left side of the Home screen.
+* **No More Clipped Cards or Text**: "Continue Reading", "Recently Updated", shelf headers, cards, and the Hero poster now start cleanly to the right of the navigation rail without being hidden or cut off.
 
-### 🖼️ Selected Artwork in Full-Screen Cover Dialog
-* **Accurate Full-Screen Cover Viewer**: Tapping the cover on the details page now displays your selected high-resolution artwork (AniList/Kitsu/MAL or custom cover) rather than falling back to the low-resolution source thumbnail.
-* **Accurate Saving & Sharing**: Saving or sharing the cover from the full-screen dialog now exports the exact high-resolution cover you are viewing.
+### 🔙 Back Button in Chimanew Settings
+* **One-Tap Return**: Fixed the missing top back arrow button when navigating to Chimanew / Nuvio Settings from the Home page gear icon. Tapping the back button now returns you smoothly to your Home feed.
 
-### 🏠 Home Page & Hero Section Synchronization
-* **Instant Home Refresh on Cover Changes**: Updating or resetting custom covers and banners now immediately invalidates the home feed cache, updating the Hero carousel and all home shelves without needing to restart the app.
-* **Custom Artwork Priority in Hero & Cards**: The Hero carousel and shelf cards now correctly prioritize your custom covers and custom banners above online metadata providers.
-* **Consistent Source Exclusion on Home**: Manga source exclusions configured in the Artwork Picker are now seamlessly respected on the Home page feed.
+### 💾 Backup & Restore for Chosen Artwork
+* **Permanent Backup Preservation**: Selecting a high-definition cover in the Artwork Picker now permanently binds the artwork's web URL into your entry's custom metadata.
+* **Seamless Restore**: When creating a `.tachibk` backup and restoring on a new device, Chimanew will automatically remember your chosen covers and download them. Fully compatible with other forks (like TachiyomiSY).

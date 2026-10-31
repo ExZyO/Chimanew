@@ -93,6 +93,9 @@ import kotlinx.coroutines.withContext
 import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 import tachiyomi.core.common.util.system.logcat
 import eu.kanade.domain.manga.interactor.UpdateManga
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
+import tachiyomi.domain.manga.interactor.SetCustomMangaInfo
+import tachiyomi.domain.manga.model.CustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
@@ -373,6 +376,13 @@ fun ArtworkPickerBottomSheet(
                                                     )
                                                 }
                                             }
+                                            val getCustomMangaInfo = Injekt.get<GetCustomMangaInfo>()
+                                            val setCustomMangaInfo = Injekt.get<SetCustomMangaInfo>()
+                                            val currentInfo = getCustomMangaInfo.get(manga.id)
+                                            setCustomMangaInfo.set(
+                                                (currentInfo ?: CustomMangaInfo(manga.id, null, null, null, null, null, null, null))
+                                                    .copy(thumbnailUrl = coverUrl),
+                                            )
                                         }
                                         context.imageLoader.memoryCache?.clear()
                                         ChimanewHomeScreenModel.triggerRefresh()
@@ -391,6 +401,12 @@ fun ArtworkPickerBottomSheet(
                                         val coverCache = Injekt.get<CoverCache>()
                                         val updateManga = Injekt.get<UpdateManga>()
                                         coverCache.deleteCustomCover(manga.id)
+                                        val getCustomMangaInfo = Injekt.get<GetCustomMangaInfo>()
+                                        val setCustomMangaInfo = Injekt.get<SetCustomMangaInfo>()
+                                        val currentInfo = getCustomMangaInfo.get(manga.id)
+                                        if (currentInfo != null && currentInfo.thumbnailUrl != null) {
+                                            setCustomMangaInfo.set(currentInfo.copy(thumbnailUrl = null))
+                                        }
                                         updateManga.awaitUpdateCoverLastModified(manga.id)
                                     }
                                     context.imageLoader.memoryCache?.clear()

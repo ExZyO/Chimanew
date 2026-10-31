@@ -25,6 +25,8 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
+import tachiyomi.domain.manga.interactor.SetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
@@ -138,6 +140,12 @@ class MangaCoverScreenModel(
         screenModelScope.launchIO {
             try {
                 coverCache.deleteCustomCover(mangaId)
+                val getCustomMangaInfo = Injekt.get<GetCustomMangaInfo>()
+                val setCustomMangaInfo = Injekt.get<SetCustomMangaInfo>()
+                val currentInfo = getCustomMangaInfo.get(mangaId)
+                if (currentInfo != null && currentInfo.thumbnailUrl != null) {
+                    setCustomMangaInfo.set(currentInfo.copy(thumbnailUrl = null))
+                }
                 updateManga.awaitUpdateCoverLastModified(mangaId)
                 context.imageLoader.memoryCache?.clear()
                 notifyCoverUpdated(context)

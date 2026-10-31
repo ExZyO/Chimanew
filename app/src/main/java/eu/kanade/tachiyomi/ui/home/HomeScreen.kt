@@ -32,7 +32,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -251,10 +254,15 @@ object HomeScreen : Screen() {
                     bottomBar = {},
                     contentWindowInsets = WindowInsets(0),
                 ) { contentPadding ->
+                    val layoutDirection = LocalLayoutDirection.current
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = contentPadding.calculateTopPadding()),
+                            .padding(
+                                top = contentPadding.calculateTopPadding(),
+                                start = contentPadding.calculateStartPadding(layoutDirection),
+                                end = contentPadding.calculateEndPadding(layoutDirection),
+                            ),
                     ) {
                         AnimatedContent(
                             targetState = tabNavigator.current,
