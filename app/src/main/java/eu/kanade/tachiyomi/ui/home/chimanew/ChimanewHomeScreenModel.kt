@@ -39,6 +39,7 @@ import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.track.model.Track
 import tachiyomi.domain.track.repository.TrackRepository
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
@@ -166,9 +167,15 @@ class ChimanewHomeScreenModel(
     companion object {
         @Volatile
         private var cachedState: State? = null
+
+        val artworkRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
+
+        fun triggerRefresh() {
+            cachedState = null
+            artworkRefreshTrigger.value = System.currentTimeMillis()
+        }
     }
 
-    private val artworkRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
     // EaZy Nuvio+ / Chimanew: prevent infinite re-query loops for hero art
     private val attemptedHeroTitles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var lastArtworkConfigKey: String? = null
@@ -342,12 +349,12 @@ class ChimanewHomeScreenModel(
                 fun getArtwork(mangaId: Long, title: String): UnifiedArtwork? {
                     if (!prefs.useAnilistArtwork) return null
                     val defaultCoverUrl = libraryByMangaId[mangaId]?.manga?.thumbnailUrl
-                    var cachedUnified = artworkWaterfallRepository.getCached(title, defaultCoverUrl = defaultCoverUrl)
+                    var cachedUnified = artworkWaterfallRepository.getCached(title, defaultCoverUrl = defaultCoverUrl, mangaId = mangaId)
                     if (cachedUnified == null) {
                         val libManga = libraryByMangaId[mangaId]
                         val og = libManga?.manga?.ogTitle
                         if (!og.isNullOrBlank() && og != title) {
-                            cachedUnified = artworkWaterfallRepository.getCached(og, defaultCoverUrl = defaultCoverUrl)
+                            cachedUnified = artworkWaterfallRepository.getCached(og, defaultCoverUrl = defaultCoverUrl, mangaId = mangaId)
                         }
                     }
                     if (cachedUnified != null) return cachedUnified
@@ -396,6 +403,8 @@ class ChimanewHomeScreenModel(
                     return null
                 }
 
+                val coverCache = Injekt.get<CoverCache>()
+
                 fun createHomeItem(
                     mangaId: Long,
                     title: String,
@@ -411,6 +420,8 @@ class ChimanewHomeScreenModel(
                     genres: List<String> = emptyList(),
                     description: String? = null,
                 ): HomeMangaItem {
+                    val hasCustomCover = coverCache.hasCustomCover(mangaId)
+                    val customBanner = preferences.mangaCustomBannerUrl(mangaId).get().takeIf { it.isNotBlank() }
                     val artwork = getArtwork(mangaId, title)
                     val inLib = libraryByMangaId.containsKey(mangaId)
                     val mangaTracks = tracksByManga[mangaId]
@@ -419,8 +430,8 @@ class ChimanewHomeScreenModel(
                         mangaId = mangaId,
                         title = title,
                         coverData = coverData,
-                        highResBannerUrl = artwork?.bannerUrl,
-                        highResCoverUrl = artwork?.posterUrl,
+                        highResBannerUrl = customBanner ?: artwork?.bannerUrl,
+                        highResCoverUrl = if (hasCustomCover) null else artwork?.posterUrl,
                         communityRatings = artwork?.ratings ?: emptyList(),
                         lastChapterNumber = lastChapterNumber,
                         lastChapterId = lastChapterId,
@@ -504,9 +515,11 @@ class ChimanewHomeScreenModel(
                 }
 
                 fun hasRequiredHeroArtwork(mangaId: Long, title: String, heroStyle: Int): Boolean {
+                    val hasCustomCover = coverCache.hasCustomCover(mangaId)
+                    val customBanner = preferences.mangaCustomBannerUrl(mangaId).get().takeIf { it.isNotBlank() }
                     val artwork = getArtwork(mangaId, title)
-                    val hasBanner = artwork != null && !artwork.bannerUrl.isNullOrBlank()
-                    val hasCover = (artwork != null && !artwork.posterUrl.isNullOrBlank()) || ("default" in prefs.heroArtworkSources)
+                    val hasBanner = customBanner != null || (artwork != null && !artwork.bannerUrl.isNullOrBlank())
+                    val hasCover = hasCustomCover || (artwork != null && !artwork.posterUrl.isNullOrBlank()) || ("default" in prefs.heroArtworkSources)
 
                     val enforceBanner = "banner" in prefs.heroStrictArtworkRequirements
                     val enforceCover = "cover" in prefs.heroStrictArtworkRequirements

@@ -71,6 +71,7 @@ fun MangaCoverDialog(
     // KMK -->
     modifier: Modifier = Modifier,
     // KMK <--
+    coverModel: Any = manga,
 ) {
     // KMK -->
     val iconColor = contentColorFor(MaterialTheme.colorScheme.secondaryContainer)
@@ -226,7 +227,7 @@ fun MangaCoverDialog(
                     },
                     update = { view ->
                         val request = ImageRequest.Builder(view.context)
-                            .data(manga)
+                            .data(coverModel)
                             .size(Size.ORIGINAL)
                             .memoryCachePolicy(CachePolicy.DISABLED)
                             .target { image ->

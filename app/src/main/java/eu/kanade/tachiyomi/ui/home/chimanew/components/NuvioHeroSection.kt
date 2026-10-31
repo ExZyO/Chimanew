@@ -71,6 +71,7 @@ import coil3.toBitmap
 import eu.kanade.presentation.manga.components.CommunityRatingBadge
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
@@ -107,6 +108,7 @@ fun NuvioHeroSection(
     if (items.isEmpty()) return
 
     val preferences = remember { Injekt.get<ChimanewPreferences>() }
+    val coverCache = remember { Injekt.get<CoverCache>() }
     val heroRequireSelectedArtwork by preferences.heroRequireSelectedArtwork().collectPrefAsState()
     val heroStrictArtworkRequirements by preferences.heroStrictArtworkRequirements().collectPrefAsState()
     val heroArtworkPairing by preferences.heroArtworkPairing().collectPrefAsState()
@@ -124,6 +126,7 @@ fun NuvioHeroSection(
     }
 
     fun hasAuthenticCover(item: HomeMangaItem): Boolean {
+        if (coverCache.hasCustomCover(item.mangaId)) return true
         val hasHighRes = !item.highResCoverUrl.isNullOrBlank() && "cover" in heroArtworkSources
         val hasDefault = !item.coverData.ogUrl.isNullOrBlank() && "default" in heroArtworkSources
         return hasHighRes || hasDefault
@@ -302,6 +305,7 @@ fun NuvioHeroSection(
             val heroMetadataLayout by preferences.heroMetadataLayout().collectPrefAsState()
 
             val posterImageModel: Any = when {
+                coverCache.hasCustomCover(item.mangaId) -> item.coverData
                 "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
                 "default" in heroArtworkSources -> item.coverData
                 else -> item.highResCoverUrl ?: item.coverData

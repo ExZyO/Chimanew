@@ -48,10 +48,10 @@ class MangaCoverScreenModel(
         }
     }
 
-    fun saveCover(context: Context) {
+    fun saveCover(context: Context, coverModel: Any? = null) {
         screenModelScope.launch {
             try {
-                saveCoverInternal(context, temp = false)
+                saveCoverInternal(context, temp = false, coverModel = coverModel)
                 snackbarHostState.showSnackbar(
                     context.stringResource(MR.strings.cover_saved),
                     withDismissAction = true,
@@ -66,10 +66,10 @@ class MangaCoverScreenModel(
         }
     }
 
-    fun shareCover(context: Context) {
+    fun shareCover(context: Context, coverModel: Any? = null) {
         screenModelScope.launch {
             try {
-                val uri = saveCoverInternal(context, temp = true) ?: return@launch
+                val uri = saveCoverInternal(context, temp = true, coverModel = coverModel) ?: return@launch
                 withUIContext {
                     context.startActivity(uri.toShareIntent(context))
                 }
@@ -89,10 +89,11 @@ class MangaCoverScreenModel(
      * @param context The context for building and executing the ImageRequest
      * @return the uri to saved file
      */
-    private suspend fun saveCoverInternal(context: Context, temp: Boolean): Uri? {
+    private suspend fun saveCoverInternal(context: Context, temp: Boolean, coverModel: Any? = null): Uri? {
         val manga = state.value ?: return null
+        val targetData = coverModel ?: manga
         val req = ImageRequest.Builder(context)
-            .data(manga)
+            .data(targetData)
             .size(Size.ORIGINAL)
             .build()
 

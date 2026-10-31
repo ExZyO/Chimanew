@@ -39,6 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
 
@@ -91,9 +94,10 @@ fun NuvioMangaCard(
                 },
             ),
     ) {
-        // 1. Cover image: Use high-res AniList cover when available, falling back to local coverData
+        // 1. Cover image: Prioritize custom cover if set, then high-res AniList cover, falling back to local coverData
         // EaZy Nuvio+ / Chimanew: resilient cover fallback
-        val imageModel: Any = item.highResCoverUrl ?: item.coverData
+        val coverCache = remember { Injekt.get<CoverCache>() }
+        val imageModel: Any = if (coverCache.hasCustomCover(item.mangaId)) item.coverData else (item.highResCoverUrl ?: item.coverData)
         SubcomposeAsyncImage(
             model = imageModel,
             contentDescription = item.title,

@@ -80,7 +80,9 @@ import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import okio.buffer
 import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkCoverOption
 import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.UnifiedArtwork
@@ -344,18 +346,36 @@ fun ArtworkPickerBottomSheet(
                                     isApplying = true
                                     try {
                                         withContext(Dispatchers.IO) {
-                                            val client = Injekt.get<NetworkHelper>().client
-                                            val response = client.newCall(GET(coverUrl)).awaitSuccess()
-                                            response.body.byteStream().use { stream ->
-                                                manga.editCover(
-                                                    coverManager = Injekt.get<LocalCoverManager>(),
-                                                    stream = stream,
-                                                    updateManga = Injekt.get<UpdateManga>(),
-                                                    coverCache = Injekt.get<CoverCache>(),
-                                                )
+                                            val diskCache = context.imageLoader.diskCache
+                                            val snapshot = diskCache?.openSnapshot(coverUrl)
+                                            if (snapshot != null) {
+                                                try {
+                                                    diskCache.fileSystem.source(snapshot.data).buffer().inputStream().use { stream ->
+                                                        manga.editCover(
+                                                            coverManager = Injekt.get<LocalCoverManager>(),
+                                                            stream = stream,
+                                                            updateManga = Injekt.get<UpdateManga>(),
+                                                            coverCache = Injekt.get<CoverCache>(),
+                                                        )
+                                                    }
+                                                } finally {
+                                                    snapshot.close()
+                                                }
+                                            } else {
+                                                val client = Injekt.get<NetworkHelper>().client
+                                                val response = client.newCall(GET(coverUrl)).awaitSuccess()
+                                                response.body.byteStream().use { stream ->
+                                                    manga.editCover(
+                                                        coverManager = Injekt.get<LocalCoverManager>(),
+                                                        stream = stream,
+                                                        updateManga = Injekt.get<UpdateManga>(),
+                                                        coverCache = Injekt.get<CoverCache>(),
+                                                    )
+                                                }
                                             }
                                         }
                                         context.imageLoader.memoryCache?.clear()
+                                        ChimanewHomeScreenModel.triggerRefresh()
                                         context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_cover_applied))
                                         onCoverUpdated()
                                     } catch (e: Exception) {
@@ -374,6 +394,7 @@ fun ArtworkPickerBottomSheet(
                                         updateManga.awaitUpdateCoverLastModified(manga.id)
                                     }
                                     context.imageLoader.memoryCache?.clear()
+                                    ChimanewHomeScreenModel.triggerRefresh()
                                     context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_reset_cover))
                                     onCoverUpdated()
                                 }
@@ -389,12 +410,14 @@ fun ArtworkPickerBottomSheet(
                             onSelectBanner = { bannerUrl ->
                                 customBannerPref.set(bannerUrl)
                                 context.imageLoader.memoryCache?.clear()
+                                ChimanewHomeScreenModel.triggerRefresh()
                                 context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_banner_applied))
                                 onCoverUpdated()
                             },
                             onResetBanner = {
                                 customBannerPref.delete()
                                 context.imageLoader.memoryCache?.clear()
+                                ChimanewHomeScreenModel.triggerRefresh()
                                 context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_reset_banner))
                                 onCoverUpdated()
                             },
@@ -408,6 +431,7 @@ fun ArtworkPickerBottomSheet(
                             onExclusionsChanged = {
                                 fetchArtwork(false)
                                 context.imageLoader.memoryCache?.clear()
+                                ChimanewHomeScreenModel.triggerRefresh()
                                 onCoverUpdated()
                             },
                         )

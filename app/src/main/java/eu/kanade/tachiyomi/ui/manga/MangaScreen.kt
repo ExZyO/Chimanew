@@ -58,6 +58,9 @@ import eu.kanade.presentation.manga.components.ClearMangaDialog
 import eu.kanade.presentation.manga.components.ClearOcrCacheDialog
 import eu.kanade.presentation.manga.components.DeleteChaptersDialog
 import eu.kanade.presentation.manga.components.MangaCoverDialog
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.presentation.manga.components.ScanlatorFilterDialog
 import eu.kanade.presentation.manga.components.SetIntervalDialog
 import eu.kanade.presentation.more.settings.screen.SettingsEhScreen
@@ -561,13 +564,30 @@ class MangaScreen(
                     onDismissRequest = onDismissRequest,
                 )
             }
-            MangaScreenModel.Dialog.FullCover -> {
+            is MangaScreenModel.Dialog.FullCover -> {
                 val sm = rememberScreenModel { MangaCoverScreenModel(successState.manga.id) }
                 val manga by sm.state.collectAsState()
                 if (manga != null) {
+                    val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
+                    val preferences = remember { Injekt.get<ChimanewPreferences>() }
+                    val useAnilistArtwork = preferences.useAnilistArtworkInDetails().get()
+                    val mangaTitle = remember(manga) { manga!!.ogTitle ?: manga!!.title }
+                    val cachedArtwork = remember(mangaTitle, manga!!.id) {
+                        if (useAnilistArtwork) {
+                            waterfallRepo.getCached(mangaTitle, defaultCoverUrl = manga!!.thumbnailUrl, mangaId = manga!!.id)
+                        } else null
+                    }
+                    val effectiveCover: Any = when {
+                        dialog.coverModel != null -> dialog.coverModel
+                        manga!!.hasCustomCover() -> manga!!
+                        useAnilistArtwork && !cachedArtwork?.posterUrl.isNullOrBlank() -> cachedArtwork!!.posterUrl!!
+                        else -> manga!!
+                    }
                     val getContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
                         if (it == null) return@rememberLauncherForActivityResult
                         sm.editCover(context, it)
+                        context.imageLoader.memoryCache?.clear()
+                        ChimanewHomeScreenModel.triggerRefresh()
                     }
                     // KMK -->
                     val externalStoragePermissionNotGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
@@ -576,28 +596,32 @@ class MangaScreen(
                     val saveCoverPermissionRequester = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestPermission(),
                         onResult = {
-                            sm.saveCover(context)
+                            sm.saveCover(context, effectiveCover)
                         },
                     )
                     // KMK <--
                     MangaCoverDialog(
                         manga = manga!!,
+                        coverModel = effectiveCover,
                         snackbarHostState = sm.snackbarHostState,
                         isCustomCover = remember(manga) { manga!!.hasCustomCover() },
-                        onShareClick = { sm.shareCover(context) },
+                        onShareClick = { sm.shareCover(context, effectiveCover) },
                         onSaveClick = {
                             // KMK -->
                             if (externalStoragePermissionNotGranted) {
                                 saveCoverPermissionRequester.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                             } else {
                                 // KMK <--
-                                sm.saveCover(context)
+                                sm.saveCover(context, effectiveCover)
                             }
                         },
                         onEditClick = {
                             when (it) {
                                 EditCoverAction.EDIT -> getContent.launch("image/*")
-                                EditCoverAction.DELETE -> sm.deleteCustomCover(context)
+                                EditCoverAction.DELETE -> {
+                                    sm.deleteCustomCover(context)
+                                    ChimanewHomeScreenModel.triggerRefresh()
+                                }
                             }
                         },
                         onDismissRequest = onDismissRequest,
@@ -627,6 +651,7 @@ class MangaScreen(
                     if (uri == null) return@rememberLauncherForActivityResult
                     sm.editCover(context, uri)
                     context.imageLoader.memoryCache?.clear()
+                    ChimanewHomeScreenModel.triggerRefresh()
                 }
                 ArtworkPickerBottomSheet(
                     manga = successState.manga,
@@ -634,7 +659,7 @@ class MangaScreen(
                     onCustomCoverFilePick = { getContent.launch("image/*") },
                     onCoverUpdated = {
                         context.imageLoader.memoryCache?.clear()
-                        screenModel.fetchAllFromSource(manualFetch = false)
+                        ChimanewHomeScreenModel.triggerRefresh()
                     },
                 )
             }

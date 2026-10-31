@@ -2061,7 +2061,7 @@ class MangaScreenModel(
 
         data object SettingsSheet : Dialog
         data object TrackSheet : Dialog
-        data object FullCover : Dialog
+        data class FullCover(val coverModel: Any? = null) : Dialog
         data object ArtworkPickerSheet : Dialog
     }
 
@@ -2081,8 +2081,8 @@ class MangaScreenModel(
         updateSuccessState { it.copy(dialog = Dialog.TrackSheet) }
     }
 
-    fun showCoverDialog() {
-        updateSuccessState { it.copy(dialog = Dialog.FullCover) }
+    fun showCoverDialog(coverModel: Any? = null) {
+        updateSuccessState { it.copy(dialog = Dialog.FullCover(coverModel)) }
     }
 
     fun showArtworkPickerDialog() {
