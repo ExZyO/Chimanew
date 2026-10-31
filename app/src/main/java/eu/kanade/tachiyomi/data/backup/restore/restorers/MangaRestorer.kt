@@ -19,6 +19,9 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.interactor.FetchInterval
+import eu.kanade.tachiyomi.data.cache.CoverCache
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.interactor.GetMangaByUrlAndSourceId
 import tachiyomi.domain.manga.interactor.InsertFlatMetadata
@@ -48,6 +51,8 @@ class MangaRestorer(
     fetchInterval: FetchInterval = Injekt.get(),
     // SY -->
     private val setCustomMangaInfo: SetCustomMangaInfo = Injekt.get(),
+    private val getCustomMangaInfo: GetCustomMangaInfo = Injekt.get(),
+    private val coverCache: CoverCache = Injekt.get(),
     private val insertFlatMetadata: InsertFlatMetadata = Injekt.get(),
     private val getFlatMetadataById: GetFlatMetadataById = Injekt.get(),
     // SY <--
@@ -574,6 +579,11 @@ class MangaRestorer(
 
     private fun restoreEditedInfo(mangaJson: CustomMangaInfo?) {
         mangaJson ?: return
+        val existing = getCustomMangaInfo.get(mangaJson.id)
+        if (existing?.thumbnailUrl != mangaJson.thumbnailUrl) {
+            coverCache.deleteCustomCover(mangaJson.id)
+            ChimanewHomeScreenModel.triggerRefresh()
+        }
         setCustomMangaInfo.set(mangaJson)
     }
 

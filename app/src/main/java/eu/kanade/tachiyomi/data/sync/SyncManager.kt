@@ -24,6 +24,7 @@ import tachiyomi.data.Chapters
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.data.manga.MangaMapper.mapManga
 import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -47,6 +48,7 @@ class SyncManager(
         ignoreUnknownKeys = true
     },
     private val getCategories: GetCategories = Injekt.get(),
+    private val getCustomMangaInfo: GetCustomMangaInfo = Injekt.get(),
 ) {
     private val backupCreator: BackupCreator = BackupCreator(context, false)
     private val notifier: SyncNotifier = SyncNotifier(context)
@@ -318,6 +320,18 @@ class SyncManager(
         }
 
         if (localCategories.toSet() != remoteManga.categories.toSet()) {
+            return true
+        }
+
+        // EaZy Nuvio+ / Chimanew: Detect custom cover / artwork changes
+        val localCustom = getCustomMangaInfo.get(localManga.id)
+        if (localCustom?.thumbnailUrl != remoteManga.customThumbnailUrl) {
+            return true
+        }
+        if (localCustom?.title != remoteManga.customTitle) {
+            return true
+        }
+        if (localManga.coverLastModified != remoteManga.lastModifiedAt) {
             return true
         }
 

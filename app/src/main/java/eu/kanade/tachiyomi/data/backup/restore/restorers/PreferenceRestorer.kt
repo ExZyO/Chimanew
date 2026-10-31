@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import android.content.Context
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
 import eu.kanade.tachiyomi.data.backup.create.BackupCreateJob
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
@@ -54,6 +55,8 @@ class PreferenceRestorer(
         // KMK -->
         AppUpdateJob.setupTask(context)
         // KMK <--
+        // EaZy Nuvio+ / Chimanew: Immediately refresh Home feed when synced/restored preferences are applied
+        ChimanewHomeScreenModel.triggerRefresh()
     }
 
     suspend fun restoreSource(preferences: List<BackupSourcePreferences>) {

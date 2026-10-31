@@ -212,20 +212,25 @@ abstract class SyncService(
                 }
                 local != null && remote != null -> {
                     // Compare versions to decide which manga to keep
-                    if (local.version >= remote.version) {
-                        logcat(LogPriority.DEBUG, logTag) {
-                            "Keeping local version of ${local.title} with merged chapters."
-                        }
-                        local.chapters = mergeChapters(local.chapters, remote.chapters)
-                        updateCategories(local, localCategoriesMapByOrder)
-                        local
-                    } else {
+                    val useRemote = remote.version > local.version ||
+                        (remote.version == local.version && remote.customThumbnailUrl != null && remote.customThumbnailUrl != local.customThumbnailUrl)
+                    if (useRemote) {
                         logcat(LogPriority.DEBUG, logTag) {
                             "Keeping remote version of ${remote.title} with merged chapters."
                         }
                         remote.chapters = mergeChapters(local.chapters, remote.chapters)
                         updateCategories(remote, remoteCategoriesMapByOrder)
                         remote
+                    } else {
+                        logcat(LogPriority.DEBUG, logTag) {
+                            "Keeping local version of ${local.title} with merged chapters."
+                        }
+                        local.chapters = mergeChapters(local.chapters, remote.chapters)
+                        updateCategories(local, localCategoriesMapByOrder)
+                        if (remote.customThumbnailUrl != null && remote.customThumbnailUrl != local.customThumbnailUrl && local.customThumbnailUrl == null) {
+                            local.customThumbnailUrl = remote.customThumbnailUrl
+                        }
+                        local
                     }
                 }
                 else -> null // No manga found for key
@@ -556,31 +561,9 @@ abstract class SyncService(
                 "Remote preferences: ${remotePreferences?.size}"
         }
 
-        // Merge both preferences maps
-        val mergedPreferences = (localPreferencesMap.keys + remotePreferencesMap.keys).distinct().mapNotNull { key ->
-            val localPreference = localPreferencesMap[key]
-            val remotePreference = remotePreferencesMap[key]
-
-            logcat(LogPriority.DEBUG, logTag) {
-                "Processing preference key: $key. Local preference: ${localPreference != null}, " +
-                    "Remote preference: ${remotePreference != null}"
-            }
-
-            when {
-                localPreference != null && remotePreference == null -> {
-                    logcat(LogPriority.DEBUG, logTag) { "Using local preference: ${localPreference.key}." }
-                    localPreference
-                }
-                remotePreference != null && localPreference == null -> {
-                    logcat(LogPriority.DEBUG, logTag) { "Using remote preference: ${remotePreference.key}." }
-                    remotePreference
-                }
-                else -> {
-                    logcat(LogPriority.DEBUG, logTag) { "Both remote and local have keys. Skipping: $key" }
-                    null
-                }
-            }
-        }
+        // EaZy Nuvio+ / Chimanew: Merge preferences with incoming remote taking precedence over local defaults
+        val mergedPreferencesMap = localPreferencesMap + remotePreferencesMap
+        val mergedPreferences = mergedPreferencesMap.values.toList()
 
         logcat(LogPriority.DEBUG, logTag) {
             "Preferences merge completed. Total merged preferences: ${mergedPreferences.size}"
