@@ -15,7 +15,10 @@ import com.hippo.unifile.UniFile
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.coil.MangaCoverFetcher.Companion.USE_CUSTOM_COVER_KEY
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +43,7 @@ import tachiyomi.core.common.storage.extension
 import tachiyomi.core.common.storage.nameWithoutExtension
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.manga.model.asMangaCover
@@ -99,6 +103,12 @@ class MangaCoverFetcher(
             val customCoverFile = customCoverFileLazy.value
             if (customCoverFile.exists()) {
                 return fileLoader(customCoverFile)
+            }
+            // EaZy Nuvio+ / Chimanew: If custom cover file is not yet cached on disk, fetch from custom thumbnail URL
+            val customInfo = Injekt.get<GetCustomMangaInfo>().get(mangaCover.mangaId)
+            val customUrl = customInfo?.thumbnailUrl
+            if (!customUrl.isNullOrBlank() && (customUrl.startsWith("http://") || customUrl.startsWith("https://"))) {
+                return httpCustomCoverLoader(customUrl, customCoverFile)
             }
         }
 
@@ -301,6 +311,30 @@ class MangaCoverFetcher(
             mimeType = "image/*",
             dataSource = DataSource.DISK,
         )
+    }
+
+    private suspend fun httpCustomCoverLoader(customUrl: String, customCoverFile: File): FetchResult {
+        try {
+            val networkHelper = Injekt.get<NetworkHelper>()
+            val request = GET(customUrl)
+            val response = networkHelper.client.newCall(request).awaitSuccess()
+            response.body.byteStream().use { stream ->
+                val coverCache = Injekt.get<CoverCache>()
+                coverCache.setCustomCoverToCache(mangaCover.mangaId, stream)
+            }
+            if (customCoverFile.exists()) {
+                return fileLoader(customCoverFile)
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN, e) { "Failed to download custom cover from URL: $customUrl" }
+        }
+        if (url == null) error("No cover specified")
+        return when (getResourceType(url)) {
+            Type.File -> fileLoader(File(url.substringAfter("file://")))
+            Type.URI -> fileUriLoader(url)
+            Type.URL -> httpLoader()
+            null -> error("Invalid image")
+        }
     }
 
     private suspend fun httpLoader(): FetchResult {

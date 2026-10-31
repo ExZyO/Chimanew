@@ -211,8 +211,26 @@ abstract class SyncService(
                     remote
                 }
                 local != null && remote != null -> {
+                    // EaZy Nuvio+ / Chimanew: Reconcile custom artwork & chosen covers between devices
+                    val remoteCoverTime = remote.coverLastModified ?: 0L
+                    val localCoverTime = local.coverLastModified ?: 0L
+                    val chosenCustomThumbnail = when {
+                        remote.customThumbnailUrl != null && local.customThumbnailUrl == null -> remote.customThumbnailUrl
+                        local.customThumbnailUrl != null && remote.customThumbnailUrl == null -> local.customThumbnailUrl
+                        remoteCoverTime > localCoverTime -> remote.customThumbnailUrl
+                        localCoverTime > remoteCoverTime -> local.customThumbnailUrl
+                        else -> remote.customThumbnailUrl ?: local.customThumbnailUrl
+                    }
+                    val chosenCoverLastModified = maxOf(remoteCoverTime, localCoverTime)
+                    val chosenCustomTitle = if (remoteCoverTime > localCoverTime) {
+                        remote.customTitle ?: local.customTitle
+                    } else {
+                        local.customTitle ?: remote.customTitle
+                    }
+
                     // Compare versions to decide which manga to keep
                     val useRemote = remote.version > local.version ||
+                        (remoteCoverTime > localCoverTime) ||
                         (remote.version == local.version && remote.customThumbnailUrl != null && remote.customThumbnailUrl != local.customThumbnailUrl)
                     if (useRemote) {
                         logcat(LogPriority.DEBUG, logTag) {
@@ -220,6 +238,9 @@ abstract class SyncService(
                         }
                         remote.chapters = mergeChapters(local.chapters, remote.chapters)
                         updateCategories(remote, remoteCategoriesMapByOrder)
+                        remote.customThumbnailUrl = chosenCustomThumbnail
+                        remote.coverLastModified = chosenCoverLastModified
+                        if (chosenCustomTitle != null) remote.customTitle = chosenCustomTitle
                         remote
                     } else {
                         logcat(LogPriority.DEBUG, logTag) {
@@ -227,9 +248,9 @@ abstract class SyncService(
                         }
                         local.chapters = mergeChapters(local.chapters, remote.chapters)
                         updateCategories(local, localCategoriesMapByOrder)
-                        if (remote.customThumbnailUrl != null && remote.customThumbnailUrl != local.customThumbnailUrl && local.customThumbnailUrl == null) {
-                            local.customThumbnailUrl = remote.customThumbnailUrl
-                        }
+                        local.customThumbnailUrl = chosenCustomThumbnail
+                        local.coverLastModified = chosenCoverLastModified
+                        if (chosenCustomTitle != null) local.customTitle = chosenCustomTitle
                         local
                     }
                 }
