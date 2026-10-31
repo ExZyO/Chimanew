@@ -127,6 +127,10 @@ class AppModule(val app: Application) : InjektModule {
                     setPragma(db, "foreign_keys = ON")
                     setPragma(db, "journal_mode = WAL")
                     setPragma(db, "synchronous = NORMAL")
+                    // EaZy Nuvio+ / Chimanew: Memory-mapped I/O and expanded 32MB RAM page cache for instant library & chapter queries
+                    setPragma(db, "cache_size = -32000")
+                    setPragma(db, "temp_store = MEMORY")
+                    setPragma(db, "mmap_size = 268435456")
                 }
                 private fun setPragma(db: SupportSQLiteDatabase, pragma: String) {
                     val cursor = db.query("PRAGMA $pragma")
@@ -178,6 +182,10 @@ class AppModule(val app: Application) : InjektModule {
                     setPragma(db, "foreign_keys = ON")
                     setPragma(db, "journal_mode = WAL")
                     setPragma(db, "synchronous = NORMAL")
+                    // EaZy Nuvio+ / Chimanew: Memory-mapped I/O and expanded 32MB RAM page cache for instant anime & episode queries
+                    setPragma(db, "cache_size = -32000")
+                    setPragma(db, "temp_store = MEMORY")
+                    setPragma(db, "mmap_size = 268435456")
                 }
                 private fun setPragma(db: SupportSQLiteDatabase, pragma: String) {
                     val cursor = db.query("PRAGMA $pragma")

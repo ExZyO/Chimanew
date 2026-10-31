@@ -293,7 +293,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             diskCache(
                 DiskCache.Builder()
                     .directory(context.cacheDir.resolve("image_cache"))
-                    .maxSizePercent(0.02)
+                    .maxSizePercent(0.05)
                     .build(),
             )
 
@@ -303,15 +303,15 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
                     .build(),
             )
 
-            crossfade((300 * this@App.animatorDurationScale).toInt())
+            crossfade((150 * this@App.animatorDurationScale).toInt())
             allowRgb565(DeviceUtil.isLowRamDevice(this@App))
             // KMK -->
             if (EHLogLevel.isExtraLogging()) logger(DebugLogger())
             // KMK <--
 
-            // Coil spawns a new thread for every image load by default
-            fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))
-            decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))
+            // EaZy Nuvio+ / Chimanew: Boosted parallelism for multi-core hardware decoding & fast image fetching
+            fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(16))
+            decoderCoroutineContext(Dispatchers.IO.limitedParallelism(6))
         }
             .build()
     }

@@ -50,6 +50,7 @@ fun AnimeLibraryCompactGrid(
 
         items(
             items = items,
+            key = { it.libraryAnime.anime.id },
             contentType = { "anime_library_compact_grid_item" },
         ) { libraryItem ->
             val anime = libraryItem.libraryAnime.anime

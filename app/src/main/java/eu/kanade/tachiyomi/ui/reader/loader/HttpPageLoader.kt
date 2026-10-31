@@ -67,7 +67,8 @@ internal class HttpPageLoader(
                 it.chapter = chapter
             }
         }.also {
-            it.loadByRollingChunked(0, 1, 1)
+            // EaZy Nuvio+ / Chimanew: Aggressive parallel chunking for instant page prefetching
+            it.loadByRollingChunked(0, 3, 5)
         }
     }
 
@@ -88,7 +89,7 @@ internal class HttpPageLoader(
         }
 
         val pages = page.chapter.pages ?: return@withIOContext
-        pages.loadByRollingChunked(page.index, 1, 2)
+        pages.loadByRollingChunked(page.index, 2, 4)
     }
 
     /**
@@ -104,7 +105,7 @@ internal class HttpPageLoader(
             page.imageUrl = null
         }
         boostPage(page)
-        pages.loadByRollingChunked(page.index, 1, 2)
+        pages.loadByRollingChunked(page.index, 2, 4)
     }
 
     fun boostPage(page: ReaderPage) {
@@ -250,4 +251,4 @@ internal class HttpPageLoader(
     }
 }
 
-private const val LIMITED_PAGES_AHEAD = 4
+private const val LIMITED_PAGES_AHEAD = 10

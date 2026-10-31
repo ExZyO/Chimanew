@@ -60,6 +60,7 @@ internal fun AnimeLibraryList(
 
         items(
             items = items,
+            key = { it.libraryAnime.anime.id },
             contentType = { "anime_library_list_item" },
         ) { libraryItem ->
             val anime = libraryItem.libraryAnime.anime

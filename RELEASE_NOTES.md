@@ -1,8 +1,8 @@
-# What's New in Chimanew v2.6.39
+# What's New in Chimanew v2.6.40
 
-### 🛡️ Smart Artwork Discovery & AniList Rate-Limiting Defense
-* **Proactive Gas Gauge & Rate Limiting**: Added a background Token Bucket rate limiter (30 permits/min) and dynamic header monitor for AniList. When remaining requests drop below 15, background queries smoothly pause to protect your account from 429 lockouts while keeping sync and browsing responsive.
-* **Persistent Disk Caching with Smart Invalidation**: Discovered artwork IDs and clean title mappings now persist across app restarts in an atomic file. Cached results are reused instantly and only re-evaluated when clearing the cache, updating priority hierarchy, or tapping manual refresh.
-* **Granular Source Exclusions**: Added an Exclusions tab in the Artwork Picker dialog with separate multiple-choice controls for Volume Covers/Posters and Landscape Banners. Exclude any provider or lock entries strictly to the default source cover.
-* **Offline Memory & Heap Optimization**: Internal artwork metadata is normalized into canonical reference tables, eliminating duplicate allocations and cutting disk cache footprint by over 70%.
-* **Updater & Reader Reliability**: Resolved in-app update download triggers across diverse device vendors and fixed reader dimension resolution.
+### 🚀 High-Performance Fork Optimizations (Dantotsu, Kotatsu & TachiyomiSY)
+* **Dynamic 120Hz Motion & Stutter Eliminator**: Added stable, permanent item keys across all Manga, Anime, and Novel library grids and list views. Prevents Compose from recreating cards on scroll, locking scrolling to 120fps on modern LTPO high-refresh displays.
+* **Full-Speed Pre-Fetching Pipeline (Active on Mobile Data & Wi-Fi)**: Expanded rolling reader chunking to prefetch 4 to 5 pages simultaneously and raised limited prefetch window to 10 pages. Eliminates blank page flashes and loading spinners during rapid reading on both 5G/LTE and Wi-Fi.
+* **HTTP/2 Parallel Host Multiplexing**: Reconfigured OkHttp Dispatcher to allow up to 20 concurrent requests per host (previously capped at 5) and expanded network cache to 64MB. Chapter downloads and image streaming now pull multiple chunks simultaneously without bottlenecking.
+* **SQLite Memory-Mapped Database Turbocharger**: Allocated 32MB of dedicated RAM page cache, in-memory temporary tables, and 256MB memory-mapped I/O to SQLite engines for both Manga and Anime databases. Library filtering, searches, and chapter list loading are instantaneous.
+* **Hardware Bitmap & Decoder Thread Boost**: Tuned image loading parallelism (16 fetchers, 6 decoders) across multi-core CPUs and reduced crossfade latency for instant cover rendering.

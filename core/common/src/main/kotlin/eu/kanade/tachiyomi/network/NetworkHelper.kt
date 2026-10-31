@@ -47,7 +47,13 @@ import kotlin.random.Random
     ): OkHttpClient.Builder = run {
         val builder = OkHttpClient.Builder()
             .cookieJar(cookieJar)
-            .connectionPool(ConnectionPool(15, 3, TimeUnit.MINUTES))
+            .dispatcher(
+                okhttp3.Dispatcher().apply {
+                    maxRequests = 64
+                    maxRequestsPerHost = 20
+                },
+            )
+            .connectionPool(ConnectionPool(30, 5, TimeUnit.MINUTES))
             // KMK -->
             .connectTimeout(connectTimeout, TimeUnit.SECONDS)
             .readTimeout(readTimeout, TimeUnit.SECONDS)
@@ -56,7 +62,7 @@ import kotlin.random.Random
             .cache(
                 Cache(
                     directory = File(context.cacheDir, "network_cache"),
-                    maxSize = 5L * 1024 * 1024, // 5 MiB
+                    maxSize = 64L * 1024 * 1024, // 64 MiB (EaZy Nuvio+ / Chimanew: expanded cache for fast chapter & cover retrieval)
                 ),
             )
             .addInterceptor(UncaughtExceptionInterceptor())
