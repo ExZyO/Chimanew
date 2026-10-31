@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import eu.kanade.presentation.components.AdaptiveSheet
@@ -354,6 +355,7 @@ fun ArtworkPickerBottomSheet(
                                                 )
                                             }
                                         }
+                                        context.imageLoader.memoryCache?.clear()
                                         context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_cover_applied))
                                         onCoverUpdated()
                                     } catch (e: Exception) {
@@ -371,6 +373,7 @@ fun ArtworkPickerBottomSheet(
                                         coverCache.deleteCustomCover(manga.id)
                                         updateManga.awaitUpdateCoverLastModified(manga.id)
                                     }
+                                    context.imageLoader.memoryCache?.clear()
                                     context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_reset_cover))
                                     onCoverUpdated()
                                 }
@@ -385,11 +388,15 @@ fun ArtworkPickerBottomSheet(
                             currentCustomBanner = currentCustomBanner,
                             onSelectBanner = { bannerUrl ->
                                 customBannerPref.set(bannerUrl)
+                                context.imageLoader.memoryCache?.clear()
                                 context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_banner_applied))
+                                onCoverUpdated()
                             },
                             onResetBanner = {
                                 customBannerPref.delete()
+                                context.imageLoader.memoryCache?.clear()
                                 context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_reset_banner))
+                                onCoverUpdated()
                             },
                         )
                     }
@@ -400,6 +407,7 @@ fun ArtworkPickerBottomSheet(
                             preferences = preferences,
                             onExclusionsChanged = {
                                 fetchArtwork(false)
+                                context.imageLoader.memoryCache?.clear()
                                 onCoverUpdated()
                             },
                         )

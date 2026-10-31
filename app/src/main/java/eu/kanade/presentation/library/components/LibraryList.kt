@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.MangaCover
+import eu.kanade.domain.manga.model.hasCustomCover
 import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -60,19 +61,22 @@ internal fun LibraryList(
             contentType = { "library_list_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
+            val hasCustomCover = remember(manga.id, manga.coverLastModified) { manga.hasCustomCover() }
             val highResCover by produceState<String?>(
-                initialValue = if (useAnilistArtwork) {
+                initialValue = if (!hasCustomCover && useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title
-                    waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl)?.posterUrl
+                    waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl, mangaId = manga.id)?.posterUrl
                 } else null,
                 manga.id,
+                manga.coverLastModified,
+                hasCustomCover,
                 useAnilistArtwork,
                 artworkCoverOrder,
                 artworkWaterfallOrder,
             ) {
-                if (useAnilistArtwork) {
+                if (!hasCustomCover && useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title
-                    val cached = waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl)?.posterUrl
+                    val cached = waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl, mangaId = manga.id)?.posterUrl
                     if (cached != null) {
                         value = cached
                     } else {

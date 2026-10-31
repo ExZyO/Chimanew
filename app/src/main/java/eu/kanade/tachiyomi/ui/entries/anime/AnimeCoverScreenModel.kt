@@ -123,6 +123,7 @@ class AnimeCoverScreenModel(
             context.contentResolver.openInputStream(data)?.use {
                 try {
                     anime.editCover(Injekt.get(), it, coverCache = coverCache)
+                    context.imageLoader.memoryCache?.clear()
                     notifyCoverUpdated(context)
                 } catch (e: Exception) {
                     notifyFailedCoverUpdate(context, e)
@@ -137,6 +138,7 @@ class AnimeCoverScreenModel(
             try {
                 coverCache.deleteCustomCover(animeId)
                 updateAnime.awaitUpdateCoverLastModified(animeId)
+                context.imageLoader.memoryCache?.clear()
                 notifyCoverUpdated(context)
             } catch (e: Exception) {
                 notifyFailedCoverUpdate(context, e)

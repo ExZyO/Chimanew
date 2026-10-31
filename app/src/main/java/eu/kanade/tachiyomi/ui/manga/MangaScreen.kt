@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import coil3.imageLoader
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -625,12 +626,14 @@ class MangaScreen(
                 val getContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                     if (uri == null) return@rememberLauncherForActivityResult
                     sm.editCover(context, uri)
+                    context.imageLoader.memoryCache?.clear()
                 }
                 ArtworkPickerBottomSheet(
                     manga = successState.manga,
                     onDismissRequest = onDismissRequest,
                     onCustomCoverFilePick = { getContent.launch("image/*") },
                     onCoverUpdated = {
+                        context.imageLoader.memoryCache?.clear()
                         screenModel.fetchAllFromSource(manualFetch = false)
                     },
                 )

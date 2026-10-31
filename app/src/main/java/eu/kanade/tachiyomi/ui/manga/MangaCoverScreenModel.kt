@@ -123,6 +123,7 @@ class MangaCoverScreenModel(
             context.contentResolver.openInputStream(data)?.use {
                 try {
                     manga.editCover(Injekt.get(), it, updateManga, coverCache)
+                    context.imageLoader.memoryCache?.clear()
                     notifyCoverUpdated(context)
                 } catch (e: Exception) {
                     notifyFailedCoverUpdate(context, e)
@@ -137,6 +138,7 @@ class MangaCoverScreenModel(
             try {
                 coverCache.deleteCustomCover(mangaId)
                 updateManga.awaitUpdateCoverLastModified(mangaId)
+                context.imageLoader.memoryCache?.clear()
                 notifyCoverUpdated(context)
             } catch (e: Exception) {
                 notifyFailedCoverUpdate(context, e)

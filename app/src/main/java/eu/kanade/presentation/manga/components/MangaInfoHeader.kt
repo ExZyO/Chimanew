@@ -75,6 +75,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
@@ -189,15 +190,23 @@ fun MangaInfoBox(
     val communityRatingFormat by chimanewPreferences.communityRatingFormat().collectAsState()
     val heroAllowCroppedFallback by chimanewPreferences.heroAllowCroppedFallback().collectAsState()
 
+    val excludedCovers by chimanewPreferences.mangaExcludedCoverSources(manga.id).collectAsState()
+    val excludedBanners by chimanewPreferences.mangaExcludedBannerSources(manga.id).collectAsState()
+    val hasCustomCover = remember(manga.id, manga.coverLastModified) { manga.hasCustomCover() }
+
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val mangaTitle = remember(manga) { manga.ogTitle ?: manga.title }
-    val cachedArtwork = remember(mangaTitle, artworkBannerOrder, artworkCoverOrder, artworkWaterfallOrder) {
-        waterfallRepo.getCached(mangaTitle, defaultCoverUrl = manga.thumbnailUrl)
+    val cachedArtwork = remember(mangaTitle, manga.id, excludedCovers, excludedBanners, artworkBannerOrder, artworkCoverOrder, artworkWaterfallOrder) {
+        waterfallRepo.getCached(mangaTitle, defaultCoverUrl = manga.thumbnailUrl, mangaId = manga.id)
     }
 
     val unifiedArtwork by produceState<UnifiedArtwork?>(
         initialValue = if (useAnilistArtwork) cachedArtwork else null,
         manga.id,
+        manga.coverLastModified,
+        hasCustomCover,
+        excludedCovers,
+        excludedBanners,
         useAnilistArtwork,
         artworkWaterfallOrder,
         artworkBannerOrder,
@@ -231,9 +240,11 @@ fun MangaInfoBox(
         !customBannerUrl.isNullOrBlank() -> customBannerUrl
         !useAnilistArtwork -> manga
         detailsBackdropArtwork == 0 && !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
+        detailsBackdropArtwork == 1 && hasCustomCover -> manga
         detailsBackdropArtwork == 1 && !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
         detailsBackdropArtwork == 2 -> manga
         !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
+        hasCustomCover -> manga
         !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
         else -> manga
     }
@@ -254,7 +265,9 @@ fun MangaInfoBox(
         }
     }
 
-    val ambientArtworkModel: Any = if (useAnilistArtwork && !unifiedArtwork?.posterUrl.isNullOrBlank()) {
+    val ambientArtworkModel: Any = if (hasCustomCover) {
+        manga
+    } else if (useAnilistArtwork && !unifiedArtwork?.posterUrl.isNullOrBlank()) {
         unifiedArtwork!!.posterUrl!!
     } else {
         manga
@@ -735,7 +748,9 @@ fun MangaInfoBox(
             emptyList()
         }
 
-        val effectiveCoverModel: Any = if (useAnilistArtwork && !unifiedArtwork?.posterUrl.isNullOrBlank()) {
+        val effectiveCoverModel: Any = if (hasCustomCover) {
+            manga
+        } else if (useAnilistArtwork && !unifiedArtwork?.posterUrl.isNullOrBlank()) {
             unifiedArtwork!!.posterUrl!!
         } else {
             manga
