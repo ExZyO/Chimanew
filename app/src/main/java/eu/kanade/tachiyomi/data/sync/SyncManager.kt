@@ -308,11 +308,11 @@ class SyncManager(
             return true
         }
 
-        if (localManga.viewerFlags != remoteManga.viewer) {
+        if (localManga.viewerFlags != (remoteManga.viewer_flags?.toLong() ?: remoteManga.viewer.toLong())) {
             return true
         }
 
-        if (localManga.chapterFlags != remoteManga.chapterFlags) {
+        if (localManga.chapterFlags != remoteManga.chapterFlags.toLong()) {
             return true
         }
 
