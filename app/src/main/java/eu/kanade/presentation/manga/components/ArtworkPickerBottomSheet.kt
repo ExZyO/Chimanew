@@ -380,8 +380,8 @@ fun ArtworkPickerBottomSheet(
                                             val setCustomMangaInfo = Injekt.get<SetCustomMangaInfo>()
                                             val currentInfo = getCustomMangaInfo.get(manga.id)
                                             setCustomMangaInfo.set(
-                                                (currentInfo ?: CustomMangaInfo(manga.id, null, null, null, null, null, null, null))
-                                                    .copy(thumbnailUrl = coverUrl),
+                                                currentInfo?.copy(thumbnailUrl = coverUrl)
+                                                    ?: CustomMangaInfo(id = manga.id, title = null, thumbnailUrl = coverUrl),
                                             )
                                         }
                                         context.imageLoader.memoryCache?.clear()

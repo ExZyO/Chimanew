@@ -27,10 +27,10 @@ interface SearchableSettings : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val handleBack = LocalBackPress.current ?: if (navigator.canPop) navigator::pop else null
+        val handleBack: (() -> Unit)? = LocalBackPress.current ?: if (navigator.canPop) { { navigator.pop() } } else null
         PreferenceScaffold(
             titleRes = getTitleRes(),
-            onBackPressed = if (handleBack != null) handleBack::invoke else null,
+            onBackPressed = handleBack,
             actions = { AppBarAction() },
             itemsProvider = { getPreferences() },
         )
