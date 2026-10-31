@@ -303,6 +303,37 @@ class SyncManager(
     }
 
     private suspend fun isMangaDifferent(localManga: Manga, remoteManga: BackupManga): Boolean {
+        // EaZy Nuvio+ / Chimanew: Quick checks first to avoid unnecessary chapter queries
+        if (localManga.favorite != remoteManga.favorite) {
+            return true
+        }
+
+        if (localManga.viewerFlags != remoteManga.viewer) {
+            return true
+        }
+
+        if (localManga.chapterFlags != remoteManga.chapterFlags) {
+            return true
+        }
+
+        val localCategories = getCategories.await(localManga.id).map { it.order }
+        if (localCategories.toSet() != remoteManga.categories.toSet()) {
+            return true
+        }
+
+        // EaZy Nuvio+ / Chimanew: Detect custom cover / artwork changes or missing local cover image
+        val localCustom = getCustomMangaInfo.get(localManga.id)
+        if (localCustom?.thumbnailUrl != remoteManga.customThumbnailUrl) {
+            return true
+        }
+        if (localCustom?.title != remoteManga.customTitle) {
+            return true
+        }
+        if (remoteManga.customThumbnailUrl != null && !coverCache.getCustomCoverFile(localManga.id).exists()) {
+            return true
+        }
+
+        // Deep check: Compare actual chapter reading state (read, bookmark, last page read, count)
         val localChapters = handler.await {
             chaptersQueries.getChaptersByMangaId(
                 localManga.id,
@@ -313,29 +344,8 @@ class SyncManager(
                 // KMK <--
             ).executeAsList()
         }
-        val localCategories = getCategories.await(localManga.id).map { it.order }
 
         if (areChaptersDifferent(localChapters, remoteManga.chapters)) {
-            return true
-        }
-
-        if (localManga.version != remoteManga.version) {
-            return true
-        }
-
-        if (localCategories.toSet() != remoteManga.categories.toSet()) {
-            return true
-        }
-
-        // EaZy Nuvio+ / Chimanew: Detect custom cover / artwork changes
-        val localCustom = getCustomMangaInfo.get(localManga.id)
-        if (localCustom?.thumbnailUrl != remoteManga.customThumbnailUrl) {
-            return true
-        }
-        if (localCustom?.title != remoteManga.customTitle) {
-            return true
-        }
-        if (remoteManga.customThumbnailUrl != null && !coverCache.getCustomCoverFile(localManga.id).exists()) {
             return true
         }
 
@@ -351,10 +361,14 @@ class SyncManager(
         }
 
         for ((url, localChapter) in localChapterMap) {
-            val remoteChapter = remoteChapterMap[url]
+            val remoteChapter = remoteChapterMap[url] ?: return true
 
-            // If a matching remote chapter doesn't exist, or the version numbers are different, consider them different
-            if (remoteChapter == null || localChapter.version != remoteChapter.version) {
+            // EaZy Nuvio+ / Chimanew: Compare actual user progress/state (read, bookmark, page)
+            // instead of SQLite auto-incremented version triggers which drift across devices
+            if (localChapter.read != remoteChapter.read ||
+                localChapter.bookmark != remoteChapter.bookmark ||
+                localChapter.last_page_read != remoteChapter.lastPageRead
+            ) {
                 return true
             }
         }
