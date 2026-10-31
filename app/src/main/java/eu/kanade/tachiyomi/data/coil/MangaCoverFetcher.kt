@@ -318,7 +318,7 @@ class MangaCoverFetcher(
             val networkHelper = Injekt.get<NetworkHelper>()
             val request = GET(customUrl)
             val response = networkHelper.client.newCall(request).awaitSuccess()
-            response.body.byteStream().use { stream ->
+            response.body?.byteStream()?.use { stream ->
                 val coverCache = Injekt.get<CoverCache>()
                 coverCache.setCustomCoverToCache(mangaCover.mangaId, stream)
             }
