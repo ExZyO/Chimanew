@@ -19,6 +19,7 @@ import kotlinx.serialization.json.Json
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.track.repository.TrackRepository
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -93,6 +94,7 @@ class ArtworkWaterfallRepository(
     private val kuaikanRepo: KuaikanCoverRepository = Injekt.get(),
     private val bookwalkerRepo: BookWalkerCoverRepository = Injekt.get(),
     private val bangumiRepo: BangumiCoverRepository = Injekt.get(),
+    private val getManga: GetManga = Injekt.get(),
 ) {
     private val cache = ConcurrentHashMap<String, UnifiedArtwork>()
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -338,12 +340,18 @@ class ArtworkWaterfallRepository(
         mangaId: Long? = null,
         defaultCoverUrl: String? = null,
         forceRefresh: Boolean = false,
+        altTitle: String? = null,
     ): UnifiedArtwork = withContext(Dispatchers.IO) {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return@withContext UnifiedArtwork()
 
         if (forceRefresh) {
             cache.remove(title)
+            mangadexRepo.removeTitleFromCache(title)
+            if (!altTitle.isNullOrBlank()) {
+                mangadexRepo.removeTitleFromCache(altTitle)
+            }
+            mangadexRepo.resetRateLimit()
         }
 
         val excludedBanners = if (mangaId != null) preferences.mangaExcludedBannerSources(mangaId).get() else emptySet()
@@ -376,7 +384,7 @@ class ArtworkWaterfallRepository(
         val isBookWalkerRequested = !excludedCovers.contains("ALL") && "BOOKWALKER" in coverOrder
         val isKitsuRequested = (!excludedBanners.contains("ALL") && "KITSU" in bannerOrder) ||
                                (!excludedCovers.contains("ALL") && "KITSU" in coverOrder)
-        val isMangaDexRequested = !excludedCovers.contains("ALL") && "MANGADEX" in coverOrder
+        val isMangaDexRequested = !excludedCovers.contains("ALL") && !excludedCovers.contains("MANGADEX")
         val isAniListRequested = (!excludedBanners.contains("ALL") && "ANILIST" in bannerOrder) ||
                                  (!excludedCovers.contains("ALL") && "ANILIST" in coverOrder)
         val needsAsianBridge = isNaverRequested || isKuaikanRequested || isBangumiRequested || isBookWalkerRequested
@@ -415,8 +423,10 @@ class ArtworkWaterfallRepository(
         var effectiveAniListId = anilistRemoteId
         var effectiveKitsuId = kitsuRemoteId
         var effectiveMalId = malRemoteId
+        var effectiveMangadexId: String? = null
+        var effectiveAltTitle = altTitle
 
-        if (mangaId != null && (effectiveAniListId == null || effectiveMalId == null || effectiveKitsuId == null)) {
+        if (mangaId != null) {
             try {
                 val tracks = trackRepository.getTracksByMangaId(mangaId)
                 if (effectiveAniListId == null) {
@@ -427,6 +437,25 @@ class ArtworkWaterfallRepository(
                 }
                 if (effectiveKitsuId == null) {
                     effectiveKitsuId = tracks.firstOrNull { it.trackerId == 3L }?.remoteId?.takeIf { it > 0 }
+                }
+                val mdTrack = tracks.firstOrNull { it.trackerId == 60L }
+                effectiveMangadexId = mdTrack?.remoteUrl?.substringAfter("/manga/")?.substringBefore("/")?.substringBefore("?")?.trim()?.takeIf { it.length >= 32 }
+
+                val mangaObj = getManga.await(mangaId)
+                if (mangaObj != null) {
+                    if (effectiveMangadexId == null && mangaObj.url.contains("/manga/")) {
+                        effectiveMangadexId = mangaObj.url.substringAfter("/manga/").substringBefore("/").substringBefore("?").trim().takeIf { it.length >= 32 }
+                    }
+                    if (effectiveAltTitle == null) {
+                        val cTitle = cleanTitle(rawTitle)
+                        val mTitle = mangaObj.title.trim()
+                        val mOgTitle = mangaObj.ogTitle?.trim()
+                        if (cTitle == cleanTitle(mTitle) && !mOgTitle.isNullOrBlank()) {
+                            effectiveAltTitle = mOgTitle
+                        } else if (!mTitle.isBlank() && cTitle != cleanTitle(mTitle)) {
+                            effectiveAltTitle = mTitle
+                        }
+                    }
                 }
             } catch (_: Exception) {}
         }
@@ -610,8 +639,29 @@ class ArtworkWaterfallRepository(
         }
 
         // 6. MANGADEX
-        if (isMangaDexRequested && "MANGADEX" in missingProviders) {
-            val mdArt = mangadexRepo.getCachedByTitle(title) ?: mangadexRepo.fetchCoversByTitle(title)
+        val hasExistingMdCovers = cachedEntry?.allAvailableCovers?.any { it.source.equals("MangaDex", true) } == true
+        val shouldQueryMangaDex = isMangaDexRequested && ("MANGADEX" in missingProviders || !hasExistingMdCovers || forceRefresh)
+        if (shouldQueryMangaDex) {
+            val mdArt = if (!effectiveMangadexId.isNullOrBlank()) {
+                if (forceRefresh) mangadexRepo.fetchCoversByMangaId(effectiveMangadexId, forceRefresh = true)
+                else mangadexRepo.getCached(effectiveMangadexId) ?: mangadexRepo.fetchCoversByMangaId(effectiveMangadexId)
+            } else null
+                ?: (if (!forceRefresh) mangadexRepo.getCachedByTitle(title) else null)
+                ?: mangadexRepo.fetchCoversByTitle(
+                    rawTitle = title,
+                    forceRefresh = forceRefresh,
+                    anilistId = effectiveAniListId,
+                    malId = effectiveMalId,
+                )
+                ?: (if (!effectiveAltTitle.isNullOrBlank() && effectiveAltTitle != title) {
+                    mangadexRepo.fetchCoversByTitle(
+                        rawTitle = effectiveAltTitle,
+                        forceRefresh = forceRefresh,
+                        anilistId = effectiveAniListId,
+                        malId = effectiveMalId,
+                    )
+                } else null)
+
             mdArt?.covers?.let { mdCovers ->
                 mdCovers.forEach { c ->
                     val sub = listOfNotNull(c.volume?.let { "Vol. $it" }, c.locale).joinToString(" ").ifBlank { null }

@@ -141,6 +141,7 @@ fun ArtworkPickerBottomSheet(
                 val kitsuTrack = tracks.firstOrNull { it.trackerId == trackerManager.kitsu.id }
                 val malTrack = tracks.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
                 val title = manga.ogTitle ?: manga.title
+                val altTitle = if (!manga.ogTitle.isNullOrBlank() && manga.ogTitle != manga.title) manga.title else manga.ogTitle
                 val res = waterfallRepo.resolveArtwork(
                     rawTitle = title,
                     anilistRemoteId = anilistTrack?.remoteId?.takeIf { it > 0 },
@@ -149,6 +150,7 @@ fun ArtworkPickerBottomSheet(
                     mangaId = manga.id,
                     defaultCoverUrl = manga.thumbnailUrl,
                     forceRefresh = force,
+                    altTitle = altTitle,
                 )
                 artwork = res
             }
