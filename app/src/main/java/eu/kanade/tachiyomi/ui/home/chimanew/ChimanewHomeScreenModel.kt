@@ -208,6 +208,11 @@ class ChimanewHomeScreenModel(
 
     init {
         screenModelScope.launchIO {
+            preferences.categoryArtworkRulesUpdated().changes().collectLatest {
+                artworkRefreshTrigger.value = System.currentTimeMillis()
+            }
+        }
+        screenModelScope.launchIO {
             val dataFlow = combine(
                 getHistory.subscribe("", unfinishedManga = null, unfinishedChapter = null, nonLibraryEntries = null),
                 getLibraryManga.subscribe(),
@@ -360,12 +365,13 @@ class ChimanewHomeScreenModel(
                 fun getArtwork(mangaId: Long, title: String): UnifiedArtwork? {
                     if (!prefs.useAnilistArtwork) return null
                     val defaultCoverUrl = libraryByMangaId[mangaId]?.manga?.thumbnailUrl
-                    var cachedUnified = artworkWaterfallRepository.getCached(title, defaultCoverUrl = defaultCoverUrl, mangaId = mangaId)
+                    val categoryIds = libraryByMangaId[mangaId]?.categories
+                    var cachedUnified = artworkWaterfallRepository.getCached(title, defaultCoverUrl = defaultCoverUrl, mangaId = mangaId, categoryIds = categoryIds)
                     if (cachedUnified == null) {
                         val libManga = libraryByMangaId[mangaId]
                         val og = libManga?.manga?.ogTitle
                         if (!og.isNullOrBlank() && og != title) {
-                            cachedUnified = artworkWaterfallRepository.getCached(og, defaultCoverUrl = defaultCoverUrl, mangaId = mangaId)
+                            cachedUnified = artworkWaterfallRepository.getCached(og, defaultCoverUrl = defaultCoverUrl, mangaId = mangaId, categoryIds = categoryIds)
                         }
                     }
                     if (cachedUnified != null) return cachedUnified

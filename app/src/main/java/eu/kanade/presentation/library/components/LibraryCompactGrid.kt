@@ -38,6 +38,7 @@ internal fun LibraryCompactGrid(
     val useAnilistArtwork by preferences.useAnilistArtworkInLibrary().collectPrefAsState()
     val artworkWaterfallOrder by preferences.artworkWaterfallOrder().collectPrefAsState()
     val artworkCoverOrder by preferences.artworkCoverOrder().collectPrefAsState()
+    val categoryArtworkRulesUpdated by preferences.categoryArtworkRulesUpdated().collectPrefAsState()
 
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -52,11 +53,12 @@ internal fun LibraryCompactGrid(
             contentType = { "library_compact_grid_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
+            val categoryIds = libraryItem.libraryManga.categories
             val hasCustomCover = remember(manga.id, manga.coverLastModified) { manga.hasCustomCover() }
             val highResCover by produceState<String?>(
                 initialValue = if (!hasCustomCover && useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title
-                    waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl, mangaId = manga.id)?.posterUrl
+                    waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl, mangaId = manga.id, categoryIds = categoryIds)?.posterUrl
                 } else null,
                 manga.id,
                 manga.coverLastModified,
@@ -64,15 +66,16 @@ internal fun LibraryCompactGrid(
                 useAnilistArtwork,
                 artworkCoverOrder,
                 artworkWaterfallOrder,
+                categoryArtworkRulesUpdated,
             ) {
                 if (!hasCustomCover && useAnilistArtwork) {
                     val mTitle = manga.ogTitle ?: manga.title
-                    val cached = waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl, mangaId = manga.id)?.posterUrl
+                    val cached = waterfallRepo.getCached(mTitle, defaultCoverUrl = manga.thumbnailUrl, mangaId = manga.id, categoryIds = categoryIds)?.posterUrl
                     if (cached != null) {
                         value = cached
                     } else {
                         val resolved = withContext(Dispatchers.IO) {
-                            waterfallRepo.resolveArtwork(mTitle, mangaId = manga.id, defaultCoverUrl = manga.thumbnailUrl)
+                            waterfallRepo.resolveArtwork(mTitle, mangaId = manga.id, defaultCoverUrl = manga.thumbnailUrl, categoryIds = categoryIds)
                         }
                         value = resolved.posterUrl
                     }

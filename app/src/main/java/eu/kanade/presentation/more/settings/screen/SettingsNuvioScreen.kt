@@ -11,6 +11,7 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.chimanew.ArtworkPriorityCustomizerScreen
+import eu.kanade.presentation.more.settings.screen.chimanew.CategoryArtworkRulesScreen
 import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.util.system.copyToClipboard
@@ -370,6 +371,13 @@ object SettingsNuvioScreen : SearchableSettings {
                     subtitle = stringResource(MR.strings.pref_chimanew_artwork_waterfall_summary),
                     onClick = {
                         navigator.push(ArtworkPriorityCustomizerScreen())
+                    },
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_chimanew_category_artwork_rules_title),
+                    subtitle = stringResource(MR.strings.pref_chimanew_category_artwork_rules_summary),
+                    onClick = {
+                        navigator.push(CategoryArtworkRulesScreen())
                     },
                 ),
                 Preference.PreferenceItem.TextPreference(

@@ -142,4 +142,15 @@ class ChimanewPreferences(
         "pref_chimanew_diagnostic_categories",
         setOf("network", "artwork", "hero", "details", "shelves"),
     )
+
+    // Category Artwork Rules // EaZy Nuvio+ / Chimanew
+    fun categoryArtworkRulesConfig() = preferenceStore.getString(
+        "pref_chimanew_category_artwork_rules_config",
+        "",
+    )
+
+    fun categoryArtworkRulesUpdated() = preferenceStore.getLong(
+        "pref_chimanew_category_artwork_rules_updated",
+        0L,
+    )
 }

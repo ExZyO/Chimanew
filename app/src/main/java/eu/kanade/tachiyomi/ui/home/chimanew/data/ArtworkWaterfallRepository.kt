@@ -19,10 +19,45 @@ import kotlinx.serialization.json.Json
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.track.repository.TrackRepository
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+
+@Serializable
+data class CategoryArtworkRule(
+    val categoryId: Long,
+    val coverSource: String = "waterfall", // "waterfall", "anilist", "mangadex", "bangumi", "kitsu", "bookwalker", "naver", "kuaikan", "default"
+    val bannerSource: String = "waterfall", // "waterfall", "anilist", "bangumi", "kitsu", "naver", "kuaikan", "none", "default"
+    val fallbackMode: String = "strict", // "strict", "waterfall"
+)
+
+@Serializable
+data class CategoryArtworkRulesConfig(
+    val priorityCategoryIds: List<Long> = emptyList(),
+    val rules: Map<String, CategoryArtworkRule> = emptyMap(),
+    val defaultCoverSource: String = "waterfall",
+    val defaultBannerSource: String = "waterfall",
+    val defaultFallbackMode: String = "strict",
+) {
+    fun getRuleForManga(categoryIds: List<Long>): CategoryArtworkRule {
+        for (catId in priorityCategoryIds) {
+            if (catId in categoryIds) {
+                rules[catId.toString()]?.let { return it }
+            }
+        }
+        for (catId in categoryIds) {
+            rules[catId.toString()]?.let { return it }
+        }
+        return CategoryArtworkRule(
+            categoryId = -1L,
+            coverSource = defaultCoverSource,
+            bannerSource = defaultBannerSource,
+            fallbackMode = defaultFallbackMode,
+        )
+    }
+}
 
 @Serializable
 data class PersistedRating(
@@ -95,8 +130,26 @@ class ArtworkWaterfallRepository(
     private val bookwalkerRepo: BookWalkerCoverRepository = Injekt.get(),
     private val bangumiRepo: BangumiCoverRepository = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
+    private val getCategories: GetCategories = Injekt.get(),
 ) {
     private val cache = ConcurrentHashMap<String, UnifiedArtwork>()
+    private val mangaCategoriesCache = ConcurrentHashMap<Long, List<Long>>()
+
+    fun setMangaCategories(mangaId: Long, categoryIds: List<Long>) {
+        mangaCategoriesCache[mangaId] = categoryIds
+    }
+
+    fun getMangaCategories(mangaId: Long): List<Long>? = mangaCategoriesCache[mangaId]
+
+    fun getCategoryRulesConfig(): CategoryArtworkRulesConfig {
+        val raw = preferences.categoryArtworkRulesConfig().get()
+        if (raw.isBlank()) return CategoryArtworkRulesConfig()
+        return try {
+            jsonHelper.decodeFromString<CategoryArtworkRulesConfig>(raw)
+        } catch (_: Exception) {
+            CategoryArtworkRulesConfig()
+        }
+    }
     private val scope = CoroutineScope(Dispatchers.IO)
     private val cacheFile by lazy { File(context.filesDir, "chimanew_artwork_waterfall_cache.json") }
     private val jsonHelper = Json {
@@ -205,16 +258,31 @@ class ArtworkWaterfallRepository(
 
     fun isCached(title: String): Boolean = cache.containsKey(cleanTitle(title))
 
-    fun getEffectiveArtwork(raw: UnifiedArtwork, defaultCoverUrl: String? = null, mangaId: Long? = null): UnifiedArtwork {
+    fun getEffectiveArtwork(
+        raw: UnifiedArtwork,
+        defaultCoverUrl: String? = null,
+        mangaId: Long? = null,
+        categoryIds: List<Long>? = null,
+    ): UnifiedArtwork {
         val excludedBanners = if (mangaId != null) preferences.mangaExcludedBannerSources(mangaId).get() else emptySet()
         val excludedCovers = if (mangaId != null) preferences.mangaExcludedCoverSources(mangaId).get() else emptySet()
 
-        val bannerOrder = parsePriorityOrder(
+        if (mangaId != null && categoryIds != null) {
+            mangaCategoriesCache[mangaId] = categoryIds
+        }
+        val effCategories = categoryIds
+            ?: (if (mangaId != null) mangaCategoriesCache[mangaId] else null)
+            ?: emptyList()
+
+        val rulesConfig = getCategoryRulesConfig()
+        val rule = rulesConfig.getRuleForManga(effCategories)
+
+        val globalBannerOrder = parsePriorityOrder(
             preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
             allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
         ).filterNot { it in excludedBanners }
 
-        val coverOrder = parsePriorityOrder(
+        val globalCoverOrder = parsePriorityOrder(
             preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
             allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
         ).filterNot { it in excludedCovers }
@@ -222,47 +290,104 @@ class ArtworkWaterfallRepository(
         val defaultCover = defaultCoverUrl?.takeIf { it.isNotBlank() }
             ?: raw.allAvailableCovers.firstOrNull { it.source.equals("Default", ignoreCase = true) }?.url
 
+        fun findBannerFromProvider(provider: String): String? {
+            val p = provider.uppercase()
+            val banner = raw.bannerOptions.firstOrNull { it.source.equals(p, ignoreCase = true) }?.url
+                ?: when (p) {
+                    "NAVER" -> raw.allAvailableBanners.firstOrNull { it.contains("pstatic", ignoreCase = true) || it.contains("naver", ignoreCase = true) }
+                    "KUAIKAN" -> raw.allAvailableBanners.firstOrNull { it.contains("kkmh", ignoreCase = true) || it.contains("kuaikan", ignoreCase = true) }
+                    "BANGUMI" -> raw.allAvailableBanners.firstOrNull { it.contains("bgm.tv", ignoreCase = true) || it.contains("bangumi", ignoreCase = true) }
+                    "ANILIST" -> raw.allAvailableBanners.firstOrNull { it.contains("anilist", ignoreCase = true) }
+                    "KITSU" -> raw.allAvailableBanners.firstOrNull { it.contains("kitsu", ignoreCase = true) }
+                    else -> null
+                }
+            return if (!banner.isNullOrBlank() && !banner.contains("bookwalker", ignoreCase = true)) banner else null
+        }
+
+        fun findCoverFromProvider(provider: String): String? {
+            val p = provider.uppercase()
+            return when (p) {
+                "DEFAULT" -> defaultCover
+                else -> {
+                    raw.allAvailableCovers.firstOrNull { it.source.equals(p, ignoreCase = true) }?.url
+                        ?: when (p) {
+                            "BOOKWALKER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bookwalker", ignoreCase = true) }?.url
+                            "BANGUMI" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bgm.tv", ignoreCase = true) || it.url.contains("bangumi", ignoreCase = true) }?.url
+                            "NAVER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("pstatic", ignoreCase = true) || it.url.contains("naver", ignoreCase = true) }?.url
+                            "KUAIKAN" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kkmh", ignoreCase = true) || it.url.contains("kuaikan", ignoreCase = true) }?.url
+                            "MANGADEX" -> raw.allAvailableCovers.firstOrNull { it.url.contains("mangadex", ignoreCase = true) }?.url
+                            "ANILIST" -> raw.allAvailableCovers.firstOrNull { it.url.contains("anilist", ignoreCase = true) }?.url
+                            "KITSU" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kitsu", ignoreCase = true) }?.url
+                            else -> null
+                        }
+                }
+            }
+        }
+
         var effectiveBanner: String? = null
         if (!excludedBanners.contains("ALL")) {
-            for (provider in bannerOrder) {
-                val banner = raw.bannerOptions.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
-                    ?: when (provider) {
-                        "NAVER" -> raw.allAvailableBanners.firstOrNull { it.contains("pstatic", ignoreCase = true) || it.contains("naver", ignoreCase = true) }
-                        "KUAIKAN" -> raw.allAvailableBanners.firstOrNull { it.contains("kkmh", ignoreCase = true) || it.contains("kuaikan", ignoreCase = true) }
-                        "BANGUMI" -> raw.allAvailableBanners.firstOrNull { it.contains("bgm.tv", ignoreCase = true) || it.contains("bangumi", ignoreCase = true) }
-                        "ANILIST" -> raw.allAvailableBanners.firstOrNull { it.contains("anilist", ignoreCase = true) }
-                        "KITSU" -> raw.allAvailableBanners.firstOrNull { it.contains("kitsu", ignoreCase = true) }
-                        else -> null
+            val bSource = rule.bannerSource.lowercase()
+            if (bSource == "none" || bSource == "default") {
+                effectiveBanner = null
+            } else if (bSource != "waterfall") {
+                val directBanner = if (!excludedBanners.contains(bSource.uppercase())) {
+                    findBannerFromProvider(bSource)
+                } else null
+
+                if (!directBanner.isNullOrBlank()) {
+                    effectiveBanner = directBanner
+                } else if (rule.fallbackMode == "waterfall") {
+                    for (provider in globalBannerOrder) {
+                        val banner = findBannerFromProvider(provider)
+                        if (!banner.isNullOrBlank()) {
+                            effectiveBanner = banner
+                            break
+                        }
                     }
-                if (!banner.isNullOrBlank() && !banner.contains("bookwalker", ignoreCase = true)) {
-                    effectiveBanner = banner
-                    break
+                } else {
+                    effectiveBanner = null
+                }
+            } else {
+                for (provider in globalBannerOrder) {
+                    val banner = findBannerFromProvider(provider)
+                    if (!banner.isNullOrBlank()) {
+                        effectiveBanner = banner
+                        break
+                    }
                 }
             }
         }
 
         var effectivePoster: String? = null
         if (!excludedCovers.contains("ALL")) {
-            for (provider in coverOrder) {
-                val cover = when (provider) {
-                    "DEFAULT" -> defaultCover
-                    else -> {
-                        raw.allAvailableCovers.firstOrNull { it.source.equals(provider, ignoreCase = true) }?.url
-                            ?: when (provider) {
-                                "BOOKWALKER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bookwalker", ignoreCase = true) }?.url
-                                "BANGUMI" -> raw.allAvailableCovers.firstOrNull { it.url.contains("bgm.tv", ignoreCase = true) || it.url.contains("bangumi", ignoreCase = true) }?.url
-                                "NAVER" -> raw.allAvailableCovers.firstOrNull { it.url.contains("pstatic", ignoreCase = true) || it.url.contains("naver", ignoreCase = true) }?.url
-                                "KUAIKAN" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kkmh", ignoreCase = true) || it.url.contains("kuaikan", ignoreCase = true) }?.url
-                                "MANGADEX" -> raw.allAvailableCovers.firstOrNull { it.url.contains("mangadex", ignoreCase = true) }?.url
-                                "ANILIST" -> raw.allAvailableCovers.firstOrNull { it.url.contains("anilist", ignoreCase = true) }?.url
-                                "KITSU" -> raw.allAvailableCovers.firstOrNull { it.url.contains("kitsu", ignoreCase = true) }?.url
-                                else -> null
-                            }
+            val cSource = rule.coverSource.lowercase()
+            if (cSource == "default") {
+                effectivePoster = defaultCover
+            } else if (cSource != "waterfall") {
+                val directCover = if (!excludedCovers.contains(cSource.uppercase())) {
+                    findCoverFromProvider(cSource)
+                } else null
+
+                if (!directCover.isNullOrBlank()) {
+                    effectivePoster = directCover
+                } else if (rule.fallbackMode == "waterfall") {
+                    for (provider in globalCoverOrder) {
+                        val cover = findCoverFromProvider(provider)
+                        if (!cover.isNullOrBlank()) {
+                            effectivePoster = cover
+                            break
+                        }
                     }
+                } else {
+                    effectivePoster = defaultCover
                 }
-                if (!cover.isNullOrBlank()) {
-                    effectivePoster = cover
-                    break
+            } else {
+                for (provider in globalCoverOrder) {
+                    val cover = findCoverFromProvider(provider)
+                    if (!cover.isNullOrBlank()) {
+                        effectivePoster = cover
+                        break
+                    }
                 }
             }
         }
@@ -277,9 +402,14 @@ class ArtworkWaterfallRepository(
         )
     }
 
-    fun getCached(title: String, defaultCoverUrl: String? = null, mangaId: Long? = null): UnifiedArtwork? {
+    fun getCached(
+        title: String,
+        defaultCoverUrl: String? = null,
+        mangaId: Long? = null,
+        categoryIds: List<Long>? = null,
+    ): UnifiedArtwork? {
         val raw = cache[cleanTitle(title)] ?: return null
-        val effective = getEffectiveArtwork(raw, defaultCoverUrl, mangaId)
+        val effective = getEffectiveArtwork(raw, defaultCoverUrl, mangaId, categoryIds)
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Cache") {
             "Memory cache HIT for '$title': banner=${effective?.bannerUrl}, poster=${effective?.posterUrl}"
         }
@@ -341,9 +471,27 @@ class ArtworkWaterfallRepository(
         defaultCoverUrl: String? = null,
         forceRefresh: Boolean = false,
         altTitle: String? = null,
+        categoryIds: List<Long>? = null,
     ): UnifiedArtwork = withContext(Dispatchers.IO) {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return@withContext UnifiedArtwork()
+
+        if (mangaId != null) {
+            if (categoryIds != null) {
+                mangaCategoriesCache[mangaId] = categoryIds
+            } else if (!mangaCategoriesCache.containsKey(mangaId)) {
+                try {
+                    val cats = getCategories.await(mangaId).map { it.id }
+                    mangaCategoriesCache[mangaId] = cats
+                } catch (_: Exception) {}
+            }
+        }
+        val effCategories = categoryIds
+            ?: (if (mangaId != null) mangaCategoriesCache[mangaId] else null)
+            ?: emptyList()
+
+        val rulesConfig = getCategoryRulesConfig()
+        val rule = rulesConfig.getRuleForManga(effCategories)
 
         if (forceRefresh) {
             cache.remove(title)
@@ -376,17 +524,29 @@ class ArtworkWaterfallRepository(
         val coverOrder = getActiveCoverOrder().filterNot { it in excludedCovers }
 
         val isNaverRequested = (!excludedBanners.contains("ALL") && "NAVER" in bannerOrder) ||
-                               (!excludedCovers.contains("ALL") && "NAVER" in coverOrder)
+                               (!excludedCovers.contains("ALL") && "NAVER" in coverOrder) ||
+                               rule.bannerSource.equals("naver", true) ||
+                               rule.coverSource.equals("naver", true)
         val isKuaikanRequested = (!excludedBanners.contains("ALL") && "KUAIKAN" in bannerOrder) ||
-                                 (!excludedCovers.contains("ALL") && "KUAIKAN" in coverOrder)
+                                 (!excludedCovers.contains("ALL") && "KUAIKAN" in coverOrder) ||
+                                 rule.bannerSource.equals("kuaikan", true) ||
+                                 rule.coverSource.equals("kuaikan", true)
         val isBangumiRequested = (!excludedBanners.contains("ALL") && "BANGUMI" in bannerOrder) ||
-                                 (!excludedCovers.contains("ALL") && "BANGUMI" in coverOrder)
-        val isBookWalkerRequested = !excludedCovers.contains("ALL") && "BOOKWALKER" in coverOrder
+                                 (!excludedCovers.contains("ALL") && "BANGUMI" in coverOrder) ||
+                                 rule.bannerSource.equals("bangumi", true) ||
+                                 rule.coverSource.equals("bangumi", true)
+        val isBookWalkerRequested = (!excludedCovers.contains("ALL") && "BOOKWALKER" in coverOrder) ||
+                                    rule.coverSource.equals("bookwalker", true)
         val isKitsuRequested = (!excludedBanners.contains("ALL") && "KITSU" in bannerOrder) ||
-                               (!excludedCovers.contains("ALL") && "KITSU" in coverOrder)
-        val isMangaDexRequested = !excludedCovers.contains("ALL") && !excludedCovers.contains("MANGADEX")
+                               (!excludedCovers.contains("ALL") && "KITSU" in coverOrder) ||
+                               rule.bannerSource.equals("kitsu", true) ||
+                               rule.coverSource.equals("kitsu", true)
+        val isMangaDexRequested = (!excludedCovers.contains("ALL") && !excludedCovers.contains("MANGADEX")) ||
+                                  rule.coverSource.equals("mangadex", true)
         val isAniListRequested = (!excludedBanners.contains("ALL") && "ANILIST" in bannerOrder) ||
-                                 (!excludedCovers.contains("ALL") && "ANILIST" in coverOrder)
+                                 (!excludedCovers.contains("ALL") && "ANILIST" in coverOrder) ||
+                                 rule.bannerSource.equals("anilist", true) ||
+                                 rule.coverSource.equals("anilist", true)
         val needsAsianBridge = isNaverRequested || isKuaikanRequested || isBangumiRequested || isBookWalkerRequested
 
         val requestedProviders = mutableSetOf<String>()
@@ -402,7 +562,7 @@ class ArtworkWaterfallRepository(
         if (cachedEntry != null && !forceRefresh) {
             val missingProviders = requestedProviders - cachedEntry.queriedProviders
             if (missingProviders.isEmpty()) {
-                val cached = getEffectiveArtwork(cachedEntry, defaultCoverUrl, mangaId)
+                val cached = getEffectiveArtwork(cachedEntry, defaultCoverUrl, mangaId, effCategories)
                 ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
                     "Resolved from cache for '$title': banner=${cached.bannerUrl}, poster=${cached.posterUrl}"
                 }
@@ -694,7 +854,7 @@ class ArtworkWaterfallRepository(
             cache[title] = rawResult
             scheduleSaveToDisk()
         }
-        val effective = getEffectiveArtwork(rawResult, defaultCoverUrl, mangaId)
+        val effective = getEffectiveArtwork(rawResult, defaultCoverUrl, mangaId, effCategories)
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
             "Network discovery completed for '$title' -> banner=${effective.bannerUrl}, cover=${effective.posterUrl} (covers=${mergedCovers.size}, banners=${mergedBanners.size})"
         }

@@ -11,6 +11,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -35,6 +39,7 @@ import eu.kanade.presentation.category.components.CategoryFloatingActionButton
 import eu.kanade.presentation.category.components.CategoryListItem
 import eu.kanade.presentation.category.components.CategoryRenameDialog
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.more.settings.screen.chimanew.CategoryArtworkRulesScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.util.system.toast
@@ -102,6 +107,16 @@ class CategoryScreen(
                     AppBar(
                         title = stringResource(MR.strings.categories),
                         navigateUp = navigator::pop,
+                        actions = {
+                            IconButton(
+                                onClick = { navigator.push(CategoryArtworkRulesScreen()) },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Palette,
+                                    contentDescription = stringResource(MR.strings.pref_chimanew_category_artwork_rules_title),
+                                )
+                            }
+                        },
                     )
                     if (availableTabs.size > 1) {
                         PrimaryTabRow(selectedTabIndex = pagerState.currentPage.coerceAtMost(availableTabs.lastIndex)) {

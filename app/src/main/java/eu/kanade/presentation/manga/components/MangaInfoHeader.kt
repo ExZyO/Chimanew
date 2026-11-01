@@ -192,11 +192,12 @@ fun MangaInfoBox(
 
     val excludedCovers by chimanewPreferences.mangaExcludedCoverSources(manga.id).collectAsState()
     val excludedBanners by chimanewPreferences.mangaExcludedBannerSources(manga.id).collectAsState()
+    val categoryArtworkRulesUpdated by chimanewPreferences.categoryArtworkRulesUpdated().collectAsState()
     val hasCustomCover = remember(manga.id, manga.coverLastModified) { manga.hasCustomCover() }
 
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val mangaTitle = remember(manga) { manga.ogTitle ?: manga.title }
-    val cachedArtwork = remember(mangaTitle, manga.id, excludedCovers, excludedBanners, artworkBannerOrder, artworkCoverOrder, artworkWaterfallOrder) {
+    val cachedArtwork = remember(mangaTitle, manga.id, excludedCovers, excludedBanners, artworkBannerOrder, artworkCoverOrder, artworkWaterfallOrder, categoryArtworkRulesUpdated) {
         waterfallRepo.getCached(mangaTitle, defaultCoverUrl = manga.thumbnailUrl, mangaId = manga.id)
     }
 
@@ -212,6 +213,7 @@ fun MangaInfoBox(
         artworkBannerOrder,
         artworkCoverOrder,
         detailsBackdropArtwork,
+        categoryArtworkRulesUpdated,
     ) {
         if (!useAnilistArtwork) {
             value = null
