@@ -42,6 +42,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.domain.track.model.Track
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.ZonedDateTime
@@ -68,6 +69,7 @@ class MangaRestorer(
     private val getFlatMetadataById: GetFlatMetadataById = Injekt.get(),
     private val context: Context = Injekt.get(),
     // SY <--
+    private val preferences: ChimanewPreferences = Injekt.get(),
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
     private var now = ZonedDateTime.now()
@@ -124,6 +126,9 @@ class MangaRestorer(
                 flatMetadata = backupManga.flatMetadata,
                 customManga = backupManga.getCustomMangaInfo(),
                 // SY <--
+                customBannerUrl = backupManga.customBannerUrl,
+                excludedBannerSources = backupManga.excludedBannerSources,
+                excludedCoverSources = backupManga.excludedCoverSources,
             )
 
             if (isSync) {
@@ -370,6 +375,9 @@ class MangaRestorer(
         flatMetadata: BackupFlatMetadata?,
         customManga: CustomMangaInfo?,
         // SY <--
+        customBannerUrl: String? = null,
+        excludedBannerSources: List<String> = emptyList(),
+        excludedCoverSources: List<String> = emptyList(),
     ): Manga {
         restoreCategories(manga, categories, backupCategories)
         restoreChapters(manga, chapters)
@@ -382,6 +390,13 @@ class MangaRestorer(
         flatMetadata?.let { restoreFlatMetadata(manga.id, it) }
         restoreEditedInfo(customManga?.copy(id = manga.id))
         // SY <--
+        restoreCustomBanner(manga.id, customBannerUrl)
+        if (excludedBannerSources.isNotEmpty()) {
+            preferences.mangaExcludedBannerSources(manga.id).set(excludedBannerSources.toSet())
+        }
+        if (excludedCoverSources.isNotEmpty()) {
+            preferences.mangaExcludedCoverSources(manga.id).set(excludedCoverSources.toSet())
+        }
 
         return manga
     }
@@ -615,6 +630,16 @@ class MangaRestorer(
                     logcat(LogPriority.WARN, e) { "Failed to cache custom cover from URL: $coverUrl" }
                 }
             }
+        }
+    }
+
+    private fun restoreCustomBanner(mangaId: Long, bannerUrl: String?) {
+        if (bannerUrl == null) return
+        val currentBanner = preferences.mangaCustomBannerUrl(mangaId).get()
+        if (currentBanner != bannerUrl) {
+            preferences.mangaCustomBannerUrl(mangaId).set(bannerUrl)
+            context.imageLoader.memoryCache?.clear()
+            ChimanewHomeScreenModel.triggerRefresh()
         }
     }
 

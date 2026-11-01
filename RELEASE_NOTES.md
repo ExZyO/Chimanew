@@ -1,7 +1,7 @@
-# What's New in Chimanew v2.6.48
+# What's New in Chimanew v2.6.49
 
-### 🖼️ Permanent Cross-Device Cover Sync & On-Demand Fallback
-* **Timestamp-Based Artwork Reconciliation**: Fixed an issue in the Google Drive merge service that was dropping custom artwork if the receiving device already had any cover set or a higher database version counter. Now, whichever device selected or updated the cover most recently always wins.
-* **Coil On-Demand Cover Fetcher**: If a custom cover image hasn't finished downloading in the background yet, the image loader directly downloads it from the synced URL on-demand and saves it straight to the disk cache.
-* **Dynamic Coil Memory Cache Keys**: Integrated the custom cover URL into the Coil image cache key so changing or syncing a cover immediately updates the image on your home screen and library without being blocked by stale memory cache.
-* **Lightweight Incremental Restores**: Only changed entries are synced and written, eliminating background database lock lag.
+### 🌄 Cross-Device Landscape Banner & Artwork Customization Sync
+* **Complete Banner Synchronization**: Custom series banners selected from the Artwork Picker (Naver, AniList, Kitsu, Kuaikan, etc.) now sync seamlessly between your phone, tablet, and laptop via Google Drive.
+* **Artwork Source Exclusion Sync**: Custom per-entry artwork and banner source exclusions are now synchronized across all your devices, preserving your preferred visuals everywhere.
+* **Instant Recomposition & Invalidation**: Setting or resetting a banner immediately updates local database timestamps, busts in-memory image caches, and triggers auto-sync without requiring a full manual restart.
+* **Incremental Artwork Sync**: Preserves lightweight, conflict-free syncing without re-restoring unmodified series or locking the database.

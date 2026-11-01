@@ -21,6 +21,7 @@ import tachiyomi.domain.manga.interactor.GetFlatMetadataById
 import tachiyomi.domain.manga.model.CustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -33,6 +34,7 @@ class MangaBackupCreator(
     private val getCustomMangaInfo: GetCustomMangaInfo = Injekt.get(),
     private val getFlatMetadataById: GetFlatMetadataById = Injekt.get(),
     // SY <--
+    private val preferences: ChimanewPreferences = Injekt.get(),
 ) {
 
     suspend operator fun invoke(mangas: List<Manga>, options: BackupOptions): List<BackupManga> {
@@ -52,6 +54,19 @@ class MangaBackupCreator(
             },
             // SY <--
         )
+
+        // EaZy Nuvio+ / Chimanew: Backup custom banner and artwork exclusions
+        if (options.customInfo) {
+            preferences.mangaCustomBannerUrl(manga.id).get().takeIf { it.isNotBlank() }?.let {
+                mangaObject.customBannerUrl = it
+            }
+            preferences.mangaExcludedBannerSources(manga.id).get().takeIf { it.isNotEmpty() }?.let {
+                mangaObject.excludedBannerSources = it.toList()
+            }
+            preferences.mangaExcludedCoverSources(manga.id).get().takeIf { it.isNotEmpty() }?.let {
+                mangaObject.excludedCoverSources = it.toList()
+            }
+        }
 
         // SY -->
         if (manga.source == MERGED_SOURCE_ID) {

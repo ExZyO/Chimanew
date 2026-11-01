@@ -425,6 +425,12 @@ fun ArtworkPickerBottomSheet(
                             currentCustomBanner = currentCustomBanner,
                             onSelectBanner = { bannerUrl ->
                                 customBannerPref.set(bannerUrl)
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        val updateManga = Injekt.get<UpdateManga>()
+                                        updateManga.awaitUpdateCoverLastModified(manga.id)
+                                    }
+                                }
                                 context.imageLoader.memoryCache?.clear()
                                 ChimanewHomeScreenModel.triggerRefresh()
                                 context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_banner_applied))
@@ -432,6 +438,12 @@ fun ArtworkPickerBottomSheet(
                             },
                             onResetBanner = {
                                 customBannerPref.delete()
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        val updateManga = Injekt.get<UpdateManga>()
+                                        updateManga.awaitUpdateCoverLastModified(manga.id)
+                                    }
+                                }
                                 context.imageLoader.memoryCache?.clear()
                                 ChimanewHomeScreenModel.triggerRefresh()
                                 context.toast(context.stringResource(MR.strings.pref_chimanew_artwork_picker_reset_banner))
@@ -445,6 +457,12 @@ fun ArtworkPickerBottomSheet(
                             mangaId = manga.id,
                             preferences = preferences,
                             onExclusionsChanged = {
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        val updateManga = Injekt.get<UpdateManga>()
+                                        updateManga.awaitUpdateCoverLastModified(manga.id)
+                                    }
+                                }
                                 fetchArtwork(false)
                                 context.imageLoader.memoryCache?.clear()
                                 ChimanewHomeScreenModel.triggerRefresh()

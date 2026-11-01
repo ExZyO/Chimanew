@@ -221,6 +221,23 @@ abstract class SyncService(
                         localTime > remoteTime -> local.customThumbnailUrl
                         else -> remote.customThumbnailUrl ?: local.customThumbnailUrl
                     }
+                    val chosenCustomBanner = when {
+                        remote.customBannerUrl != null && local.customBannerUrl == null -> remote.customBannerUrl
+                        local.customBannerUrl != null && remote.customBannerUrl == null -> local.customBannerUrl
+                        remoteTime > localTime -> remote.customBannerUrl
+                        localTime > remoteTime -> local.customBannerUrl
+                        else -> remote.customBannerUrl ?: local.customBannerUrl
+                    }
+                    val chosenExcludedBanners = if (remoteTime > localTime) {
+                        remote.excludedBannerSources.ifEmpty { local.excludedBannerSources }
+                    } else {
+                        local.excludedBannerSources.ifEmpty { remote.excludedBannerSources }
+                    }
+                    val chosenExcludedCovers = if (remoteTime > localTime) {
+                        remote.excludedCoverSources.ifEmpty { local.excludedCoverSources }
+                    } else {
+                        local.excludedCoverSources.ifEmpty { remote.excludedCoverSources }
+                    }
                     val chosenCustomTitle = if (remoteTime > localTime) {
                         remote.customTitle ?: local.customTitle
                     } else {
@@ -230,7 +247,12 @@ abstract class SyncService(
                     // Compare versions to decide which manga to keep
                     val useRemote = remote.version > local.version ||
                         (remoteTime > localTime) ||
-                        (remote.version == local.version && remote.customThumbnailUrl != null && remote.customThumbnailUrl != local.customThumbnailUrl)
+                        (remote.version == local.version && (
+                            (remote.customThumbnailUrl != null && remote.customThumbnailUrl != local.customThumbnailUrl) ||
+                            (remote.customBannerUrl != null && remote.customBannerUrl != local.customBannerUrl) ||
+                            (remote.excludedBannerSources != local.excludedBannerSources) ||
+                            (remote.excludedCoverSources != local.excludedCoverSources)
+                        ))
                     if (useRemote) {
                         logcat(LogPriority.DEBUG, logTag) {
                             "Keeping remote version of ${remote.title} with merged chapters."
@@ -238,6 +260,9 @@ abstract class SyncService(
                         remote.chapters = mergeChapters(local.chapters, remote.chapters)
                         updateCategories(remote, remoteCategoriesMapByOrder)
                         remote.customThumbnailUrl = chosenCustomThumbnail
+                        remote.customBannerUrl = chosenCustomBanner
+                        remote.excludedBannerSources = chosenExcludedBanners
+                        remote.excludedCoverSources = chosenExcludedCovers
                         if (chosenCustomTitle != null) remote.customTitle = chosenCustomTitle
                         remote
                     } else {
@@ -247,6 +272,9 @@ abstract class SyncService(
                         local.chapters = mergeChapters(local.chapters, remote.chapters)
                         updateCategories(local, localCategoriesMapByOrder)
                         local.customThumbnailUrl = chosenCustomThumbnail
+                        local.customBannerUrl = chosenCustomBanner
+                        local.excludedBannerSources = chosenExcludedBanners
+                        local.excludedCoverSources = chosenExcludedCovers
                         if (chosenCustomTitle != null) local.customTitle = chosenCustomTitle
                         local
                     }

@@ -27,6 +27,7 @@ import tachiyomi.data.manga.MangaMapper.mapManga
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.manga.interactor.GetCustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
@@ -51,6 +52,7 @@ class SyncManager(
     private val getCategories: GetCategories = Injekt.get(),
     private val getCustomMangaInfo: GetCustomMangaInfo = Injekt.get(),
     private val coverCache: CoverCache = Injekt.get(),
+    private val preferences: ChimanewPreferences = Injekt.get(),
 ) {
     private val backupCreator: BackupCreator = BackupCreator(context, false)
     private val notifier: SyncNotifier = SyncNotifier(context)
@@ -330,6 +332,18 @@ class SyncManager(
             return true
         }
         if (remoteManga.customThumbnailUrl != null && !coverCache.getCustomCoverFile(localManga.id).exists()) {
+            return true
+        }
+        val localBanner = preferences.mangaCustomBannerUrl(localManga.id).get().takeIf { it.isNotBlank() }
+        if (localBanner != remoteManga.customBannerUrl) {
+            return true
+        }
+        val localExcludedBanners = preferences.mangaExcludedBannerSources(localManga.id).get()
+        if (localExcludedBanners != remoteManga.excludedBannerSources.toSet()) {
+            return true
+        }
+        val localExcludedCovers = preferences.mangaExcludedCoverSources(localManga.id).get()
+        if (localExcludedCovers != remoteManga.excludedCoverSources.toSet()) {
             return true
         }
 
