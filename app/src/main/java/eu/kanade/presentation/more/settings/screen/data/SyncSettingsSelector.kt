@@ -128,6 +128,9 @@ private class SyncSettingsSelectorModel(
                 sourceNovelLibrary = syncSettings.sourceNovelLibrary,
                 // Chimahon <--
                 animeEntries = syncSettings.animeEntries,
+                // EaZy Nuvio+ / Chimanew: Separate covers & banners
+                customCovers = syncSettings.customCovers,
+                customBanners = syncSettings.customBanners,
             )
         }
 
@@ -153,6 +156,9 @@ private class SyncSettingsSelectorModel(
                 sourceNovelLibrary = backupOptions.sourceNovelLibrary,
                 // Chimahon <--
                 animeEntries = backupOptions.animeEntries,
+                // EaZy Nuvio+ / Chimanew: Separate covers & banners
+                customCovers = backupOptions.customCovers,
+                customBanners = backupOptions.customBanners,
             )
         }
     }

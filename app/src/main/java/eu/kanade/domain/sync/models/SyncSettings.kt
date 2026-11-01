@@ -21,4 +21,7 @@ data class SyncSettings(
     val sourceNovelLibrary: Boolean = true,
     // Chimahon <--
     val animeEntries: Boolean = true,
+    // EaZy Nuvio+ / Chimanew: Separate covers & banners sync options
+    val customCovers: Boolean = true,
+    val customBanners: Boolean = true,
 )

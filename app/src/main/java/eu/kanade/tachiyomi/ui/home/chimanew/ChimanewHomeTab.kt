@@ -74,7 +74,7 @@ import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
-import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
+import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioHeroSection
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioMangaShelf
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioQuickTrackerSheet
@@ -307,11 +307,15 @@ data object ChimanewHomeTab : Tab {
                 horizontalArrangement = Arrangement.End,
             ) {
                 IconButton(
-                    onClick = { navigator.push(GlobalSearchScreen()) },
+                    onClick = {
+                        scope.launch {
+                            HomeScreen.search("")
+                        }
+                    },
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Search,
-                        contentDescription = "Search",
+                        contentDescription = stringResource(MR.strings.action_search),
                         tint = Color.White,
                     )
                 }

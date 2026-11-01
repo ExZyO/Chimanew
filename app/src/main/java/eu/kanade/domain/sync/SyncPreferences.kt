@@ -75,6 +75,9 @@ class SyncPreferences(
             sourceNovelLibrary = preferenceStore.getBoolean("sync_source_novel_library", true).get(),
             // Chimahon <--
             animeEntries = preferenceStore.getBoolean("anime_entries", true).get(),
+            // EaZy Nuvio+ / Chimanew: Separate covers & banners
+            customCovers = preferenceStore.getBoolean("sync_customCovers", true).get(),
+            customBanners = preferenceStore.getBoolean("sync_customBanners", true).get(),
         )
     }
 
@@ -99,6 +102,9 @@ class SyncPreferences(
         preferenceStore.getBoolean("sync_source_novel_library", true).set(syncSettings.sourceNovelLibrary)
         // Chimahon <--
         preferenceStore.getBoolean("anime_entries", true).set(syncSettings.animeEntries)
+        // EaZy Nuvio+ / Chimanew: Separate covers & banners
+        preferenceStore.getBoolean("sync_customCovers", true).set(syncSettings.customCovers)
+        preferenceStore.getBoolean("sync_customBanners", true).set(syncSettings.customBanners)
     }
 
     fun getSyncTriggerOptions(): SyncTriggerOptions {

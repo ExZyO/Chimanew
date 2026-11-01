@@ -1,7 +1,9 @@
-# What's New in Chimanew v2.6.49
+# What's New in Chimanew v2.6.50
 
-### 🌄 Cross-Device Landscape Banner & Artwork Customization Sync
-* **Complete Banner Synchronization**: Custom series banners selected from the Artwork Picker (Naver, AniList, Kitsu, Kuaikan, etc.) now sync seamlessly between your phone, tablet, and laptop via Google Drive.
-* **Artwork Source Exclusion Sync**: Custom per-entry artwork and banner source exclusions are now synchronized across all your devices, preserving your preferred visuals everywhere.
-* **Instant Recomposition & Invalidation**: Setting or resetting a banner immediately updates local database timestamps, busts in-memory image caches, and triggers auto-sync without requiring a full manual restart.
-* **Incremental Artwork Sync**: Preserves lightweight, conflict-free syncing without re-restoring unmodified series or locking the database.
+### 🔍 Home Search Searches Library
+* **Direct Library Search from Home**: Tapping the search icon on the Home page header now instantly opens and focuses your Library search rather than launching Global Extension Search, making it fast and effortless to find series already in your collection.
+
+### 🖼️ Granular Sync Options & Cross-Fork Compatibility
+* **Independent Cover & Banner Sync Toggles**: Added separate checkboxes for "Custom covers" and "Custom banners" in both **Choose what to sync** (Google Drive) and **Create backup**. You can now choose exactly which artwork elements you want synced.
+* **Universal Fork Compatibility**: Backups created from Chimanew safely omit unselected artwork metadata and adhere to standard Protobuf specifications, remaining 100% loadable and compatible across other forks like Komikku, Chimahon, Mihon, etc.
+* **Smart Sync Diff Filter**: When Cover or Banner sync is disabled, artwork changes will no longer trigger unnecessary diff reconciliations.

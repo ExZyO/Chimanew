@@ -27,6 +27,9 @@ data class BackupOptions(
     val sourceNovelLibrary: Boolean = true,
     // Chimahon <--
     val animeEntries: Boolean = true,
+    // EaZy Nuvio+ / Chimanew: Separate toggles for custom covers and banners
+    val customCovers: Boolean = true,
+    val customBanners: Boolean = true,
 ) {
 
     fun asBooleanArray() = booleanArrayOf(
@@ -49,6 +52,10 @@ data class BackupOptions(
         sourceNovelLibrary,
         // Chimahon <--
         animeEntries,
+        // Chimanew -->
+        customCovers,
+        customBanners,
+        // Chimanew <--
     )
 
     fun canCreate() =
@@ -100,6 +107,19 @@ data class BackupOptions(
                 label = SYMR.strings.custom_entry_info,
                 getter = BackupOptions::customInfo,
                 setter = { options, enabled -> options.copy(customInfo = enabled) },
+                enabled = { it.libraryEntries },
+            ),
+            // EaZy Nuvio+ / Chimanew: Separate custom covers & banners
+            Entry(
+                label = MR.strings.custom_covers,
+                getter = BackupOptions::customCovers,
+                setter = { options, enabled -> options.copy(customCovers = enabled) },
+                enabled = { it.libraryEntries },
+            ),
+            Entry(
+                label = MR.strings.custom_banners,
+                getter = BackupOptions::customBanners,
+                setter = { options, enabled -> options.copy(customBanners = enabled) },
                 enabled = { it.libraryEntries },
             ),
             Entry(
@@ -168,6 +188,10 @@ data class BackupOptions(
             sourceNovelLibrary = array.getOrElse(13) { true },
             // Chimahon <--
             animeEntries = array.getOrElse(14) { true },
+            // Chimanew -->
+            customCovers = array.getOrElse(15) { true },
+            customBanners = array.getOrElse(16) { true },
+            // Chimanew <--
         )
     }
 

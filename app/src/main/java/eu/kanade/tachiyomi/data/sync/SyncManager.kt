@@ -109,6 +109,9 @@ class SyncManager(
             sourceNovelLibrary = syncOptions.sourceNovelLibrary,
             // Chimahon <--
             animeEntries = syncOptions.animeEntries,
+            // EaZy Nuvio+ / Chimanew: Separate covers & banners
+            customCovers = syncOptions.customCovers,
+            customBanners = syncOptions.customBanners,
         )
 
         logcat(LogPriority.DEBUG) { "Begin create backup" }
@@ -324,27 +327,37 @@ class SyncManager(
         }
 
         // EaZy Nuvio+ / Chimanew: Detect custom cover / artwork changes or missing local cover image
+        val syncSettings = syncPreferences.getSyncSettings()
         val localCustom = getCustomMangaInfo.get(localManga.id)
-        if (localCustom?.thumbnailUrl != remoteManga.customThumbnailUrl) {
-            return true
+
+        if (syncSettings.customInfo) {
+            if (localCustom?.title != remoteManga.customTitle) {
+                return true
+            }
         }
-        if (localCustom?.title != remoteManga.customTitle) {
-            return true
+
+        if (syncSettings.customCovers) {
+            if (localCustom?.thumbnailUrl != remoteManga.customThumbnailUrl) {
+                return true
+            }
+            if (remoteManga.customThumbnailUrl != null && !coverCache.getCustomCoverFile(localManga.id).exists()) {
+                return true
+            }
+            val localExcludedCovers = preferences.mangaExcludedCoverSources(localManga.id).get()
+            if (localExcludedCovers != remoteManga.excludedCoverSources.toSet()) {
+                return true
+            }
         }
-        if (remoteManga.customThumbnailUrl != null && !coverCache.getCustomCoverFile(localManga.id).exists()) {
-            return true
-        }
-        val localBanner = preferences.mangaCustomBannerUrl(localManga.id).get().takeIf { it.isNotBlank() }
-        if (localBanner != remoteManga.customBannerUrl) {
-            return true
-        }
-        val localExcludedBanners = preferences.mangaExcludedBannerSources(localManga.id).get()
-        if (localExcludedBanners != remoteManga.excludedBannerSources.toSet()) {
-            return true
-        }
-        val localExcludedCovers = preferences.mangaExcludedCoverSources(localManga.id).get()
-        if (localExcludedCovers != remoteManga.excludedCoverSources.toSet()) {
-            return true
+
+        if (syncSettings.customBanners) {
+            val localBanner = preferences.mangaCustomBannerUrl(localManga.id).get().takeIf { it.isNotBlank() }
+            if (localBanner != remoteManga.customBannerUrl) {
+                return true
+            }
+            val localExcludedBanners = preferences.mangaExcludedBannerSources(localManga.id).get()
+            if (localExcludedBanners != remoteManga.excludedBannerSources.toSet()) {
+                return true
+            }
         }
 
         // Deep check: Compare actual chapter reading state (read, bookmark, last page read, count)

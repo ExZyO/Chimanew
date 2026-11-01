@@ -47,7 +47,7 @@ class MangaBackupCreator(
         // Entry for this manga
         val mangaObject = manga.toBackupManga(
             // SY -->
-            if (options.customInfo) {
+            if (options.customInfo || options.customCovers) {
                 getCustomMangaInfo.get(manga.id)
             } else {
                 null
@@ -55,16 +55,32 @@ class MangaBackupCreator(
             // SY <--
         )
 
+        // EaZy Nuvio+ / Chimanew: Cleanly decouple covers, info, and banners
+        if (!options.customCovers) {
+            mangaObject.customThumbnailUrl = null
+            mangaObject.excludedCoverSources = emptyList()
+        } else {
+            preferences.mangaExcludedCoverSources(manga.id).get().takeIf { it.isNotEmpty() }?.let {
+                mangaObject.excludedCoverSources = it.toList()
+            }
+        }
+
+        if (!options.customInfo) {
+            mangaObject.customTitle = null
+            mangaObject.customArtist = null
+            mangaObject.customAuthor = null
+            mangaObject.customDescription = null
+            mangaObject.customGenre = null
+            mangaObject.customStatus = 0
+        }
+
         // EaZy Nuvio+ / Chimanew: Backup custom banner and artwork exclusions
-        if (options.customInfo) {
+        if (options.customBanners) {
             preferences.mangaCustomBannerUrl(manga.id).get().takeIf { it.isNotBlank() }?.let {
                 mangaObject.customBannerUrl = it
             }
             preferences.mangaExcludedBannerSources(manga.id).get().takeIf { it.isNotEmpty() }?.let {
                 mangaObject.excludedBannerSources = it.toList()
-            }
-            preferences.mangaExcludedCoverSources(manga.id).get().takeIf { it.isNotEmpty() }?.let {
-                mangaObject.excludedCoverSources = it.toList()
             }
         }
 
