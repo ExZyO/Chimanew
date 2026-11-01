@@ -43,7 +43,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -53,10 +52,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -78,8 +75,6 @@ import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
@@ -185,14 +180,10 @@ fun NuvioHeroSection(
         pageCount = { virtualCount },
     )
 
-    val haptic = LocalHapticFeedback.current
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }
-            .distinctUntilChanged()
-            .drop(1)
-            .collect {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            }
+    LaunchedEffect(displayItems.map { it.mangaId }) {
+        if (displayItems.isNotEmpty()) {
+            pagerState.scrollToPage(startIndex)
+        }
     }
 
     // Dynamic Ambient Palette Extraction (Option A: Smooth Vertical Gradient)

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -87,6 +88,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -97,7 +99,8 @@ data object ChimanewHomeTab : Tab {
     private val scrollToTopChannel = Channel<Unit>(Channel.CONFLATED)
 
     override suspend fun onReselect(navigator: cafe.adriel.voyager.navigator.Navigator) {
-        scrollToTopChannel.send(Unit)
+        scrollToTopChannel.trySend(Unit)
+        HomeScreen.search("")
     }
 
     override val options: TabOptions
@@ -199,11 +202,17 @@ data object ChimanewHomeTab : Tab {
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
+            PullRefresh(
+                refreshing = state.isRefreshing,
+                enabled = !state.isLoading,
+                onRefresh = screenModel::refreshHero,
+                indicatorPadding = WindowInsets.statusBars.asPaddingValues(),
             ) {
-                // 1. Top Hero Section
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    // 1. Top Hero Section
                 if (state.heroItems.isNotEmpty()) {
                     item(key = "hero_carousel") {
                         NuvioHeroSection(
@@ -295,6 +304,7 @@ data object ChimanewHomeTab : Tab {
                     Spacer(modifier = Modifier.height(96.dp))
                 }
             }
+        }
 
             // Sleek Ambient App Bar Header (Smoothly darkens on scroll; no blocking text)
             Row(

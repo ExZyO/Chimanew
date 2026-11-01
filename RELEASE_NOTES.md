@@ -1,9 +1,10 @@
-# What's New in Chimanew v2.6.50
+# What's New in Chimanew v2.6.51
 
-### 🔍 Home Search Searches Library
-* **Direct Library Search from Home**: Tapping the search icon on the Home page header now instantly opens and focuses your Library search rather than launching Global Extension Search, making it fast and effortless to find series already in your collection.
+### 🔍 Double Tap Home to Search Library
+* **Quick Navigation Gesture**: Double-tapping the Home navigation tab now instantly switches to your Library tab with the search bar open and keyboard focused, matching the quick gesture behavior of the Library, Updates, and Browse tabs.
 
-### 🖼️ Granular Sync Options & Cross-Fork Compatibility
-* **Independent Cover & Banner Sync Toggles**: Added separate checkboxes for "Custom covers" and "Custom banners" in both **Choose what to sync** (Google Drive) and **Create backup**. You can now choose exactly which artwork elements you want synced.
-* **Universal Fork Compatibility**: Backups created from Chimanew safely omit unselected artwork metadata and adhere to standard Protobuf specifications, remaining 100% loadable and compatible across other forks like Komikku, Chimahon, Mihon, etc.
-* **Smart Sync Diff Filter**: When Cover or Banner sync is disabled, artwork changes will no longer trigger unnecessary diff reconciliations.
+### 📳 Vibration Removed on Hero Carousel
+* **Silenced Carousel Scroll**: Removed the haptic vibration pulse that previously fired every time you scrolled through slides in the top hero banner carousel for a smooth, silent browsing experience.
+
+### 🔄 Pull-to-Refresh Hero Banner
+* **Swipe Down to Rotate Entries**: Pulling down past the top of the Home feed or hero banner now triggers a smooth pull-to-refresh that rotates candidate pools, showing a fresh mix of in-progress history and library items in the carousel.

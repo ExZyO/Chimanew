@@ -185,6 +185,7 @@ class ChimanewHomeScreenModel(
     @Immutable
     data class State(
         val isLoading: Boolean = true,
+        val isRefreshing: Boolean = false,
         val heroItems: List<HomeMangaItem> = emptyList(),
         val heroStyle: Int = 0,
         val heroArtworkSources: Set<String> = setOf("banner", "cover", "default"),
@@ -194,6 +195,16 @@ class ChimanewHomeScreenModel(
         val continueReadingTapAction: Int = 1,
         val shelfTapAction: Int = 0,
     )
+
+    fun refreshHero() {
+        screenModelScope.launchIO {
+            mutableState.update { it.copy(isRefreshing = true) }
+            persistentHeroMangaIds = emptyList()
+            triggerRefresh()
+            delay(1000L)
+            mutableState.update { it.copy(isRefreshing = false) }
+        }
+    }
 
     init {
         screenModelScope.launchIO {
@@ -634,9 +645,10 @@ class ChimanewHomeScreenModel(
                     } else {
                         distinctHistory
                     }
-                    val heroFromHistory = eligibleHistory.take(7).map { h ->
+
+                    val historyItemsByMangaId = eligibleHistory.associate { h ->
                         val libManga = libraryByMangaId[h.mangaId]
-                        createHomeItem(
+                        h.mangaId to createHomeItem(
                             mangaId = h.mangaId,
                             title = h.title,
                             coverData = h.coverData,
@@ -651,41 +663,57 @@ class ChimanewHomeScreenModel(
                             description = libManga?.manga?.ogDescription,
                         )
                     }
-                    if (heroFromHistory.size < 5 && data.libraryList.isNotEmpty()) {
-                        val historyIds = heroFromHistory.map { it.mangaId }.toSet()
-                        val libraryCandidates = data.libraryList.filter { lib ->
-                            lib.id !in historyIds &&
-                            (!prefs.heroRequireSelectedArtwork || hasRequiredHeroArtwork(lib.manga.id, lib.manga.ogTitle ?: lib.manga.title, prefs.heroStyle))
-                        }
-                        val candidateMap = libraryCandidates.associateBy { it.manga.id }
-                        val needed = 7 - heroFromHistory.size
-                        val stableFallbackIds = persistentHeroMangaIds.filter { it in candidateMap && it !in historyIds }
-                        val finalFallbackIds = if (stableFallbackIds.size < needed) {
-                            val sorted = libraryCandidates
-                                .filter { it.manga.id !in stableFallbackIds.toSet() }
-                                .sortedByDescending { it.unreadCount.coerceAtLeast(0L) }
-                            stableFallbackIds + sorted.take(needed - stableFallbackIds.size).map { it.manga.id }
-                        } else {
-                            stableFallbackIds.take(needed)
-                        }
-                        val fallbackItems = finalFallbackIds.mapNotNull { candidateMap[it] }.map { lib ->
-                            createHomeItem(
-                                mangaId = lib.manga.id,
-                                title = lib.manga.title,
-                                coverData = lib.manga.asMangaCover(),
-                                totalChapters = lib.totalChapters,
-                                readChapters = lib.readCount,
-                                unreadCount = lib.unreadCount,
-                                genres = lib.manga.ogGenre ?: emptyList(),
-                                description = lib.manga.ogDescription,
-                            )
-                        }
-                        persistentHeroMangaIds = heroFromHistory.map { it.mangaId } + finalFallbackIds
-                        heroFromHistory + fallbackItems
-                    } else {
-                        persistentHeroMangaIds = heroFromHistory.map { it.mangaId }
-                        heroFromHistory
+
+                    val libraryCandidates = data.libraryList.filter { lib ->
+                        !prefs.heroRequireSelectedArtwork || hasRequiredHeroArtwork(lib.manga.id, lib.manga.ogTitle ?: lib.manga.title, prefs.heroStyle)
                     }
+
+                    val libraryItemsByMangaId = libraryCandidates.associate { lib ->
+                        lib.manga.id to createHomeItem(
+                            mangaId = lib.manga.id,
+                            title = lib.manga.title,
+                            coverData = lib.manga.asMangaCover(),
+                            totalChapters = lib.totalChapters,
+                            readChapters = lib.readCount,
+                            unreadCount = lib.unreadCount,
+                            genres = lib.manga.ogGenre ?: emptyList(),
+                            description = lib.manga.ogDescription,
+                        )
+                    }
+
+                    val allCandidatesMap = HashMap<Long, HomeMangaItem>().apply {
+                        putAll(libraryItemsByMangaId)
+                        putAll(historyItemsByMangaId)
+                    }
+
+                    val stableIds = persistentHeroMangaIds.filter { it in allCandidatesMap }
+                    val finalIds = if (stableIds.size < 7) {
+                        val historyPool = eligibleHistory.shuffled()
+                        val historyIdsInPool = historyPool.map { it.mangaId }.toSet()
+                        val libraryPool = libraryCandidates.filter { it.manga.id !in historyIdsInPool }.shuffled()
+
+                        val historyTarget = if (libraryPool.isNotEmpty()) 4 else 7
+                        val pickedHistory = historyPool.filter { it.mangaId !in stableIds.toSet() }.take(historyTarget).map { it.mangaId }
+
+                        val neededForLibrary = 7 - (stableIds.size + pickedHistory.size)
+                        val pickedLibrary = libraryPool.filter { it.manga.id !in stableIds.toSet() }.take(neededForLibrary).map { it.manga.id }
+
+                        val remainingNeeded = 7 - (stableIds.size + pickedHistory.size + pickedLibrary.size)
+                        val fallbackHistory = if (remainingNeeded > 0) {
+                            historyPool.filter { it.mangaId !in stableIds.toSet() && it.mangaId !in pickedHistory.toSet() }
+                                .take(remainingNeeded)
+                                .map { it.mangaId }
+                        } else {
+                            emptyList()
+                        }
+
+                        (stableIds + pickedHistory + pickedLibrary + fallbackHistory).distinct().take(7)
+                    } else {
+                        stableIds.take(7)
+                    }
+
+                    persistentHeroMangaIds = finalIds
+                    finalIds.mapNotNull { allCandidatesMap[it] }
                 }
 
                 if (prefs.useAnilistArtwork) {
@@ -896,6 +924,7 @@ class ChimanewHomeScreenModel(
 
                 State(
                     isLoading = false,
+                    isRefreshing = mutableState.value.isRefreshing,
                     heroItems = heroItems,
                     heroStyle = prefs.heroStyle,
                     heroArtworkSources = prefs.heroArtworkSources,
