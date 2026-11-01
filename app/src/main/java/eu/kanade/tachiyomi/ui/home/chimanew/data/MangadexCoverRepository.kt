@@ -157,7 +157,7 @@ class MangadexCoverRepository(
                 suspend fun executeSearch(query: String): JsonArray? {
                     throttle()
                     val encoded = URLEncoder.encode(query, "UTF-8")
-                    val searchUrl = "$API_URL/manga?title=$encoded&limit=15&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&order[relevance]=desc"
+                    val searchUrl = "$API_URL/manga?title=$encoded&limit=15&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&order[relevance]=desc"
                     val searchResponse = client.newCall(GET(searchUrl, headers)).awaitSuccess()
                     val searchBody = searchResponse.body.string()
                     val searchRoot = json.parseToJsonElement(searchBody) as? JsonObject ?: return null
@@ -241,14 +241,16 @@ class MangadexCoverRepository(
                     }
                     score += bestTitleScore
 
-                    // 3. Penalize fan doujinshis & fan cuts
+                    // 3. De-prioritize fan doujinshis & fan cuts when matching mainstream titles
                     val tags = (attrs["tags"] as? JsonArray)?.mapNotNull { tagObj ->
                         ((tagObj as? JsonObject)?.get("attributes") as? JsonObject)?.get("name")?.jsonObject?.get("en")?.jsonPrimitive?.contentOrNull?.lowercase()
                     } ?: emptyList()
-
+                    val queryHasDoujin = title.contains("doujin", ignoreCase = true)
                     val isDoujinshi = "doujinshi" in tags || allCandidateTitles.any { it.contains("doujinshi", ignoreCase = true) }
-                    if (isDoujinshi) {
-                        score -= 500
+                    if (isDoujinshi && !queryHasDoujin) {
+                        // Only deprioritize doujinshis if query is not looking for a doujinshi,
+                        // keeping penalty moderate (-100) and clamped so legitimate doujinshis or self-published works are never dropped
+                        score = maxOf(1, score - 100)
                     }
 
                     val isFanOrColored = allCandidateTitles.any {
@@ -257,7 +259,7 @@ class MangadexCoverRepository(
                         it.contains("side story", ignoreCase = true)
                     }
                     if (isFanOrColored) {
-                        score -= 50
+                        score = maxOf(1, score - 50)
                     }
 
                     // Extract embedded primary cover if available
