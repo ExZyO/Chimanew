@@ -310,6 +310,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val (_, fetchWindowUpperBound) = fetchInterval.getWindow(ZonedDateTime.now())
         val isTrackerAssisted = libraryPreferences.trackerAssistedUpdates().get()
 
+        logcat(LogPriority.INFO) {
+            "[TrackerUpdateEngine] Starting queue evaluation for ${listToUpdate.size} manga. " +
+                "trackerAssisted=$isTrackerAssisted, restrictions=$restrictions, windowUpperBound=$fetchWindowUpperBound"
+        }
+
         // Tracker-Assisted Update Engine: Query tracks for library entries
         val allTracks = if (isTrackerAssisted) {
             getTracks.await().groupBy { it.mangaId }
@@ -321,50 +326,68 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         if (isTrackerAssisted) {
             for (item in listToUpdate) {
                 val tracks = allTracks[item.manga.id].orEmpty()
-                if (tracks.any { it.totalChapters > item.totalChapters && it.totalChapters > 0L }) {
+                val higherTrack = tracks.firstOrNull { it.totalChapters > item.totalChapters && it.totalChapters > 0L }
+                if (higherTrack != null) {
                     trackerSignaledMangaIds.add(item.manga.id)
+                    logcat(LogPriority.INFO) {
+                        "[TrackerUpdateEngine] Cached tracker signal: '${item.manga.title}' has ${higherTrack.totalChapters} chapters on tracker (ID ${higherTrack.trackerId}) vs ${item.totalChapters} local chapters."
+                    }
                 }
             }
 
-            // For manga outside release period, perform pre-flight check across logged-in trackers
-            if (MANGA_OUTSIDE_RELEASE_PERIOD in restrictions) {
-                val candidateManga = listToUpdate.filter {
-                    it.manga.nextUpdate > fetchWindowUpperBound &&
-                        it.manga.id !in trackerSignaledMangaIds &&
-                        allTracks[it.manga.id]?.any { track ->
-                            trackerManager.get(track.trackerId)?.isLoggedIn == true
-                        } == true
-                }
+            // Probe candidate manga whose release window has passed or were marked completed,
+            // discovering surprise releases across logged-in trackers (ComicK, MangaDex, MangaUpdates, AniList, etc.)
+            val candidateManga = listToUpdate.filter {
+                it.manga.id !in trackerSignaledMangaIds &&
+                    (MANGA_OUTSIDE_RELEASE_PERIOD in restrictions && it.manga.nextUpdate > fetchWindowUpperBound ||
+                        MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED) &&
+                    allTracks[it.manga.id]?.any { track ->
+                        trackerManager.get(track.trackerId)?.isLoggedIn == true
+                    } == true
+            }
 
-                if (candidateManga.isNotEmpty()) {
-                    coroutineScope {
-                        val checkSemaphore = Semaphore(6)
-                        candidateManga.map { item ->
-                            async {
-                                checkSemaphore.withPermit {
-                                    val tracks = allTracks[item.manga.id].orEmpty()
-                                    for (track in tracks) {
-                                        val service = trackerManager.get(track.trackerId)
-                                        if (service?.isLoggedIn == true) {
-                                            try {
-                                                val refreshed = service.refresh(track.toDbTrack()).toDomainTrack()
-                                                if (refreshed != null) {
-                                                    insertTrack.await(refreshed)
-                                                    if (refreshed.totalChapters > item.totalChapters && refreshed.totalChapters > 0L) {
-                                                        trackerSignaledMangaIds.add(item.manga.id)
-                                                        break
-                                                    }
+            if (candidateManga.isNotEmpty()) {
+                logcat(LogPriority.INFO) {
+                    "[TrackerUpdateEngine] Running pre-flight probe for ${candidateManga.size} tracked candidates..."
+                }
+                coroutineScope {
+                    val checkSemaphore = Semaphore(6)
+                    candidateManga.map { item ->
+                        async {
+                            checkSemaphore.withPermit {
+                                val tracks = allTracks[item.manga.id].orEmpty()
+                                for (track in tracks) {
+                                    val service = trackerManager.get(track.trackerId)
+                                    if (service?.isLoggedIn == true) {
+                                        try {
+                                            logcat(LogPriority.INFO) {
+                                                "[TrackerUpdateEngine] Probing ${service.name} for '${item.manga.title}' (remoteId=${track.remoteId})..."
+                                            }
+                                            val refreshed = service.refresh(track.toDbTrack()).toDomainTrack()
+                                            if (refreshed != null) {
+                                                insertTrack.await(refreshed)
+                                                logcat(LogPriority.INFO) {
+                                                    "[TrackerUpdateEngine] ${service.name} returned totalChapters=${refreshed.totalChapters} (local=${item.totalChapters}) for '${item.manga.title}'"
                                                 }
-                                            } catch (e: Exception) {
-                                                if (e is CancellationException) throw e
-                                                // Ignore individual tracker refresh failures during pre-flight
+                                                if (refreshed.totalChapters > item.totalChapters && refreshed.totalChapters > 0L) {
+                                                    trackerSignaledMangaIds.add(item.manga.id)
+                                                    logcat(LogPriority.INFO) {
+                                                        "[TrackerUpdateEngine] ⭐ Tracker signal DETECTED for '${item.manga.title}' via ${service.name}! Bypassing restrictions and prioritizing."
+                                                    }
+                                                    break
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            if (e is CancellationException) throw e
+                                            logcat(LogPriority.WARN) {
+                                                "[TrackerUpdateEngine] Probe failed for '${item.manga.title}' on ${service.name}: ${e.message}"
                                             }
                                         }
                                     }
                                 }
                             }
-                        }.awaitAll()
-                    }
+                        }
+                    }.awaitAll()
                 }
             }
         }
@@ -384,8 +407,15 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED -> {
-                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_completed))
-                        false
+                        if (it.manga.id in trackerSignaledMangaIds) {
+                            logcat(LogPriority.INFO) {
+                                "[TrackerUpdateEngine] Bypassing MANGA_NON_COMPLETED for '${it.manga.title}' because tracker signaled new chapters!"
+                            }
+                            true
+                        } else {
+                            skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_completed))
+                            false
+                        }
                     }
 
                     MANGA_HAS_UNREAD in restrictions && it.unreadCount != 0L -> {
@@ -399,13 +429,19 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_OUTSIDE_RELEASE_PERIOD in restrictions &&
-                        it.manga.nextUpdate > fetchWindowUpperBound &&
-                        it.manga.id !in trackerSignaledMangaIds -> {
-                        skippedUpdates.add(
-                            it.manga to
-                                context.stringResource(MR.strings.skipped_reason_not_in_release_period),
-                        )
-                        false
+                        it.manga.nextUpdate > fetchWindowUpperBound -> {
+                        if (it.manga.id in trackerSignaledMangaIds) {
+                            logcat(LogPriority.INFO) {
+                                "[TrackerUpdateEngine] Bypassing MANGA_OUTSIDE_RELEASE_PERIOD for '${it.manga.title}' because tracker signaled new chapters!"
+                            }
+                            true
+                        } else {
+                            skippedUpdates.add(
+                                it.manga to
+                                    context.stringResource(MR.strings.skipped_reason_not_in_release_period),
+                            )
+                            false
+                        }
                     }
 
                     else -> true
@@ -432,16 +468,19 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
         notifier.showQueueSizeWarningNotificationIfNeeded(mangaToUpdate)
 
+        logcat(LogPriority.INFO) {
+            "[TrackerUpdateEngine] Final update queue built: ${mangaToUpdate.size} manga (${trackerSignaledMangaIds.size} tracker-assisted at front). Total skipped: ${skippedUpdates.size}."
+        }
+
         if (skippedUpdates.isNotEmpty()) {
-            // TODO: surface skipped reasons to user?
-            logcat {
-                skippedUpdates
-                    .groupBy { it.second }
-                    .map { (reason, entries) ->
-                        "$reason: [${entries.map { it.first.title }.sorted().joinToString()}]"
-                    }
-                    .joinToString()
-            }
+            val breakdown = skippedUpdates
+                .groupBy { it.second }
+                .map { (reason, entries) ->
+                    val sample = entries.take(3).joinToString { it.first.title }
+                    "$reason (${entries.size}): [$sample${if (entries.size > 3) ", ..." else ""}]"
+                }
+                .joinToString("; ")
+            logcat(LogPriority.INFO) { "[TrackerUpdateEngine] Skipped breakdown: $breakdown" }
         }
     }
 

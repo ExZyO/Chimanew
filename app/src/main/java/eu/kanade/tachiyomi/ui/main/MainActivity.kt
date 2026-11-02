@@ -519,11 +519,16 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        if (isLaunch && libraryPreferences.autoCheckUpdatesOnLaunch().get()) {
+        if (isLaunch) {
+            val autoCheck = libraryPreferences.autoCheckUpdatesOnLaunch().get()
             val lastCheck = libraryPreferences.lastUpdatedTimestamp().get()
             val now = System.currentTimeMillis()
-            // 15-minute cooldown to avoid spamming network when briefly switching apps
-            if (now - lastCheck > 15 * 60 * 1000L) {
+            val elapsedMinutes = (now - lastCheck) / (60 * 1000L)
+            logcat(LogPriority.INFO) {
+                "[LaunchUpdate] Cold launch. autoCheck=$autoCheck, lastCheck=${elapsedMinutes}m ago, cooldown15mMet=${elapsedMinutes >= 15}"
+            }
+            if (autoCheck && (now - lastCheck > 15 * 60 * 1000L)) {
+                logcat(LogPriority.INFO) { "[LaunchUpdate] Triggering LibraryUpdateJob.startNow() on launch" }
                 LibraryUpdateJob.startNow(this)
             }
         }

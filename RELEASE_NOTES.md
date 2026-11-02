@@ -1,3 +1,10 @@
+# What's New in Chimanew v2.6.60
+
+### 🔍 Tracker Engine Logging & Restriction Bypass Polish
+* **High-Visibility Logging**: Added detailed `[TrackerUpdateEngine]` and `[LaunchUpdate]` log messages recording every single step of the update lifecycle, including candidate probing, chapter differentials, restriction bypasses, and skipped breakdowns.
+* **Completed Status Bypass**: If a series was marked as Completed on the source, but ComicK, AniList, or another tracker signals that new chapters or a sequel released, `MANGA_NON_COMPLETED` is now bypassed automatically!
+* **Transparent Skipped Breakdown**: The logs now explicitly record the reason for every single skipped title so you can verify exactly why any manga wasn't checked.
+
 # What's New in Chimanew v2.6.59
 
 ### 🚀 Check for Updates on App Launch
