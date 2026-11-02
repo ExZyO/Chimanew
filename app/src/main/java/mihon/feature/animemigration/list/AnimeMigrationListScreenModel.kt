@@ -257,7 +257,7 @@ class AnimeMigrationListScreenModel(
 
     private suspend fun updateMigrationProgress() {
         val finished = items.count { it.searchResult.value != SearchResult.Searching }
-        val complete = migrationComplete()
+        val complete = state.value.migrationComplete()
         val successCount = items.count { it.searchResult.value is SearchResult.Success }
         logcat(LogPriority.INFO) {
             "[MIGRATION] Anime progress: finished=$finished/${items.size}, matched=$successCount, complete=$complete"
