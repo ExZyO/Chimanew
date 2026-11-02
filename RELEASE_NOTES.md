@@ -1,3 +1,9 @@
+# What's New in Chimanew v2.6.59
+
+### 🚀 Check for Updates on App Launch
+* **Auto-Check on Launch Toggle**: Added a new setting under **Settings → Library → Global update** to automatically check your library for new chapters whenever you open the app.
+* **Smart 15-Minute Cooldown**: To protect your battery and data, launch updates include an intelligent 15-minute cooldown so briefly switching apps or replying to messages won't trigger unnecessary re-checks.
+
 # What's New in Chimanew v2.6.58
 
 ### ⚡ Phase 2: Tracker-Assisted Update Engine

@@ -46,6 +46,7 @@ class LibraryPreferences(
     fun lastUpdatedTimestamp() = preferenceStore.getLong(Preference.appStateKey("library_update_last_timestamp"), 0L)
     fun autoUpdateInterval() = preferenceStore.getInt("pref_library_update_interval_key", 0)
     fun trackerAssistedUpdates() = preferenceStore.getBoolean("pref_tracker_assisted_updates", true)
+    fun autoCheckUpdatesOnLaunch() = preferenceStore.getBoolean("pref_auto_check_updates_on_launch", false)
 
     // KMK -->
     fun showUpdatingProgressBanner() = preferenceStore.getBoolean(

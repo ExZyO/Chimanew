@@ -340,6 +340,11 @@ object SettingsLibraryScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_tracker_assisted_updates),
                     subtitle = stringResource(MR.strings.pref_tracker_assisted_updates_summary),
                 ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = libraryPreferences.autoCheckUpdatesOnLaunch(),
+                    title = stringResource(MR.strings.pref_auto_check_updates_on_launch),
+                    subtitle = stringResource(MR.strings.pref_auto_check_updates_on_launch_summary),
+                ),
                 Preference.PreferenceItem.MultiSelectListPreference(
                     preference = libraryPreferences.autoUpdateMangaRestrictions(),
                     entries = persistentMapOf(

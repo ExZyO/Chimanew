@@ -518,6 +518,15 @@ class MainActivity : BaseActivity() {
                 chapterCache.clear()
             }
         }
+
+        if (isLaunch && libraryPreferences.autoCheckUpdatesOnLaunch().get()) {
+            val lastCheck = libraryPreferences.lastUpdatedTimestamp().get()
+            val now = System.currentTimeMillis()
+            // 15-minute cooldown to avoid spamming network when briefly switching apps
+            if (now - lastCheck > 15 * 60 * 1000L) {
+                LibraryUpdateJob.startNow(this)
+            }
+        }
     }
 
     // AY -->
