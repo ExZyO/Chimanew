@@ -59,13 +59,13 @@ object SettingsNuvioHeroScreen : SearchableSettings {
         val showHeroNovel by preferences.showHeroCarouselNovel().collectPrefAsState()
 
         val styleEntries = persistentMapOf(
-            0 to stringResource(MR.strings.pref_nuvio_hero_style_cinematic),
-            1 to stringResource(MR.strings.pref_nuvio_hero_style_framed),
-            2 to stringResource(MR.strings.pref_nuvio_hero_style_minimal),
-            3 to stringResource(MR.strings.pref_nuvio_hero_style_ambient),
-            4 to stringResource(MR.strings.pref_nuvio_hero_style_glassmorphic),
-            5 to stringResource(MR.strings.pref_nuvio_hero_style_magazine),
-            6 to stringResource(MR.strings.pref_nuvio_hero_style_split),
+            0 to "Ambient Glow",
+            1 to "Framed Poster Showcase",
+            2 to "Minimal Backdrop",
+            3 to "Cinematic Ambient Glow",
+            4 to "Glassmorphic Translucent",
+            5 to "Magazine Editorial",
+            6 to "Split Dual-Tone",
         )
 
         return listOf(
@@ -125,19 +125,20 @@ object SettingsNuvioHeroScreen : SearchableSettings {
                     Preference.PreferenceItem.MultiSelectListPreference(
                         preference = preferences.heroCategories(),
                         entries = categoryEntries,
-                        title = stringResource(MR.strings.pref_chimanew_hero_categories_title),
+                        title = stringResource(MR.strings.pref_chimanew_hero_categories),
                         subtitle = stringResource(MR.strings.pref_chimanew_hero_categories_summary),
                         enabled = showHeroManga && heroSource == 1,
                     ),
                     Preference.PreferenceItem.MultiSelectListPreference(
                         preference = preferences.heroTrackerStatuses(),
                         entries = persistentMapOf(
-                            "reading" to stringResource(MR.strings.pref_nuvio_shelf_reading),
-                            "plan_to_read" to stringResource(MR.strings.pref_nuvio_shelf_plan_to_read),
-                            "on_hold" to stringResource(MR.strings.pref_nuvio_shelf_on_hold),
-                            "completed" to stringResource(MR.strings.pref_nuvio_shelf_completed),
+                            "reading" to stringResource(MR.strings.pref_tracker_reading),
+                            "plan_to_read" to stringResource(MR.strings.pref_tracker_plan_to_read),
+                            "on_hold" to stringResource(MR.strings.pref_tracker_on_hold),
+                            "completed" to stringResource(MR.strings.pref_tracker_completed),
+                            "dropped" to stringResource(MR.strings.pref_tracker_dropped),
                         ),
-                        title = stringResource(MR.strings.pref_chimanew_hero_tracker_statuses_title),
+                        title = stringResource(MR.strings.pref_chimanew_hero_tracker_statuses),
                         subtitle = stringResource(MR.strings.pref_chimanew_hero_tracker_statuses_summary),
                         enabled = showHeroManga && heroSource == 2,
                     ),
@@ -180,10 +181,11 @@ object SettingsNuvioHeroScreen : SearchableSettings {
                     Preference.PreferenceItem.MultiSelectListPreference(
                         preference = preferences.heroTrackerStatusesAnime(),
                         entries = persistentMapOf(
-                            "reading" to "Watching",
-                            "plan_to_read" to "Plan to Watch",
-                            "on_hold" to "On Hold",
-                            "completed" to "Completed",
+                            "reading" to stringResource(MR.strings.pref_tracker_reading),
+                            "plan_to_read" to stringResource(MR.strings.pref_tracker_plan_to_read),
+                            "on_hold" to stringResource(MR.strings.pref_tracker_on_hold),
+                            "completed" to stringResource(MR.strings.pref_tracker_completed),
+                            "dropped" to stringResource(MR.strings.pref_tracker_dropped),
                         ),
                         title = "Anime Hero Tracker Statuses",
                         subtitle = "Select tracker statuses to feature in Anime Hero",

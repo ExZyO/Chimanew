@@ -422,6 +422,14 @@ class AnimeScreen(
                 }
             }
             AnimeScreenModel.Dialog.ArtworkPickerSheet -> {
+                val sm = rememberScreenModel { AnimeImageScreenModel(successState.anime.id) }
+                val getContent = rememberLauncherForActivityResult(
+                    ActivityResultContracts.GetContent(),
+                ) {
+                    if (it != null) {
+                        sm.editImage(context, it)
+                    }
+                }
                 AnimeArtworkPickerBottomSheet(
                     anime = successState.anime,
                     onDismissRequest = onDismissRequest,

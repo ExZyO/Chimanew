@@ -471,7 +471,7 @@ data class NovelDetailScreen(
                 val getContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                     if (uri == null) return@rememberLauncherForActivityResult
                 }
-                val novelObj = tachiyomi.domain.novel.model.Novel(
+                val novelObj = state.dbNovel ?: tachiyomi.domain.novel.model.Novel.create().copy(
                     id = state.novel.id,
                     source = state.novel.source,
                     url = state.novel.url,
@@ -483,13 +483,6 @@ data class NovelDetailScreen(
                     artist = state.novel.artist,
                     status = state.novel.status.toLong(),
                     favorite = state.novel.favorite,
-                    lastUpdate = state.novel.last_update,
-                    nextUpdate = 0L,
-                    fetchInterval = 0,
-                    dateAdded = 0L,
-                    viewerFlags = 0L,
-                    chapterFlags = 0L,
-                    coverLastModified = 0L,
                 )
                 NovelArtworkPickerBottomSheet(
                     novel = novelObj,

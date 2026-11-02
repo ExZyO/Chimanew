@@ -279,10 +279,11 @@ object HomeScreen : Screen() {
                             label = "tabContent",
                             contentKey = { it.key },
                         ) {
-                            val floatingDockPadding = if (!isTabletUi()) 96.dp else 0.dp
+                            val isTablet = isTabletUi()
+                            val floatingDockPadding = if (!isTablet) 96.dp else 0.dp
                             LaunchedEffect(floatingDockPadding) {
                                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "FloatingDock") {
-                                    "Applied LocalFloatingDockBottomPadding = ${floatingDockPadding.value}dp (tabletMode=${isTabletUi()})"
+                                    "Applied LocalFloatingDockBottomPadding = ${floatingDockPadding.value}dp (tabletMode=$isTablet)"
                                 }
                             }
                             CompositionLocalProvider(

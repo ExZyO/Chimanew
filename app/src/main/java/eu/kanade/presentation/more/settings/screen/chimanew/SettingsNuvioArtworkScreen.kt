@@ -126,9 +126,9 @@ object SettingsNuvioArtworkScreen : SearchableSettings {
                     Preference.PreferenceItem.ListPreference(
                         preference = preferences.ambientCanvasStyle(),
                         entries = persistentMapOf(
-                            0 to stringResource(MR.strings.pref_chimanew_ambient_canvas_style_cinematic),
-                            1 to stringResource(MR.strings.pref_chimanew_ambient_canvas_style_palette),
-                            2 to stringResource(MR.strings.pref_chimanew_ambient_canvas_style_hybrid),
+                            0 to stringResource(MR.strings.pref_chimanew_artwork_ambient_cinematic_blur),
+                            1 to stringResource(MR.strings.pref_chimanew_artwork_ambient_palette_mesh),
+                            2 to stringResource(MR.strings.pref_chimanew_artwork_ambient_hybrid_texture),
                         ),
                         title = stringResource(MR.strings.pref_chimanew_artwork_ambient_style),
                         subtitle = stringResource(MR.strings.pref_chimanew_artwork_ambient_style_summary),
