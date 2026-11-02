@@ -1,13 +1,21 @@
 package eu.kanade.presentation.updates.anime
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import eu.kanade.presentation.components.TabbedDialog
 import eu.kanade.presentation.components.TabbedDialogPaddings
@@ -16,6 +24,7 @@ import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.ank.AMR
+import tachiyomi.presentation.core.components.SettingsItemsPaddings
 import tachiyomi.presentation.core.components.TriStateItem
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
@@ -85,25 +94,25 @@ private fun ColumnScope.AnimeFilterSheet(
         onClick = { screenModel.toggleFilter(UpdatesPreferences::filterFillermarked) },
     )
 
-    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(MaterialTheme.padding.small))
+    HorizontalDivider(modifier = Modifier.padding(MaterialTheme.padding.small))
 
     val consolidateUpdates by screenModel.updatesPreferences.consolidateUpdates().collectAsState()
 
-    androidx.compose.foundation.layout.Row(
+    Row(
         modifier = Modifier
-            .androidx.compose.foundation.clickable { screenModel.toggleSwitch(UpdatesPreferences::consolidateUpdates) }
-            .androidx.compose.foundation.layout.fillMaxWidth()
-            .padding(horizontal = eu.kanade.presentation.more.settings.widget.SettingsItemsPaddings.Horizontal),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            .clickable { screenModel.toggleSwitch(UpdatesPreferences::consolidateUpdates) }
+            .fillMaxWidth()
+            .padding(horizontal = SettingsItemsPaddings.Horizontal),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        androidx.compose.material3.Text(
+        Text(
             text = stringResource(MR.strings.pref_consolidate_updates),
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyMedium,
         )
 
-        androidx.compose.material3.Switch(
+        Switch(
             checked = consolidateUpdates,
             onCheckedChange = { screenModel.toggleSwitch(UpdatesPreferences::consolidateUpdates) },
         )

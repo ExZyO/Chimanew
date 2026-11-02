@@ -180,6 +180,7 @@ class ChimanewDiagnosticLogViewerScreen : Screen() {
             DiagnosticCategory.NETWORK -> Color(0xFFFFB300) // Amber
             DiagnosticCategory.DETAILS -> Color(0xFFAB47BC) // Purple
             DiagnosticCategory.SHELVES -> Color(0xFF42A5F5) // Blue
+            DiagnosticCategory.UPDATES -> Color(0xFFFF7043) // Deep Orange
         }
 
         Box(
