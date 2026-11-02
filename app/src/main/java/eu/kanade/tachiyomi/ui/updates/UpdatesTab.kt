@@ -276,6 +276,7 @@ data object UpdatesTab : Tab {
                                 expandedState = novelState.expandedState,
                                 consolidateUpdates = novelState.consolidateUpdates,
                                 collapseToggle = novelScreenModel::toggleExpandedState,
+                                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
                                 onClickItem = { update ->
                                     navigator.push(
                                         chimahon.novel.ui.detail.NovelDetailScreen(

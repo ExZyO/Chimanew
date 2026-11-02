@@ -125,6 +125,7 @@ import soup.compose.material.motion.animation.materialFadeThroughIn
 import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.material.LocalFloatingDockBottomPadding
 import tachiyomi.presentation.core.components.material.NavigationBar
 import tachiyomi.presentation.core.components.material.NavigationRail
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -276,8 +277,13 @@ object HomeScreen : Screen() {
                             label = "tabContent",
                             contentKey = { it.key },
                         ) {
-                            tabNavigator.saveableState(key = "currentTab", it) {
-                                it.Content()
+                            val floatingDockPadding = if (!isTabletUi()) 96.dp else 0.dp
+                            CompositionLocalProvider(
+                                LocalFloatingDockBottomPadding provides floatingDockPadding,
+                            ) {
+                                tabNavigator.saveableState(key = "currentTab", it) {
+                                    it.Content()
+                                }
                             }
                         }
 

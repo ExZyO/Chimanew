@@ -1,26 +1,12 @@
-# What's New in Chimanew v2.6.61
+# What's New in Chimanew v2.6.62
 
-### Consolidated Updates Feed & Anti-Lag Optimization
-* **Consolidated Series Cards**: Updates are now consolidated into a single card per title, displaying the latest chapter name, a relative timestamp ("15m ago"), and a +X pill badge for extra chapters.
-* **Bump-to-Top Sorting**: When a series receives a new chapter or episode, it immediately moves to the very top of your feed above earlier entries.
-* **Smart Tap & Expandable Cards**:
-  - **Tap Title / Row**: Instantly begins reading or watching the earliest unread chapter/episode.
-  - **Tap Chevron (v)**: Smoothly expands the card in-place to reveal individual child chapters.
-  - **Tap Cover**: Directly opens the entry details screen.
-* **Full Group Gestures & Downloads**:
-  - **Long-Press**: Selects all new chapters in that card for bulk download, marking as read, or deleting.
-  - **Swipe**: Swiping the card marks, bookmarks, or downloads all new chapters in that series group.
-  - **Download Button**: One-tap downloads all new chapters in the card.
-  - **When Expanded**: Individual chapters can still be tapped, swiped, or selected independently.
-* **Silky Smooth 120 FPS Scrolling**: Applied Library performance parity to the Updates feed. Collapsed child chapters are omitted from lazy composition, dropping active list items from 1,500 down to ~100 for lag-free scrolling.
-* **Feed Preference Toggle**: Easily switch between Consolidated Mode and Classic List anytime in Settings or the Updates filter sheet.
+### Global Floating Dock Inset Fix
+* **Unobstructed Bottom Content**: Added a global 96dp dock padding provider to Tachiyomi's core Scaffold architecture and Novel Updates. The last items in Updates, Browse (Sources, Extensions, Migration, Feed), History, and More now scroll completely clear of the floating dynamic liquid glass navbar dock.
 
-### 1500-Item Truncation Ceiling & Multi-Scanlator Tracker Precision
-* **Anti-Truncation Limit**: Raised the SQL update buffer ceiling from 500 to 1,500 across Manga, Anime, and Novels, ensuring large bulk releases never push your older updates off the screen.
-* **Tracker Update Precision**: Solved duplicate scanlators and decimal chapters (10.5, extras) by comparing tracker totals against latestChapterNumber (GetChapterSummaryByMangaId).
-* **ComicK Chapter Count Sync**: Automatically retrieves total chapters from ComicK metadata (/titles/{hid}) on refresh.
+### 10,000-Item Updates Buffer Ceiling
+* **Multi-Scanlator Truncation Prevention**: Increased the updates SQL query buffer from 1,500 to 10,000 across Manga, Anime, and Novels. When titles have multiple scanlation groups contributing hundreds of individual chapter entries, older series updates are preserved and never pushed off your feed.
 
-### Bug Fixes & Diagnostics
-* **Fixed Startup Crash Loop**: Shielded MainActivity from restoring orphaned extension settings dialogs after process recreation, and implemented SafeEditTextPreferenceDialogFragment to gracefully dismiss without crashing.
-* **Zero 24/7 Background Logging**: Restored system logcat *:E and routed all tracker update engine diagnostics through Chimanew's in-memory ChimanewDiagnostics under a toggleable UPDATES category.
-* **Instant App Update Check**: Removed the app update check cooldown so GitHub releases are checked immediately on launch.
+### Tracker Update Engine Precision & Rate-Limit Shield
+* **Strict Completed Series Enforcement**: Completed titles are never bypassed or repeatedly queried when the "Only update ongoing" restriction is active, preventing redundant network queries for finished series.
+* **Scanlator Inflation Protection**: Refined chapter comparison logic to evaluate true latest chapter numbers alongside local chapter counts, eliminating false-positive updates on titles with multiple scanlators.
+* **Rate-Limit & Timeout Shielding**: Restricted pre-flight online probes to un-cached titles, capped candidate queries at 5 items with concurrency control and pacing delays, fully eliminating AniList HTTP 429 rate-limit errors and MyAnimeList network timeouts.

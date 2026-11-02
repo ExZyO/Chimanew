@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -49,18 +50,25 @@ fun NovelUpdatesScreen(
     expandedState: Set<String> = emptySet(),
     consolidateUpdates: Boolean = true,
     collapseToggle: (key: String) -> Unit = {},
+    contentPadding: PaddingValues = PaddingValues(),
     onClickItem: (NovelUpdatesWithRelations) -> Unit,
 ) {
     if (isLoading) {
-        LoadingScreen()
+        LoadingScreen(Modifier.padding(contentPadding))
         return
     }
     if (items.isEmpty()) {
-        EmptyScreen(stringRes = MR.strings.information_no_recent_manga)
+        EmptyScreen(
+            stringRes = MR.strings.information_no_recent_manga,
+            modifier = Modifier.padding(contentPadding),
+        )
         return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+    ) {
         items.groupBy { it.dateFetch / 86_400_000L }.forEach { (day, dayUpdates) ->
             item(key = "novelUpdatesHeader-$day") {
                 ListGroupHeader(text = relativeDateText(dayUpdates.first().dateFetch))

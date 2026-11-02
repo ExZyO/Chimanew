@@ -39,6 +39,7 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,6 +55,8 @@ import androidx.compose.ui.util.fastMap
 import androidx.compose.ui.util.fastMapNotNull
 import androidx.compose.ui.util.fastMaxBy
 import kotlin.math.max
+
+val LocalFloatingDockBottomPadding = compositionLocalOf { 0.dp }
 
 /**
  * <a href="https://material.io/design/layout/understanding-layout.html" class="external" target="_blank">Material Design layout</a>.
@@ -292,7 +295,8 @@ private fun ScaffoldLayout(
                     },
                     // Tachiyomi: Also take account of fab height when providing inner padding
                     bottom = if (bottomBarPlaceables.isEmpty() || bottomBarHeightPx == 0) {
-                        max(insets.calculateBottomPadding(), fabOffsetDp)
+                        val floatingDockPadding = LocalFloatingDockBottomPadding.current
+                        max(insets.calculateBottomPadding() + floatingDockPadding, fabOffsetDp)
                     } else {
                         max(bottomBarHeightPx.toDp(), fabOffsetDp)
                     },

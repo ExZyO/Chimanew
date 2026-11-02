@@ -34,7 +34,7 @@ class NovelUpdatesScreenModel(
         screenModelScope.launch {
             val after = ZonedDateTime.now().minusMonths(3).toInstant().toEpochMilli()
             runCatching {
-                novelUpdatesRepository.awaitUpdates(after = after, limit = 1500L)
+                novelUpdatesRepository.awaitUpdates(after = after, limit = 10000L)
             }.onSuccess { updates ->
                 mutableState.update {
                     it.copy(isLoading = false, items = updates)

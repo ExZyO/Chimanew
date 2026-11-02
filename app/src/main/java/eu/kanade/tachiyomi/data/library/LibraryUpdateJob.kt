@@ -329,13 +329,16 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val trackerSignaledMangaIds = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
         if (isTrackerAssisted) {
             for (item in listToUpdate) {
+                if (MANGA_NON_COMPLETED in restrictions && item.manga.status.toInt() == SManga.COMPLETED) {
+                    continue
+                }
                 val tracks = allTracks[item.manga.id].orEmpty()
                 val summary = getChapterSummaryByMangaId.await(item.manga.id)
                 val latestNum = summary?.latestChapterNumber
                 val higherTrack = tracks.firstOrNull { track ->
                     track.totalChapters > 0L && (
-                        track.totalChapters > item.totalChapters ||
-                        (latestNum != null && track.totalChapters > latestNum)
+                        (latestNum != null && track.totalChapters > latestNum) ||
+                        (latestNum == null && track.totalChapters > item.totalChapters)
                     )
                 }
                 if (higherTrack != null) {
@@ -346,26 +349,28 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                 }
             }
 
-            // Probe candidate manga whose release window has passed or were marked completed,
+            // Probe candidate ongoing manga whose release window has passed,
             // discovering surprise releases across logged-in trackers (ComicK, MangaDex, MangaUpdates, AniList, etc.)
+            // Strictly cap to at most 5 un-cached candidates with rate-limit delays to protect AniList/MAL quotas
             val candidateManga = listToUpdate.filter {
                 it.manga.id !in trackerSignaledMangaIds &&
-                    (MANGA_OUTSIDE_RELEASE_PERIOD in restrictions && it.manga.nextUpdate > fetchWindowUpperBound ||
-                        MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED) &&
+                    !(MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED) &&
+                    (MANGA_OUTSIDE_RELEASE_PERIOD in restrictions && it.manga.nextUpdate > fetchWindowUpperBound) &&
                     allTracks[it.manga.id]?.any { track ->
-                        trackerManager.get(track.trackerId)?.isLoggedIn == true
+                        track.totalChapters == 0L && trackerManager.get(track.trackerId)?.isLoggedIn == true
                     } == true
-            }
+            }.take(5)
 
             if (candidateManga.isNotEmpty()) {
                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                    "Running pre-flight probe for ${candidateManga.size} tracked candidates..."
+                    "Running pre-flight probe for ${candidateManga.size} uncached tracked candidates..."
                 }
                 coroutineScope {
-                    val checkSemaphore = Semaphore(6)
+                    val checkSemaphore = Semaphore(1)
                     candidateManga.map { item ->
                         async {
                             checkSemaphore.withPermit {
+                                delay(1200L)
                                 val tracks = allTracks[item.manga.id].orEmpty()
                                 val summary = getChapterSummaryByMangaId.await(item.manga.id)
                                 val latestNum = summary?.latestChapterNumber
@@ -383,13 +388,13 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                     "${service.name} returned totalChapters=${refreshed.totalChapters} (local=${item.totalChapters}, latestNum=$latestNum) for '${item.manga.title}'"
                                                 }
                                                 val isAhead = refreshed.totalChapters > 0L && (
-                                                    refreshed.totalChapters > item.totalChapters ||
-                                                    (latestNum != null && refreshed.totalChapters > latestNum)
+                                                    (latestNum != null && refreshed.totalChapters > latestNum) ||
+                                                    (latestNum == null && refreshed.totalChapters > item.totalChapters)
                                                 )
                                                 if (isAhead) {
                                                     trackerSignaledMangaIds.add(item.manga.id)
                                                     ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                                                        "⭐ Tracker signal DETECTED for '${item.manga.title}' via ${service.name}! Bypassing restrictions and prioritizing."
+                                                        "⭐ Tracker signal DETECTED for '${item.manga.title}' via ${service.name}! Prioritizing in queue."
                                                     }
                                                     break
                                                 }
@@ -424,15 +429,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED -> {
-                        if (it.manga.id in trackerSignaledMangaIds) {
-                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                                "Bypassing MANGA_NON_COMPLETED for '${it.manga.title}' because tracker signaled new chapters!"
-                            }
-                            true
-                        } else {
-                            skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_completed))
-                            false
-                        }
+                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_completed))
+                        false
                     }
 
                     MANGA_HAS_UNREAD in restrictions && it.unreadCount != 0L -> {
