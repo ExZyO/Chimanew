@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.data.track.BaseTracker
 import eu.kanade.tachiyomi.data.track.DeletableTracker
 import eu.kanade.tachiyomi.data.track.comick.dto.ComickOAuth
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import tachiyomi.i18n.MR
@@ -42,7 +44,7 @@ class Comick(id: Long) : BaseTracker(id, "Comick"), DeletableTracker {
 
     override fun getCompletionStatus(): Long = COMPLETED
 
-    override fun getScoreList(): List<String> = IntRange(0, 10).map(Int::toString).toList()
+    override fun getScoreList(): ImmutableList<String> = IntRange(0, 10).map(Int::toString).toImmutableList()
 
     override fun displayScore(track: DomainTrack): String = track.score.toInt().toString()
 
@@ -87,11 +89,20 @@ class Comick(id: Long) : BaseTracker(id, "Comick"), DeletableTracker {
         return api.search(query)
     }
 
-    override suspend fun refresh(track: Track): Track {
-        val remoteTrack = api.findLibManga(track) ?: throw Exception("Could not find manga")
-        track.copyPersonalFrom(remoteTrack)
-        return track
+    // SY -->
+    override suspend fun searchById(id: String): TrackSearch? {
+        val hid = if (id.all { it.isDigit() }) {
+            id.toLongOrNull()?.toHid() ?: id
+        } else {
+            id
+        }
+        return api.getMangaDetails(hid)
     }
+    // SY <--
+
+    // KMK -->
+    override fun hasNotStartedReading(status: Long): Boolean = status == PLAN_TO_READ
+    // KMK <--
 
     override suspend fun login(username: String, password: String) = login(password)
 
@@ -100,17 +111,17 @@ class Comick(id: Long) : BaseTracker(id, "Comick"), DeletableTracker {
             val oauth = api.getAccessToken(code)
             interceptor.setAuth(oauth)
             val currentUser = api.getCurrentUser()
-            saveDisplayUsername(currentUser.username ?: currentUser.id)
-            saveCredentials("user", oauth.accessToken)
+            saveCredentials(currentUser.username ?: currentUser.id, oauth.accessToken)
         } catch (e: Exception) {
             logout()
             if (e is ComickMissingScopesException) throw e
         }
     }
 
-    override suspend fun updateUserConfig() {
-        val currentUser = api.getCurrentUser()
-        saveDisplayUsername(currentUser.username ?: currentUser.id)
+    override suspend fun refresh(track: Track): Track {
+        val remoteTrack = api.findLibManga(track) ?: throw Exception("Could not find manga")
+        track.copyPersonalFrom(remoteTrack)
+        return track
     }
 
     fun saveToken(oauth: ComickOAuth?) {
