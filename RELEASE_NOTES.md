@@ -1,3 +1,13 @@
+# What's New in Chimanew v2.6.58
+
+### ⚡ Phase 2: Tracker-Assisted Update Engine
+* **Tracker-Assisted Updates**: Connected linked trackers (ComicK, MangaDex, MangaUpdates, AniList) directly into the library update engine.
+* **Smart Interval Bypass**: Series whose release intervals pushed them outside the normal check window (`MANGA_OUTSIDE_RELEASE_PERIOD`) are no longer skipped for weeks if their linked trackers signal that new chapters were published.
+* **Active Tracker Pre-Flight**: For series on hiatus or irregular schedules, the engine performs a lightweight pre-flight check across logged-in trackers to detect unannounced releases.
+* **Priority Queue Elevation**: Titles with confirmed tracker update signals are moved to the very front of the update queue so newly published chapters download first.
+* **Polite Source Throttling**: Added gentle 250ms spacing between sequential requests to the same source domain, eliminating Cloudflare 403 blocks and 429 rate limit errors during large library updates.
+* **Global Update Toggle**: Added a toggle under **Settings → Library → Global update** to control tracker-assisted updates.
+
 # What's New in Chimanew v2.6.57
 
 ### 🛠️ ComicK Tracker Search Fix

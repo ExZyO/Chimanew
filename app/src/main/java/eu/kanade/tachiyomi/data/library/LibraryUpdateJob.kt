@@ -48,6 +48,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -307,6 +308,66 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val restrictions = libraryPreferences.autoUpdateMangaRestrictions().get()
         val skippedUpdates = mutableListOf<Pair<Manga, String?>>()
         val (_, fetchWindowUpperBound) = fetchInterval.getWindow(ZonedDateTime.now())
+        val isTrackerAssisted = libraryPreferences.trackerAssistedUpdates().get()
+
+        // Tracker-Assisted Update Engine: Query tracks for library entries
+        val allTracks = if (isTrackerAssisted) {
+            getTracks.await().groupBy { it.mangaId }
+        } else {
+            emptyMap()
+        }
+
+        val trackerSignaledMangaIds = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
+        if (isTrackerAssisted) {
+            for (item in listToUpdate) {
+                val tracks = allTracks[item.manga.id].orEmpty()
+                if (tracks.any { it.totalChapters > item.totalChapters && it.totalChapters > 0L }) {
+                    trackerSignaledMangaIds.add(item.manga.id)
+                }
+            }
+
+            // For manga outside release period, perform pre-flight check across logged-in trackers
+            if (MANGA_OUTSIDE_RELEASE_PERIOD in restrictions) {
+                val candidateManga = listToUpdate.filter {
+                    it.manga.nextUpdate > fetchWindowUpperBound &&
+                        it.manga.id !in trackerSignaledMangaIds &&
+                        allTracks[it.manga.id]?.any { track ->
+                            trackerManager.get(track.trackerId)?.isLoggedIn == true
+                        } == true
+                }
+
+                if (candidateManga.isNotEmpty()) {
+                    coroutineScope {
+                        val checkSemaphore = Semaphore(6)
+                        candidateManga.map { item ->
+                            async {
+                                checkSemaphore.withPermit {
+                                    val tracks = allTracks[item.manga.id].orEmpty()
+                                    for (track in tracks) {
+                                        val service = trackerManager.get(track.trackerId)
+                                        if (service?.isLoggedIn == true) {
+                                            try {
+                                                val refreshed = service.refresh(track.toDbTrack()).toDomainTrack()
+                                                if (refreshed != null) {
+                                                    insertTrack.await(refreshed)
+                                                    if (refreshed.totalChapters > item.totalChapters && refreshed.totalChapters > 0L) {
+                                                        trackerSignaledMangaIds.add(item.manga.id)
+                                                        break
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                if (e is CancellationException) throw e
+                                                // Ignore individual tracker refresh failures during pre-flight
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }.awaitAll()
+                    }
+                }
+            }
+        }
 
         mangaToUpdate = listToUpdate
             // SY -->
@@ -337,7 +398,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         false
                     }
 
-                    MANGA_OUTSIDE_RELEASE_PERIOD in restrictions && it.manga.nextUpdate > fetchWindowUpperBound -> {
+                    MANGA_OUTSIDE_RELEASE_PERIOD in restrictions &&
+                        it.manga.nextUpdate > fetchWindowUpperBound &&
+                        it.manga.id !in trackerSignaledMangaIds -> {
                         skippedUpdates.add(
                             it.manga to
                                 context.stringResource(MR.strings.skipped_reason_not_in_release_period),
@@ -350,6 +413,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             }
             .sortedWith(
                 compareByDescending<LibraryManga> {
+                    // Highest priority: manga that trackers signal have new chapters!
+                    it.manga.id in trackerSignaledMangaIds
+                }.thenByDescending {
                     // Prefer manga updating today
                     it.manga.nextUpdate <= fetchWindowUpperBound
                 }.thenByDescending {
@@ -432,13 +498,16 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                     }
                                 }
                             }
-                            mangaInSource.forEach { libraryManga ->
+                            mangaInSource.forEachIndexed { index, libraryManga ->
+                                if (index > 0) {
+                                    delay(250)
+                                }
                                 val manga = libraryManga.manga
                                 ensureActive()
 
                                 // Don't continue to update if manga is not in library
                                 if (getManga.await(manga.id)?.favorite != true) {
-                                    return@forEach
+                                    return@forEachIndexed
                                 }
 
                                 withUpdateNotification(
@@ -462,6 +531,21 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
                                             // Convert to the manga that contains new chapters
                                             newUpdates.add(manga to newChapters.toTypedArray())
+
+                                            // Keep local track chapter counts aligned
+                                            if (libraryPreferences.trackerAssistedUpdates().get()) {
+                                                try {
+                                                    val tracks = getTracks.await(manga.id)
+                                                    val updatedTotal = libraryManga.totalChapters + newChapters.size
+                                                    for (track in tracks) {
+                                                        if (track.totalChapters < updatedTotal) {
+                                                            insertTrack.await(track.copy(totalChapters = updatedTotal))
+                                                        }
+                                                    }
+                                                } catch (e: Exception) {
+                                                    if (e is CancellationException) throw e
+                                                }
+                                            }
                                         }
                                         clearErrorFromDB(mangaId = manga.id)
                                     } catch (e: Throwable) {
