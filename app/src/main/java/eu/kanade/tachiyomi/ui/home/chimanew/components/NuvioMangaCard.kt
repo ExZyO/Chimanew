@@ -189,7 +189,7 @@ fun NuvioMangaCard(
                 val prefix = if (item.mediaType == 1) "Ep." else "Ch."
                 val chapterText = when {
                     item.isDiscovery -> {
-                        item.communityRatings.firstOrNull()?.let { "★ ${it.score}" }
+                        item.communityRatings.firstOrNull()?.let { "★ ${String.format(java.util.Locale.ROOT, "%.1f", it.score10)}" }
                             ?: item.genres.firstOrNull()
                             ?: "Trending"
                     }

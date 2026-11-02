@@ -42,6 +42,8 @@ import tachiyomi.domain.novel.repository.NovelRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.TimeUnit
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 
 /**
  * Background refresh for favorited extension novels: fetches each source's
@@ -103,10 +105,8 @@ class NovelUpdateJob(private val context: Context, workerParams: WorkerParameter
         // Smart update restrictions
         val isManual = tags.contains(WORK_NAME_MANUAL)
         val restrictions = libraryPreferences.autoUpdateNovelRestrictions().get()
-        logcat.LogPriority.INFO.let {
-            tachiyomi.core.common.util.system.logcat(it) {
-                "[UPDATES] [NovelUpdateJob] Starting evaluation for ${categoryFilteredNovels.size} novels. isManual=$isManual, restrictions=$restrictions"
-            }
+        logcat(LogPriority.INFO) {
+            "[UPDATES] [NovelUpdateJob] Starting evaluation for ${categoryFilteredNovels.size} novels. isManual=$isManual, restrictions=$restrictions"
         }
 
         // Release window computed once: due novels run first, the rest wait

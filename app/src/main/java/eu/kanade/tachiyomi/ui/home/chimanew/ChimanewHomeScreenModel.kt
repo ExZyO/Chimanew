@@ -10,9 +10,7 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.navigator.Navigator
 import chimahon.novel.interactor.GetNextNovelChapters
 import chimahon.novel.interactor.UpdateNovel
-import chimahon.novel.model.BookMetadata
 import chimahon.novel.source.LocalNovelFiles
-import chimahon.novel.source.SourceChapterBookBuilder
 import chimahon.novel.ui.detail.NovelDetailScreen
 import chimahon.novel.ui.reader.NovelReaderActivity
 import eu.kanade.domain.track.model.toDbTrack
@@ -56,6 +54,7 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.model.AnimeCategory
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.entries.anime.interactor.GetAnime
+import tachiyomi.domain.entries.anime.interactor.GetLibraryAnime
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.AnimeCover
 import tachiyomi.domain.entries.anime.model.asAnimeCover
@@ -142,6 +141,7 @@ data class HomeShelf(
     val isResumeOnTap: Boolean = false,
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChimanewHomeScreenModel(
     private val preferences: ChimanewPreferences = Injekt.get(),
     // Manga
@@ -223,7 +223,6 @@ class ChimanewHomeScreenModel(
         }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     init {
         screenModelScope.launchIO {
             preferences.categoryArtworkRulesUpdated().changes().collectLatest {
@@ -920,6 +919,10 @@ class ChimanewHomeScreenModel(
             val distinctHistory = data.historyList.distinctBy { it.novelId }
             val favoritesByNovelId = data.favoritesList.associateBy { it.id }
 
+            fun parseNovelGenres(genre: String?): List<String> {
+                return genre?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+            }
+
             fun createNovelItem(
                 novelId: Long,
                 title: String,
@@ -956,7 +959,7 @@ class ChimanewHomeScreenModel(
                     thumbnailUrl = h.novelThumbnailUrl,
                     lastChapterNumber = h.chapterNumber.toDouble().takeIf { it >= 0 },
                     lastChapterId = h.chapterId,
-                    genres = fav?.genre ?: emptyList(),
+                    genres = parseNovelGenres(fav?.genre),
                     description = fav?.description,
                     inLibrary = fav != null,
                 )
@@ -968,7 +971,7 @@ class ChimanewHomeScreenModel(
                     novelId = novel.id,
                     title = novel.title,
                     thumbnailUrl = novel.thumbnailUrl,
-                    genres = novel.genre ?: emptyList(),
+                    genres = parseNovelGenres(novel.genre),
                     description = novel.description,
                     inLibrary = true,
                 )
@@ -1002,7 +1005,7 @@ class ChimanewHomeScreenModel(
                             novelId = novel.id,
                             title = novel.title,
                             thumbnailUrl = novel.thumbnailUrl,
-                            genres = novel.genre ?: emptyList(),
+                            genres = parseNovelGenres(novel.genre),
                             description = novel.description,
                             inLibrary = true,
                         )
@@ -1049,7 +1052,7 @@ class ChimanewHomeScreenModel(
                                 novelId = novel.id,
                                 title = novel.title,
                                 thumbnailUrl = novel.thumbnailUrl,
-                                genres = novel.genre ?: emptyList(),
+                                genres = parseNovelGenres(novel.genre),
                                 description = novel.description,
                                 inLibrary = true,
                             )
@@ -1065,7 +1068,7 @@ class ChimanewHomeScreenModel(
                     novelId = novel.id,
                     title = novel.title,
                     thumbnailUrl = novel.thumbnailUrl,
-                    genres = novel.genre ?: emptyList(),
+                    genres = parseNovelGenres(novel.genre),
                     description = novel.description,
                     inLibrary = true,
                 )
@@ -1136,7 +1139,7 @@ class ChimanewHomeScreenModel(
             if (novel == null) return@launchIO
             val localFolder = novel.localFolder
             if (localFolder != null) {
-                val dir = LocalNovelFiles.ensureReadableDir(context, File(localFolder))
+                val dir = LocalNovelFiles.ensureReadableDir(context, localFolder)
                 if (dir != null) {
                     withContext(Dispatchers.Main) {
                         NovelReaderActivity.launch(context, dir, novelId)
@@ -1174,7 +1177,7 @@ class ChimanewHomeScreenModel(
     fun updateTrackStatus(mangaId: Long, trackerId: Long, status: Long) {
         screenModelScope.launchIO {
             try {
-                val track = trackRepository.getTrackByMangaId(mangaId) ?: return@launchIO
+                val track = trackRepository.getTracksByMangaId(mangaId).firstOrNull { it.trackerId == trackerId } ?: return@launchIO
                 val updatedTrack = track.copy(status = status)
                 trackRepository.insert(updatedTrack)
                 val tracker = trackerManager.get(trackerId)
@@ -1198,7 +1201,7 @@ private fun DiscoveryItem.toHomeMangaItem(libraryId: Long?, mediaType: Int): Hom
         genres = genres,
         description = description,
         communityRatings = averageScore?.let {
-            listOf(CommunityRating("AniList", it / 10f, 10f))
+            listOf(CommunityRating(score10 = it / 10f, score100 = it, source = "AniList"))
         } ?: emptyList(),
         inLibrary = libraryId != null,
         mediaType = mediaType,

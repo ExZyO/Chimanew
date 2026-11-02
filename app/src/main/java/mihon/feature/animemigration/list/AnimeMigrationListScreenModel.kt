@@ -256,11 +256,11 @@ class AnimeMigrationListScreenModel(
     }
 
     private suspend fun updateMigrationProgress() {
-        val finished = state.items.count { it.searchResult.value != SearchResult.Searching }
-        val complete = state.migrationComplete()
-        val successCount = state.items.count { it.searchResult.value is SearchResult.Success }
+        val finished = items.count { it.searchResult.value != SearchResult.Searching }
+        val complete = migrationComplete()
+        val successCount = items.count { it.searchResult.value is SearchResult.Success }
         logcat(LogPriority.INFO) {
-            "[MIGRATION] Anime progress: finished=$finished/${state.items.size}, matched=$successCount, complete=$complete"
+            "[MIGRATION] Anime progress: finished=$finished/${items.size}, matched=$successCount, complete=$complete"
         }
         mutableState.update { state ->
             state.copy(
@@ -441,9 +441,9 @@ class AnimeMigrationListScreenModel(
     }
 
     fun showMigrateDialog(copy: Boolean) {
-        val skipped = state.items.count { it.searchResult.value !is SearchResult.Success }
+        val skipped = items.count { it.searchResult.value !is SearchResult.Success }
         logcat(LogPriority.INFO) {
-            "[MIGRATION] Anime showMigrateDialog(copy=$copy): total=${state.items.size}, skipped=$skipped"
+            "[MIGRATION] Anime showMigrateDialog(copy=$copy): total=${items.size}, skipped=$skipped"
         }
         mutableState.update { state ->
             state.copy(
