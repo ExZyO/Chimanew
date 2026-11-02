@@ -1,3 +1,10 @@
+# What's New in Chimanew v2.6.57
+
+### 🛠️ ComicK Tracker Search Fix
+* **Fixed ComicK Title Search**: Fixed a JSON parsing mismatch (`Unexpected JSON token`) when searching ComicK for manga entries by aligning the search endpoint with ComicK's authenticated integrations API (`/integrations/v1/titles`).
+* **Query Safeguards**: Added automatic 100-character query capping to prevent ComicK API 400 Bad Request errors.
+* **Resilient Model Fallbacks**: Added safe default fallbacks for missing metadata fields from search responses.
+
 # What's New in Chimanew v2.6.56
 
 ### 📚 Official ComicK Tracker Integration

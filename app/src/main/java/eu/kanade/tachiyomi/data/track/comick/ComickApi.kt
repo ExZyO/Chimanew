@@ -171,18 +171,26 @@ class ComickApi(
 
     suspend fun search(query: String): List<TrackSearch> {
         return withContext(Dispatchers.IO) {
-            val url = "$API_BASE_URL/v1.0/search".toUri().buildUpon()
-                .appendQueryParameter("q", query)
-                .appendQueryParameter("limit", "25")
-                .appendQueryParameter("tachiyomi", "true")
+            val url = "$RESOURCE_URL/titles".toUri().buildUpon()
+                // Comick throws a 400 when the query is over 100 characters
+                .appendQueryParameter("q", query.take(100))
+                .appendQueryParameter("media_type", "manga")
+                .appendQueryParameter("limit", "20")
                 .build()
 
             with(json) {
-                authClient.newCall(GET(url.toString()))
-                    .awaitSuccess()
-                    .parseAs<ComickSearchResult>()
-                    .data
-                    .map { it.toTrackSearch(trackerId) }
+                try {
+                    authClient.newCall(GET(url.toString()))
+                        .awaitSuccess()
+                        .parseAs<ComickSearchResult>()
+                        .data
+                        .map { it.toTrackSearch(trackerId) }
+                } catch (e: HttpException) {
+                    if (e.code == 404) {
+                        return@with emptyList()
+                    }
+                    throw e
+                }
             }
         }
     }

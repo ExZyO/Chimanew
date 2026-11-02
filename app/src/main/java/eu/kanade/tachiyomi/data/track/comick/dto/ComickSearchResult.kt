@@ -18,7 +18,7 @@ data class ComickTitleLookupResult(
 @Serializable
 data class ComickSearchItem(
     val hid: String,
-    val title: String,
+    val title: String = "",
     val year: Int? = null,
     val description: String? = null,
     val status: Int? = null,
@@ -27,7 +27,7 @@ data class ComickSearchItem(
     @SerialName("cover_url")
     val coverUrl: String? = null,
     val country: String? = null,
-    val url: String,
+    val url: String = "",
 ) {
     fun toTrackSearch(trackerId: Long): TrackSearch {
         return TrackSearch.create(trackerId).apply {
