@@ -69,6 +69,8 @@ import eu.kanade.presentation.manga.components.CommunityRatingBadge
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.data.cache.CoverCache
+import eu.kanade.tachiyomi.ui.home.chimanew.coverUrl
+import eu.kanade.tachiyomi.ui.home.chimanew.vibrantColor
 import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
@@ -112,10 +114,10 @@ fun NuvioHeroSection(
         if ("banner" !in heroArtworkSources) return false
         val banner = item.highResBannerUrl
         if (banner.isNullOrBlank()) return false
-        val cover = item.highResCoverUrl ?: item.coverData.ogUrl
+        val cover = item.highResCoverUrl ?: item.coverUrl
         if (!cover.isNullOrBlank() && banner.equals(cover, ignoreCase = true)) return false
         if (banner.contains("bookwalker", ignoreCase = true)) return false
-        val defaultCover = item.coverData.ogUrl
+        val defaultCover = item.coverUrl
         if (!defaultCover.isNullOrBlank() && banner.equals(defaultCover, ignoreCase = true)) return false
         return true
     }
@@ -123,7 +125,7 @@ fun NuvioHeroSection(
     fun hasAuthenticCover(item: HomeMangaItem): Boolean {
         if (coverCache.hasCustomCover(item.mangaId)) return true
         val hasHighRes = !item.highResCoverUrl.isNullOrBlank() && "cover" in heroArtworkSources
-        val hasDefault = !item.coverData.ogUrl.isNullOrBlank() && "default" in heroArtworkSources
+        val hasDefault = !item.coverUrl.isNullOrBlank() && "default" in heroArtworkSources
         return hasHighRes || hasDefault
     }
 
@@ -194,7 +196,7 @@ fun NuvioHeroSection(
     val activeBannerUrl = currentHeroItem?.let { item ->
         val hasBanner = hasAuthenticBanner(item)
         if (hasBanner && "banner" in heroArtworkSources) item.highResBannerUrl
-        else item.highResCoverUrl ?: item.coverData.ogUrl
+        else item.highResCoverUrl ?: item.coverUrl
     }
 
     var dynamicExtractedColor by remember { mutableStateOf<Color?>(null) }
@@ -234,8 +236,7 @@ fun NuvioHeroSection(
     }
 
     val ambientTargetColor = dynamicExtractedColor
-        ?: currentHeroItem?.coverData?.vibrantCoverColor?.let { Color(it) }
-        ?: currentHeroItem?.coverData?.dominantCoverColors?.first?.let { Color(it) }
+        ?: currentHeroItem?.vibrantColor
         ?: MaterialTheme.colorScheme.primary
 
     val animatedAmbientColor by animateColorAsState(
@@ -280,8 +281,7 @@ fun NuvioHeroSection(
         ) { page ->
             val actualIndex = if (isLooping) page % displayItems.size else page
             val item = displayItems[actualIndex]
-            val accentColor = item.coverData.vibrantCoverColor?.let { Color(it) }
-                ?: item.coverData.dominantCoverColors?.first?.let { Color(it) }
+            val accentColor = item.vibrantColor
                 ?: MaterialTheme.colorScheme.primary
             val surfaceColor = MaterialTheme.colorScheme.background
 
@@ -296,7 +296,7 @@ fun NuvioHeroSection(
             val heroMetadataLayout by preferences.heroMetadataLayout().collectPrefAsState()
 
             val posterImageModel: Any = when {
-                coverCache.hasCustomCover(item.mangaId) -> item.coverData
+                item.coverData is tachiyomi.domain.manga.model.MangaCover && coverCache.hasCustomCover(item.mangaId) -> item.coverData
                 "cover" in heroArtworkSources && !item.highResCoverUrl.isNullOrBlank() -> item.highResCoverUrl
                 "default" in heroArtworkSources -> item.coverData
                 else -> item.highResCoverUrl ?: item.coverData
@@ -673,10 +673,12 @@ fun NuvioHeroSection(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            val buttonText = if (item.lastChapterNumber != null) {
-                                "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
-                            } else {
-                                "Start Reading"
+                            val prefix = if (item.mediaType == 1) "Ep." else "Ch."
+                            val startAction = if (item.mediaType == 1) "Start Watching" else "Start Reading"
+                            val buttonText = when {
+                                item.isDiscovery -> "Explore"
+                                item.lastChapterNumber != null -> "Resume $prefix ${formatChapterNumber(item.lastChapterNumber)}"
+                                else -> startAction
                             }
 
                             Button(
@@ -1081,10 +1083,12 @@ private fun HeroAmbientForegroundContent(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            val baseButtonText = if (item.lastChapterNumber != null) {
-                "Resume Ch. ${formatChapterNumber(item.lastChapterNumber)}"
-            } else {
-                "Start Reading"
+            val prefix = if (item.mediaType == 1) "Ep." else "Ch."
+            val startAction = if (item.mediaType == 1) "Start Watching" else "Start Reading"
+            val baseButtonText = when {
+                item.isDiscovery -> "Explore"
+                item.lastChapterNumber != null -> "Resume $prefix ${formatChapterNumber(item.lastChapterNumber)}"
+                else -> startAction
             }
 
             val buttonText = if (heroMetadataLayout == 3 && compactProgressText.isNotBlank()) {

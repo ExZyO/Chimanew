@@ -389,6 +389,15 @@ object SettingsAppearanceScreen : SearchableSettings {
                         )
                     },
                 ),
+                Preference.PreferenceItem.TextPreference(
+                    title = "Poster & Card Styling",
+                    subtitle = "Customize card dimensions, corner radius, and 3D depth sheen",
+                    onClick = {
+                        navigator.push(
+                            eu.kanade.presentation.more.settings.screen.appearance.PosterCustomizationSettingsScreen(),
+                        )
+                    },
+                ),
             ),
         )
     }

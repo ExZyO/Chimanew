@@ -414,6 +414,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             }
         }
 
+        val isManual = tags.contains(WORK_NAME_MANUAL)
         mangaToUpdate = listToUpdate
             // SY -->
             .distinctBy { it.manga.id }
@@ -437,20 +438,36 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_HAS_UNREAD in restrictions && it.unreadCount != 0L -> {
-                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_caught_up))
-                        false
+                        if (isManual) {
+                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                "Bypassing MANGA_HAS_UNREAD for '${it.manga.title}' (manual library update initiated by user)."
+                            }
+                            true
+                        } else if (it.manga.id in trackerSignaledMangaIds) {
+                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                "Bypassing MANGA_HAS_UNREAD for '${it.manga.title}' because tracker signaled new chapters!"
+                            }
+                            true
+                        } else {
+                            skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_caught_up))
+                            false
+                        }
                     }
 
                     MANGA_NON_READ in restrictions && it.totalChapters > 0L && !it.hasStarted -> {
-                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_started))
-                        false
+                        if (isManual || it.manga.id in trackerSignaledMangaIds) {
+                            true
+                        } else {
+                            skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_started))
+                            false
+                        }
                     }
 
                     MANGA_OUTSIDE_RELEASE_PERIOD in restrictions &&
                         it.manga.nextUpdate > fetchWindowUpperBound -> {
-                        if (it.manga.id in trackerSignaledMangaIds) {
+                        if (isManual || it.manga.id in trackerSignaledMangaIds) {
                             ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                                "Bypassing MANGA_OUTSIDE_RELEASE_PERIOD for '${it.manga.title}' because tracker signaled new chapters!"
+                                "Bypassing MANGA_OUTSIDE_RELEASE_PERIOD for '${it.manga.title}' (manual update or tracker signal)."
                             }
                             true
                         } else {

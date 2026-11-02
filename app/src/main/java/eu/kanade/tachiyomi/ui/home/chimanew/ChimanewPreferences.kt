@@ -32,6 +32,30 @@ class ChimanewPreferences(
         "continue_reading:true,reading:true,plan_to_read:true,on_hold:true,completed:true,dropped:false,not_tracked:true,categories:true,recently_added:true",
     )
 
+    fun homeActiveMedia() = preferenceStore.getInt("pref_nuvio_home_active_media", 0) // 0 = Manga, 1 = Anime, 2 = Novels
+
+    fun homeShelfOrderAnime() = preferenceStore.getString(
+        "pref_chimanew_home_shelf_order_anime",
+        "continue_watching:true,watching:true,plan_to_watch:true,on_hold:true,completed:true,dropped:false,not_tracked:true,categories:true,recently_added:true,trending_anime:true",
+    )
+
+    fun homeShelfOrderNovel() = preferenceStore.getString(
+        "pref_chimanew_home_shelf_order_novel",
+        "continue_reading:true,reading:true,plan_to_read:true,on_hold:true,completed:true,dropped:false,not_tracked:true,categories:true,recently_added:true,trending_novels:true",
+    )
+
+    fun showHeroCarouselAnime() = preferenceStore.getBoolean("pref_nuvio_show_hero_anime", true)
+    fun heroSourceAnime() = preferenceStore.getInt("pref_nuvio_hero_source_anime", 0) // 0 = History, 1 = Categories, 2 = Trackers, 3 = Trending Anime
+    fun heroCategoriesAnime() = preferenceStore.getStringSet("pref_chimanew_hero_categories_anime", emptySet())
+    fun heroTrackerStatusesAnime() = preferenceStore.getStringSet(
+        "pref_chimanew_hero_tracker_statuses_anime",
+        setOf("reading"),
+    )
+
+    fun showHeroCarouselNovel() = preferenceStore.getBoolean("pref_nuvio_show_hero_novel", true)
+    fun heroSourceNovel() = preferenceStore.getInt("pref_nuvio_hero_source_novel", 0) // 0 = History, 1 = Categories, 2 = Reading, 3 = Trending Novels
+    fun heroCategoriesNovel() = preferenceStore.getStringSet("pref_chimanew_hero_categories_novel", emptySet())
+
     fun showContinueReading() = preferenceStore.getBoolean("pref_nuvio_show_continue_reading", true)
 
     fun showRecentlyUpdated() = preferenceStore.getBoolean("pref_nuvio_show_recently_updated", true)

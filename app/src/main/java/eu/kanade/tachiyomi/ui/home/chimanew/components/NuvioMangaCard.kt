@@ -43,7 +43,12 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.presentation.util.formatChapterNumber
+import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.domain.entries.anime.model.AnimeCover
 import eu.kanade.tachiyomi.ui.home.chimanew.HomeMangaItem
+import eu.kanade.tachiyomi.ui.home.chimanew.style.NuvioCardDepthSurface
+import eu.kanade.tachiyomi.ui.home.chimanew.style.nuvioCardDepth
+import eu.kanade.tachiyomi.ui.home.chimanew.style.rememberPosterCardStyleUiState
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -56,10 +61,13 @@ fun NuvioMangaCard(
     onLongClick: (() -> Unit)? = null,
 ) {
     val haptic = LocalHapticFeedback.current
-    val cardShape = RoundedCornerShape(12.dp)
-    val accentColor = item.coverData.vibrantCoverColor?.let { Color(it) }
-        ?: item.coverData.dominantCoverColors?.first?.let { Color(it) }
-        ?: MaterialTheme.colorScheme.primary
+    val posterStyle = rememberPosterCardStyleUiState()
+    val cardShape = RoundedCornerShape(posterStyle.cornerRadiusDp.dp)
+    val accentColor = when (val c = item.coverData) {
+        is MangaCover -> c.vibrantCoverColor?.let { Color(it) } ?: c.dominantCoverColors?.first?.let { Color(it) }
+        is AnimeCover -> c.vibrantCoverColor?.let { Color(it) } ?: c.dominantCoverColors?.first?.let { Color(it) }
+        else -> null
+    } ?: MaterialTheme.colorScheme.primary
 
     // EaZy Nuvio+ / Chimanew: Interactive snappy spring micro-animation on press
     val interactionSource = remember { MutableInteractionSource() }
@@ -75,13 +83,14 @@ fun NuvioMangaCard(
 
     Box(
         modifier = modifier
-            .width(132.dp)
-            .height(194.dp)
+            .width(posterStyle.widthDp.dp)
+            .height(posterStyle.heightDp.dp)
             .graphicsLayer {
                 scaleX = cardScale
                 scaleY = cardScale
             }
             .clip(cardShape)
+            .nuvioCardDepth(shape = cardShape, surface = NuvioCardDepthSurface.Posters)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -97,7 +106,11 @@ fun NuvioMangaCard(
         // 1. Cover image: Prioritize custom cover if set, then high-res AniList cover, falling back to local coverData
         // EaZy Nuvio+ / Chimanew: resilient cover fallback
         val coverCache = remember { Injekt.get<CoverCache>() }
-        val imageModel: Any = if (coverCache.hasCustomCover(item.mangaId)) item.coverData else (item.highResCoverUrl ?: item.coverData)
+        val imageModel: Any = if (item.coverData is MangaCover && coverCache.hasCustomCover(item.mangaId)) {
+            item.coverData
+        } else {
+            item.highResCoverUrl ?: item.coverData
+        }
         SubcomposeAsyncImage(
             model = imageModel,
             contentDescription = item.title,
@@ -154,56 +167,66 @@ fun NuvioMangaCard(
         )
 
         // 4. Card Content
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-        ) {
-            // Manga Title
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            // Chapter / In-Progress Info
-            val chapterText = when {
-                item.lastChapterNumber != null && !item.isChapterRead && item.lastPageRead > 0 -> {
-                    "Ch. ${formatChapterNumber(item.lastChapterNumber)}: p. ${item.lastPageRead + 1}"
-                }
-                item.lastChapterNumber != null -> {
-                    "Ch. ${formatChapterNumber(item.lastChapterNumber)}"
-                }
-                else -> {
-                    "${item.totalChapters} ch"
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 2.dp),
+        if (!posterStyle.hideLabelsEnabled) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
             ) {
+                // Manga Title
                 Text(
-                    text = chapterText,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.85f),
+                    text = item.title,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
                     ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (item.totalChapters > 0 && item.lastChapterNumber != null) {
+
+                // Chapter / Episode / Discovery Info
+                val prefix = if (item.mediaType == 1) "Ep." else "Ch."
+                val chapterText = when {
+                    item.isDiscovery -> {
+                        item.communityRatings.firstOrNull()?.let { "★ ${it.score}" }
+                            ?: item.genres.firstOrNull()
+                            ?: "Trending"
+                    }
+                    item.lastChapterNumber != null && !item.isChapterRead && item.lastPageRead > 0 -> {
+                        "$prefix ${formatChapterNumber(item.lastChapterNumber)}: p. ${item.lastPageRead + 1}"
+                    }
+                    item.lastChapterNumber != null -> {
+                        "$prefix ${formatChapterNumber(item.lastChapterNumber)}"
+                    }
+                    item.totalChapters > 0 -> {
+                        val unit = if (item.mediaType == 1) "ep" else "ch"
+                        "${item.totalChapters} $unit"
+                    }
+                    else -> item.genres.firstOrNull() ?: ""
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 2.dp),
+                ) {
                     Text(
-                        text = " / ${item.totalChapters}",
+                        text = chapterText,
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 9.sp,
-                            color = Color.White.copy(alpha = 0.50f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White.copy(alpha = 0.85f),
                         ),
                     )
+                    if (item.totalChapters > 0 && item.lastChapterNumber != null) {
+                        Text(
+                            text = " / ${item.totalChapters}",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                color = Color.White.copy(alpha = 0.50f),
+                            ),
+                        )
+                    }
                 }
             }
         }

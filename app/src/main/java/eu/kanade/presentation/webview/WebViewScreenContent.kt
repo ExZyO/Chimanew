@@ -49,6 +49,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.util.system.getHtml
 import eu.kanade.tachiyomi.util.system.isDebugBuildType
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
+import eu.kanade.tachiyomi.util.system.setUserAgent
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
@@ -111,6 +112,14 @@ fun WebViewScreenContent(
 
             override fun onPageFinished(view: WebView, url: String?) {
                 super.onPageFinished(view, url)
+                android.webkit.CookieManager.getInstance().flush()
+                val hasClearance = android.webkit.CookieManager.getInstance().getCookie(url)?.contains("cf_clearance") == true
+                if (hasClearance) {
+                    eu.kanade.tachiyomi.network.NetworkHelper.lastSolveAtMs = System.currentTimeMillis()
+                    url?.toUri()?.host?.let { host ->
+                        eu.kanade.tachiyomi.network.NetworkHelper.rememberSolveUa(host, view.settings.userAgentString)
+                    }
+                }
                 scope.launch {
                     val html = view.getHtml()
                     showCloudflareHelp = "window._cf_chl_opt" in html || "Ray ID is" in html
@@ -314,7 +323,7 @@ fun WebViewScreenContent(
                         ?.value
                         ?.takeIf { it.isNotBlank() }
                     customUserAgent?.let {
-                        webView.settings.userAgentString = it
+                        webView.setUserAgent(it)
                     }
                 },
                 onDispose = { webView ->

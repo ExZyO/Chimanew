@@ -400,13 +400,17 @@ class MigrationListScreenModel(
     }
 
     fun showMigrateDialog(copy: Boolean) {
+        val skipped = state.items.count { it.searchResult.value !is SearchResult.Success }
+        logcat(LogPriority.INFO) {
+            "[MIGRATION] Manga showMigrateDialog(copy=$copy): total=${state.items.size}, skipped=$skipped"
+        }
         mutableState.update { state ->
             state.copy(
                 dialog = Dialog.Migrate(
                     copy = copy,
                     // KMK -->
                     totalCount = state.items.size,
-                    skippedCount = state.items.count { it.searchResult.value == SearchResult.NotFound },
+                    skippedCount = skipped,
                     // KMK <--
                 ),
             )

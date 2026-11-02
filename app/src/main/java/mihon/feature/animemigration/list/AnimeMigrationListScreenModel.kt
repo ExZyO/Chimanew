@@ -256,10 +256,16 @@ class AnimeMigrationListScreenModel(
     }
 
     private suspend fun updateMigrationProgress() {
+        val finished = state.items.count { it.searchResult.value != SearchResult.Searching }
+        val complete = state.migrationComplete()
+        val successCount = state.items.count { it.searchResult.value is SearchResult.Success }
+        logcat(LogPriority.INFO) {
+            "[MIGRATION] Anime progress: finished=$finished/${state.items.size}, matched=$successCount, complete=$complete"
+        }
         mutableState.update { state ->
             state.copy(
-                finishedCount = state.items.count { it.searchResult.value != SearchResult.Searching },
-                migrationComplete = state.migrationComplete(),
+                finishedCount = finished,
+                migrationComplete = complete,
             )
         }
         if (items.isEmpty()) {
@@ -268,10 +274,7 @@ class AnimeMigrationListScreenModel(
     }
 
     private fun State.migrationComplete() =
-        items.all {
-            it.searchResult.value != SearchResult.Searching &&
-                it.searchResult.value !is SearchResult.MismatchedFetchType
-        } &&
+        items.all { it.searchResult.value != SearchResult.Searching } &&
             items.any { it.searchResult.value is SearchResult.Success }
 
     sealed interface MigrateSearchResult {
@@ -308,10 +311,12 @@ class AnimeMigrationListScreenModel(
 
             if (result == null) {
                 migratingAnime.searchResult.value = SearchResult.NotFound
+                updateMigrationProgress()
                 return@launchIO
             }
             if (result is MigrateSearchResult.Failure) {
                 migratingAnime.searchResult.value = SearchResult.NotFound
+                updateMigrationProgress()
                 withUIContext { onMissingEpisodes(result.fetchType) }
                 return@launchIO
             }
@@ -319,6 +324,7 @@ class AnimeMigrationListScreenModel(
             val resultAnime = (result as MigrateSearchResult.Success).anime
             if (migratingAnime.anime.fetchType != resultAnime.fetchType) {
                 migratingAnime.searchResult.value = resultAnime.toMismatchSearchResult()
+                updateMigrationProgress()
                 return@launchIO
             }
 
@@ -330,6 +336,9 @@ class AnimeMigrationListScreenModel(
                 // Ignore cancellations
                 throw e
             } catch (_: Exception) {
+            }
+            logcat(LogPriority.INFO) {
+                "[MIGRATION] Anime manual match applied: '${migratingAnime.anime.title}' -> '${resultAnime.title}' (id=${resultAnime.id})"
             }
             migratingAnime.searchResult.value = resultAnime.toSuccessSearchResult()
             updateMigrationProgress()
@@ -432,12 +441,16 @@ class AnimeMigrationListScreenModel(
     }
 
     fun showMigrateDialog(copy: Boolean) {
+        val skipped = state.items.count { it.searchResult.value !is SearchResult.Success }
+        logcat(LogPriority.INFO) {
+            "[MIGRATION] Anime showMigrateDialog(copy=$copy): total=${state.items.size}, skipped=$skipped"
+        }
         mutableState.update { state ->
             state.copy(
                 dialog = Dialog.Migrate(
                     copy = copy,
                     totalCount = state.items.size,
-                    skippedCount = state.items.count { it.searchResult.value == SearchResult.NotFound },
+                    skippedCount = skipped,
                 ),
             )
         }

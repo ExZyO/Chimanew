@@ -101,7 +101,13 @@ class NovelUpdateJob(private val context: Context, workerParams: WorkerParameter
         }
 
         // Smart update restrictions
+        val isManual = tags.contains(WORK_NAME_MANUAL)
         val restrictions = libraryPreferences.autoUpdateNovelRestrictions().get()
+        logcat.LogPriority.INFO.let {
+            tachiyomi.core.common.util.system.logcat(it) {
+                "[UPDATES] [NovelUpdateJob] Starting evaluation for ${categoryFilteredNovels.size} novels. isManual=$isManual, restrictions=$restrictions"
+            }
+        }
 
         // Release window computed once: due novels run first, the rest wait
         // for their nextUpdate.
@@ -132,7 +138,7 @@ class NovelUpdateJob(private val context: Context, workerParams: WorkerParameter
 
                 // Outside the release window: skip until nextUpdate (the pref
                 // key existed but was never enforced).
-                if (NOVEL_OUTSIDE_RELEASE_PERIOD in restrictions && novel.nextUpdate > fetchWindow.second) {
+                if (!isManual && NOVEL_OUTSIDE_RELEASE_PERIOD in restrictions && novel.nextUpdate > fetchWindow.second) {
                     continue
                 }
 
@@ -144,7 +150,7 @@ class NovelUpdateJob(private val context: Context, workerParams: WorkerParameter
                     val totalChapters = chapters.size
 
                     if (NOVEL_NON_COMPLETED in restrictions && novel.status == tachiyomi.domain.novel.model.Novel.COMPLETED) continue
-                    if (NOVEL_HAS_UNREAD in restrictions && unreadCount != 0) continue
+                    if (!isManual && NOVEL_HAS_UNREAD in restrictions && unreadCount != 0) continue
                     if (NOVEL_NON_READ in restrictions && totalChapters > 0 && !hasStarted) continue
                 }
 

@@ -195,7 +195,11 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             }
         }
 
+        val isManual = tags.contains(WORK_NAME_MANUAL)
         val restrictions = libraryPreferences.autoUpdateAnimeRestrictions().get()
+        logcat(LogPriority.INFO) {
+            "[UPDATES] [AnimeLibraryUpdateJob] Starting queue evaluation for ${listToUpdateWithSeasons.size} anime. isManual=$isManual, restrictions=$restrictions"
+        }
         val skippedUpdates = mutableListOf<Pair<Anime, String?>>()
         val (_, fetchWindowUpperBound) = fetchInterval.getWindow(ZonedDateTime.now())
 
@@ -216,7 +220,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                         false
                     }
 
-                    ANIME_HAS_UNVIEWED in restrictions && it.unseenCount != 0L -> {
+                    !isManual && ANIME_HAS_UNVIEWED in restrictions && it.unseenCount != 0L -> {
                         skippedUpdates.add(
                             it.anime to context.stringResource(MR.strings.skipped_reason_not_caught_up),
                         )
@@ -230,7 +234,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                         false
                     }
 
-                    ANIME_OUTSIDE_RELEASE_PERIOD in restrictions && it.anime.nextUpdate > fetchWindowUpperBound -> {
+                    !isManual && ANIME_OUTSIDE_RELEASE_PERIOD in restrictions && it.anime.nextUpdate > fetchWindowUpperBound -> {
                         skippedUpdates.add(
                             it.anime to context.stringResource(MR.strings.skipped_reason_not_in_release_period),
                         )

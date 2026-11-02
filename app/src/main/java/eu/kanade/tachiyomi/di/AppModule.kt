@@ -384,6 +384,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.BookWalkerCoverRepository(get<NetworkHelper>().client) }
         addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.BangumiCoverRepository(get<NetworkHelper>().client, get()) }
         addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository(get(), get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.ui.home.chimanew.data.DiscoveryRepository(get<NetworkHelper>().client, get(), app) }
 
         addSingletonFactory { chimahon.novel.sync.ttu.TtuOAuthManager(app) }
         addSingletonFactory { chimahon.novel.sync.ttu.SyncSettingsRepository(app) }

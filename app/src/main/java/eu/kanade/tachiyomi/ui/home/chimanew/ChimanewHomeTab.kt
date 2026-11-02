@@ -1,6 +1,7 @@
 // EaZy Nuvio+ / Chimanew
 package eu.kanade.tachiyomi.ui.home.chimanew
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,15 +24,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,7 +45,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -51,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,18 +81,26 @@ import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
+import eu.kanade.tachiyomi.ui.browse.animesource.globalsearch.GlobalAnimeSearchScreen
+import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
+import chimahon.novel.ui.browse.globalsearch.GlobalNovelSearchScreen
+import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.entries.anime.track.AnimeTrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioHeroSection
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioMangaShelf
 import eu.kanade.tachiyomi.ui.home.chimanew.components.NuvioQuickTrackerSheet
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.manga.track.TrackInfoDialogHomeScreen
+import eu.kanade.tachiyomi.ui.player.PlayerActivity
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import tachiyomi.domain.entries.anime.model.AnimeCover
+import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.i18n.stringResource
@@ -137,28 +151,69 @@ data object ChimanewHomeTab : Tab {
         }
 
         val onResumeClick: (HomeMangaItem) -> Unit = { item ->
-            // EaZy Nuvio+ / Chimanew: Instant launch if chapter ID is in progress; zero DB query delay
-            if (item.lastChapterId != null && !item.isChapterRead) {
-                val intent = ReaderActivity.newIntent(context, item.mangaId, item.lastChapterId)
-                context.startActivity(intent)
-            } else {
-                scope.launch {
-                    val chapter = screenModel.getResumeChapter(item.mangaId, item.lastChapterId)
-                    if (chapter != null) {
-                        val intent = ReaderActivity.newIntent(context, item.mangaId, chapter.id)
+            if (item.isDiscovery) {
+                when (item.mediaType) {
+                    MEDIA_TYPE_ANIME -> navigator.push(GlobalAnimeSearchScreen(item.title))
+                    MEDIA_TYPE_NOVEL -> navigator.push(GlobalNovelSearchScreen(item.title))
+                    else -> navigator.push(GlobalSearchScreen(item.title))
+                }
+            } else when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> {
+                    if (item.lastChapterId != null && !item.isChapterRead) {
+                        val intent = PlayerActivity.newIntent(context, item.mangaId, item.lastChapterId)
                         context.startActivity(intent)
                     } else {
-                        navigator.push(MangaScreen(item.mangaId))
+                        scope.launch {
+                            val ep = screenModel.getResumeEpisode(item.mangaId, item.lastChapterId)
+                            if (ep != null) {
+                                val intent = PlayerActivity.newIntent(context, item.mangaId, ep.id)
+                                context.startActivity(intent)
+                            } else {
+                                navigator.push(AnimeScreen(item.mangaId))
+                            }
+                        }
+                    }
+                }
+                MEDIA_TYPE_NOVEL -> {
+                    screenModel.resumeNovel(context, item.mangaId) { screen ->
+                        navigator.push(screen)
+                    }
+                }
+                else -> {
+                    // Manga
+                    if (item.lastChapterId != null && !item.isChapterRead) {
+                        val intent = ReaderActivity.newIntent(context, item.mangaId, item.lastChapterId)
+                        context.startActivity(intent)
+                    } else {
+                        scope.launch {
+                            val chapter = screenModel.getResumeChapter(item.mangaId, item.lastChapterId)
+                            if (chapter != null) {
+                                val intent = ReaderActivity.newIntent(context, item.mangaId, chapter.id)
+                                context.startActivity(intent)
+                            } else {
+                                navigator.push(MangaScreen(item.mangaId))
+                            }
+                        }
                     }
                 }
             }
         }
 
         val onDetailsClick: (HomeMangaItem) -> Unit = { item ->
-            navigator.push(MangaScreen(item.mangaId))
+            if (item.isDiscovery) {
+                when (item.mediaType) {
+                    MEDIA_TYPE_ANIME -> navigator.push(GlobalAnimeSearchScreen(item.title))
+                    MEDIA_TYPE_NOVEL -> navigator.push(GlobalNovelSearchScreen(item.title))
+                    else -> navigator.push(GlobalSearchScreen(item.title))
+                }
+            } else when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> navigator.push(AnimeScreen(item.mangaId))
+                MEDIA_TYPE_NOVEL -> screenModel.openNovelDetails(item.mangaId) { navigator.push(it) }
+                else -> navigator.push(MangaScreen(item.mangaId))
+            }
         }
 
-        // EaZy Nuvio+ / Chimanew: Card tap action setting toggle (0 = Details page, 1 = Reader)
+        // Card tap action setting toggle (0 = Details page, 1 = Reader/Player)
         val onCardClick: (HomeMangaItem) -> Unit = { item ->
             if (state.shelfTapAction == 1) {
                 onResumeClick(item)
@@ -174,7 +229,7 @@ data object ChimanewHomeTab : Tab {
         val listState = rememberLazyListState()
 
         var hasScrolledToTopOnce by rememberSaveable { mutableStateOf(false) }
-        LaunchedEffect(state.heroItems.size, state.shelves.size) {
+        LaunchedEffect(state.heroItems.size, state.shelves.size, state.activeMedia) {
             if (!hasScrolledToTopOnce && (state.heroItems.isNotEmpty() || state.shelves.isNotEmpty())) {
                 hasScrolledToTopOnce = true
                 listState.scrollToItem(0, 0)
@@ -213,98 +268,114 @@ data object ChimanewHomeTab : Tab {
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     // 1. Top Hero Section
-                if (state.heroItems.isNotEmpty()) {
-                    item(key = "hero_carousel") {
-                        NuvioHeroSection(
-                            items = state.heroItems,
-                            heroStyle = state.heroStyle,
-                            heroArtworkSources = state.heroArtworkSources,
-                            onItemClick = onCardClick,
-                            onResumeClick = onResumeClick,
-                            onQuickStatusClick = onTrackerClick,
-                        )
-                    }
-                }
-
-                // 2. Dynamic Shelves (ordered and filtered according to user preferences)
-                items(
-                    items = state.shelves,
-                    key = { it.id },
-                ) { shelf ->
-                    NuvioMangaShelf(
-                        title = shelf.title,
-                        items = shelf.items,
-                        showProgressBar = state.showProgressBars,
-                        showUnreadBadge = state.showUnreadBadges,
-                        onItemClick = if (shelf.isResumeOnTap) onResumeClick else onCardClick,
-                        onLongClick = onLongClickItem,
-                    )
-                }
-
-                // 4. Loading State
-                if (state.isLoading && state.heroItems.isEmpty() && state.shelves.isEmpty()) {
-                    item(key = "loading_state") {
-                        Box(
-                            modifier = Modifier.fillParentMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.primary,
+                    if (state.heroItems.isNotEmpty()) {
+                        item(key = "hero_carousel_${state.activeMedia}") {
+                            NuvioHeroSection(
+                                items = state.heroItems,
+                                heroStyle = state.heroStyle,
+                                heroArtworkSources = state.heroArtworkSources,
+                                onItemClick = onCardClick,
+                                onResumeClick = onResumeClick,
+                                onQuickStatusClick = onTrackerClick,
                             )
                         }
                     }
-                }
 
-                // 5. Empty State
-                if (state.heroItems.isEmpty() && !state.isLoading) {
-                    item(key = "empty_state") {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 32.dp, vertical = 80.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = "Welcome to Chimanew",
-                                style = MaterialTheme.typography.headlineSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Start reading or add manga to your library to populate your personalized home feed.",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                ),
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Button(
-                                onClick = { navigator.push(BrowseTab) },
-                                shape = RoundedCornerShape(20.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                ),
+                    // 2. Dynamic Shelves (ordered and filtered according to user preferences)
+                    items(
+                        items = state.shelves,
+                        key = { "${it.id}_${state.activeMedia}" },
+                    ) { shelf ->
+                        NuvioMangaShelf(
+                            title = shelf.title,
+                            items = shelf.items,
+                            showProgressBar = state.showProgressBars,
+                            showUnreadBadge = state.showUnreadBadges,
+                            onItemClick = if (shelf.isResumeOnTap) onResumeClick else onCardClick,
+                            onLongClick = onLongClickItem,
+                        )
+                    }
+
+                    // 4. Loading State
+                    if (state.isLoading && state.heroItems.isEmpty() && state.shelves.isEmpty()) {
+                        item(key = "loading_state") {
+                            Box(
+                                modifier = Modifier.fillParentMaxSize(),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Explore,
-                                    contentDescription = null,
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.primary,
                                 )
-                                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                                Text(text = "Browse Extensions")
                             }
                         }
                     }
-                }
 
-                // Bottom spacer for navigation bar clearance
-                item(key = "bottom_nav_spacer") {
-                    Spacer(modifier = Modifier.height(96.dp))
+                    // 5. Empty State
+                    if (state.heroItems.isEmpty() && state.shelves.isEmpty() && !state.isLoading) {
+                        item(key = "empty_state_${state.activeMedia}") {
+                            val emptyTitle = when (state.activeMedia) {
+                                MEDIA_TYPE_ANIME -> "Anime in Chimanew"
+                                MEDIA_TYPE_NOVEL -> "Novels in Chimanew"
+                                else -> "Welcome to Chimanew"
+                            }
+                            val emptySummary = when (state.activeMedia) {
+                                MEDIA_TYPE_ANIME -> "Start watching or add anime to your library to populate your personalized feed."
+                                MEDIA_TYPE_NOVEL -> "Start reading or add novels to your library to populate your personalized feed."
+                                else -> "Start reading or add manga to your library to populate your personalized home feed."
+                            }
+                            val buttonText = when (state.activeMedia) {
+                                MEDIA_TYPE_ANIME -> "Browse Anime Extensions"
+                                MEDIA_TYPE_NOVEL -> "Browse Novel Extensions"
+                                else -> "Browse Extensions"
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 32.dp, vertical = 80.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Text(
+                                    text = emptyTitle,
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                    ),
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = emptySummary,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Button(
+                                    onClick = { navigator.push(BrowseTab) },
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                    ),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Explore,
+                                        contentDescription = null,
+                                    )
+                                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                                    Text(text = buttonText)
+                                }
+                            }
+                        }
+                    }
+
+                    // Bottom spacer for navigation bar clearance
+                    item(key = "bottom_nav_spacer") {
+                        Spacer(modifier = Modifier.height(96.dp))
+                    }
                 }
             }
-        }
 
             // Sleek Ambient App Bar Header (Smoothly darkens on scroll; no blocking text)
             Row(
@@ -314,30 +385,111 @@ data object ChimanewHomeTab : Tab {
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                IconButton(
-                    onClick = {
-                        scope.launch {
-                            HomeScreen.search("")
-                        }
-                    },
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Search,
-                        contentDescription = stringResource(MR.strings.action_search),
-                        tint = Color.White,
-                    )
+                // Left side: Compact dark translucent pill [ Manga ▾ ]
+                var mediaMenuExpanded by remember { mutableStateOf(false) }
+                val mediaTitle = when (state.activeMedia) {
+                    MEDIA_TYPE_ANIME -> "Anime"
+                    MEDIA_TYPE_NOVEL -> "Novels"
+                    else -> "Manga"
+                }
+                val mediaIcon = when (state.activeMedia) {
+                    MEDIA_TYPE_ANIME -> Icons.Filled.PlayArrow
+                    MEDIA_TYPE_NOVEL -> Icons.Outlined.MenuBook
+                    else -> Icons.Outlined.AutoStories
                 }
 
-                IconButton(
-                    onClick = { navigator.push(SettingsNuvioScreen) },
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Settings,
-                        contentDescription = "Nuvio Settings",
-                        tint = Color.White,
-                    )
+                Box {
+                    Surface(
+                        onClick = { mediaMenuExpanded = true },
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.Black.copy(alpha = 0.55f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        ) {
+                            Icon(
+                                imageVector = mediaIcon,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = mediaTitle,
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                ),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Filled.ArrowDropDown,
+                                contentDescription = "Switch Media",
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = mediaMenuExpanded,
+                        onDismissRequest = { mediaMenuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Manga", fontWeight = if (state.activeMedia == MEDIA_TYPE_MANGA) FontWeight.Bold else FontWeight.Normal) },
+                            leadingIcon = { Icon(Icons.Outlined.AutoStories, contentDescription = null) },
+                            onClick = {
+                                mediaMenuExpanded = false
+                                screenModel.switchMedia(MEDIA_TYPE_MANGA)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Anime", fontWeight = if (state.activeMedia == MEDIA_TYPE_ANIME) FontWeight.Bold else FontWeight.Normal) },
+                            leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                            onClick = {
+                                mediaMenuExpanded = false
+                                screenModel.switchMedia(MEDIA_TYPE_ANIME)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Novels", fontWeight = if (state.activeMedia == MEDIA_TYPE_NOVEL) FontWeight.Bold else FontWeight.Normal) },
+                            leadingIcon = { Icon(Icons.Outlined.MenuBook, contentDescription = null) },
+                            onClick = {
+                                mediaMenuExpanded = false
+                                screenModel.switchMedia(MEDIA_TYPE_NOVEL)
+                            },
+                        )
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                HomeScreen.search("")
+                            }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = stringResource(MR.strings.action_search),
+                            tint = Color.White,
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { navigator.push(SettingsNuvioScreen) },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "Nuvio Settings",
+                            tint = Color.White,
+                        )
+                    }
                 }
             }
 
@@ -380,8 +532,9 @@ data object ChimanewHomeTab : Tab {
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 if (item.lastChapterNumber != null) {
+                                    val unit = if (item.mediaType == MEDIA_TYPE_ANIME) "Episode" else "Chapter"
                                     Text(
-                                        text = "Chapter ${item.lastChapterNumber}",
+                                        text = "$unit ${item.lastChapterNumber}",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         ),
@@ -392,9 +545,19 @@ data object ChimanewHomeTab : Tab {
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+                        val detailLabel = when (item.mediaType) {
+                            MEDIA_TYPE_ANIME -> "Anime Details"
+                            MEDIA_TYPE_NOVEL -> "Novel Details"
+                            else -> "Manga Details"
+                        }
+                        val resumeLabel = when (item.mediaType) {
+                            MEDIA_TYPE_ANIME -> "Resume Watching"
+                            else -> "Resume Reading"
+                        }
+
                         // Action 1: Open Details Page
                         ListItem(
-                            headlineContent = { Text("Manga Details") },
+                            headlineContent = { Text(detailLabel) },
                             leadingContent = {
                                 Icon(
                                     imageVector = Icons.Outlined.Info,
@@ -403,13 +566,13 @@ data object ChimanewHomeTab : Tab {
                             },
                             modifier = Modifier.clickable {
                                 selectedLongPressItem = null
-                                navigator.push(MangaScreen(item.mangaId))
+                                onDetailsClick(item)
                             },
                         )
 
                         // Action 2: Resume / Start Reading
                         ListItem(
-                            headlineContent = { Text("Resume Reading") },
+                            headlineContent = { Text(resumeLabel) },
                             leadingContent = {
                                 Icon(
                                     imageVector = Icons.Filled.PlayArrow,
@@ -425,17 +588,31 @@ data object ChimanewHomeTab : Tab {
                 }
             }
 
-            // Tracking Modal Sheet (Identical to Entry Details screen)
+            // Tracking Modal Sheet
             quickTrackerItem?.let { item ->
-                NavigatorAdaptiveSheet(
-                    screen = TrackInfoDialogHomeScreen(
-                        mangaId = item.mangaId,
-                        mangaTitle = item.title,
-                        sourceId = item.coverData.sourceId,
-                    ),
-                    enableSwipeDismiss = { it.lastItem is TrackInfoDialogHomeScreen },
-                    onDismissRequest = { quickTrackerItem = null },
-                )
+                if (item.mediaType == MEDIA_TYPE_ANIME) {
+                    val sourceId = (item.coverData as? AnimeCover)?.sourceId ?: 0L
+                    NavigatorAdaptiveSheet(
+                        screen = AnimeTrackInfoDialogHomeScreen(
+                            animeId = item.mangaId,
+                            animeTitle = item.title,
+                            sourceId = sourceId,
+                        ),
+                        enableSwipeDismiss = { it.lastItem is AnimeTrackInfoDialogHomeScreen },
+                        onDismissRequest = { quickTrackerItem = null },
+                    )
+                } else {
+                    val sourceId = (item.coverData as? MangaCover)?.sourceId ?: 0L
+                    NavigatorAdaptiveSheet(
+                        screen = TrackInfoDialogHomeScreen(
+                            mangaId = item.mangaId,
+                            mangaTitle = item.title,
+                            sourceId = sourceId,
+                        ),
+                        enableSwipeDismiss = { it.lastItem is TrackInfoDialogHomeScreen },
+                        onDismissRequest = { quickTrackerItem = null },
+                    )
+                }
             }
         }
     }

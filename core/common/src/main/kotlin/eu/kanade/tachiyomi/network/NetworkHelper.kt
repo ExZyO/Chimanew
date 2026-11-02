@@ -96,6 +96,22 @@ import kotlin.random.Random
                 }
                 chain.proceed(newRequest)
             }
+            // Ensure the User-Agent that solved Cloudflare is also sent with cf_clearance at the wire level
+            .addNetworkInterceptor { chain ->
+                val original = chain.request()
+                val cookieHeader = original.header("Cookie").orEmpty()
+                val pinnedUa = solveUaFor(original.url.host)
+                val req = if (
+                    pinnedUa != null &&
+                    cookieHeader.contains("cf_clearance") &&
+                    original.header("User-Agent") != pinnedUa
+                ) {
+                    original.newBuilder().header("User-Agent", pinnedUa).build()
+                } else {
+                    original
+                }
+                chain.proceed(req)
+            }
 
         // KMK -->
         if (EHLogLevel.isExtraLogging()) {
@@ -275,5 +291,25 @@ import kotlin.random.Random
         // KMK -->
         private const val MAX_RETRY = 5
         // KMK <--
+
+        /**
+         * Timestamp (ms) when a Cloudflare challenge was last successfully solved.
+         */
+        @Volatile
+        var lastSolveAtMs: Long = 0L
+
+        /**
+         * Map of host -> User-Agent that solved Cloudflare for that host.
+         * Prevents UA mismatch between requests that earned cf_clearance and requests that send it.
+         */
+        private val solveUaByHost = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+        fun rememberSolveUa(host: String, ua: String?) {
+            if (!ua.isNullOrBlank()) {
+                solveUaByHost[host] = ua
+            }
+        }
+
+        fun solveUaFor(host: String): String? = solveUaByHost[host]
     }
 }

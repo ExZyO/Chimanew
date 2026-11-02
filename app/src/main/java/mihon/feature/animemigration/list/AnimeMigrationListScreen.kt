@@ -36,7 +36,7 @@ class AnimeMigrationListScreen(
     private val isSmartSearchSingleEntry: Boolean = false,
 ) : Screen() {
 
-    private var matchOverride: Pair<Long, Long>? = null
+    private var matchOverride by mutableStateOf<Pair<Long, Long>?>(null)
 
     fun addMatchOverride(current: Long, target: Long) {
         matchOverride = current to target

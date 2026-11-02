@@ -20,6 +20,8 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toPersistentMap
 import tachiyomi.core.common.i18n.stringResource as contextStringResource
+import tachiyomi.domain.category.interactor.GetAnimeCategories
+import tachiyomi.domain.novel.repository.NovelCategoryRepository
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -60,7 +62,22 @@ object SettingsNuvioScreen : SearchableSettings {
         val categoryEntries = remember(categories) {
             categories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
         }
+
+        val getAnimeCategories = remember { Injekt.get<GetAnimeCategories>() }
+        val animeCategories by getAnimeCategories.subscribe().collectAsState(initial = emptyList())
+        val animeCategoryEntries = remember(animeCategories) {
+            animeCategories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
+        }
+
+        val novelCategoryRepository = remember { Injekt.get<NovelCategoryRepository>() }
+        val novelCategories by novelCategoryRepository.subscribe().collectAsState(initial = emptyList())
+        val novelCategoryEntries = remember(novelCategories) {
+            novelCategories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
+        }
+
         val heroSource by preferences.heroSource().collectPrefAsState()
+        val heroSourceAnime by preferences.heroSourceAnime().collectPrefAsState()
+        val heroSourceNovel by preferences.heroSourceNovel().collectPrefAsState()
         val heroStyle by preferences.heroStyle().collectPrefAsState()
         val useAnilistArtwork by preferences.useAnilistArtwork().collectPrefAsState()
         val showHero by preferences.showHeroCarousel().collectPrefAsState()
@@ -69,9 +86,10 @@ object SettingsNuvioScreen : SearchableSettings {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_nuvio_hero_section),
             preferenceItems = persistentListOf(
+                // Manga Hero
                 Preference.PreferenceItem.SwitchPreference(
                     preference = preferences.showHeroCarousel(),
-                    title = stringResource(MR.strings.pref_nuvio_show_hero),
+                    title = "Show Manga Hero Banner",
                     subtitle = stringResource(MR.strings.pref_nuvio_show_hero_summary),
                 ),
                 Preference.PreferenceItem.ListPreference(
@@ -80,8 +98,10 @@ object SettingsNuvioScreen : SearchableSettings {
                         0 to stringResource(MR.strings.pref_nuvio_hero_source_history),
                         1 to stringResource(MR.strings.pref_nuvio_hero_source_favorites),
                         2 to stringResource(MR.strings.pref_nuvio_hero_source_trackers),
+                        3 to "Trending Manga (AniList Discovery)",
+                        4 to "Trending Manhwa (AniList Discovery)",
                     ),
-                    title = stringResource(MR.strings.pref_nuvio_hero_source),
+                    title = "Manga Hero Source",
                 ),
                 Preference.PreferenceItem.MultiSelectListPreference(
                     preference = preferences.heroCategories(),
@@ -103,6 +123,69 @@ object SettingsNuvioScreen : SearchableSettings {
                     subtitle = stringResource(MR.strings.pref_chimanew_hero_tracker_statuses_summary),
                     enabled = heroSource == 2,
                 ),
+
+                // Anime Hero
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.showHeroCarouselAnime(),
+                    title = "Show Anime Hero Banner",
+                    subtitle = "Display dynamic hero banner in Anime tab",
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.heroSourceAnime(),
+                    entries = persistentMapOf(
+                        0 to "Continue Watching",
+                        1 to "Anime Library Categories",
+                        2 to "Anime Trackers",
+                        3 to "Trending Anime (AniList Discovery)",
+                    ),
+                    title = "Anime Hero Source",
+                ),
+                Preference.PreferenceItem.MultiSelectListPreference(
+                    preference = preferences.heroCategoriesAnime(),
+                    entries = animeCategoryEntries,
+                    title = "Anime Hero Categories",
+                    subtitle = "Filter Anime Hero banner to specific categories",
+                    enabled = heroSourceAnime == 1,
+                ),
+                Preference.PreferenceItem.MultiSelectListPreference(
+                    preference = preferences.heroTrackerStatusesAnime(),
+                    entries = persistentMapOf(
+                        "reading" to "Watching",
+                        "plan_to_read" to "Plan to Watch",
+                        "on_hold" to "On Hold",
+                        "completed" to "Completed",
+                        "dropped" to "Dropped",
+                    ),
+                    title = "Anime Hero Tracker Statuses",
+                    subtitle = "Filter Anime Hero banner to specific tracking statuses",
+                    enabled = heroSourceAnime == 2,
+                ),
+
+                // Novel Hero
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = preferences.showHeroCarouselNovel(),
+                    title = "Show Novel Hero Banner",
+                    subtitle = "Display dynamic hero banner in Novels tab",
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = preferences.heroSourceNovel(),
+                    entries = persistentMapOf(
+                        0 to "Continue Reading",
+                        1 to "Novel Library Categories",
+                        2 to "In-Progress Novels",
+                        3 to "Trending Light Novels (AniList Discovery)",
+                    ),
+                    title = "Novel Hero Source",
+                ),
+                Preference.PreferenceItem.MultiSelectListPreference(
+                    preference = preferences.heroCategoriesNovel(),
+                    entries = novelCategoryEntries,
+                    title = "Novel Hero Categories",
+                    subtitle = "Filter Novel Hero banner to specific categories",
+                    enabled = heroSourceNovel == 1,
+                ),
+
+                // Hero Visuals
                 Preference.PreferenceItem.ListPreference(
                     preference = preferences.heroStyle(),
                     entries = persistentMapOf(

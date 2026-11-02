@@ -1,56 +1,105 @@
 // EaZy Nuvio+ / Chimanew
 package eu.kanade.tachiyomi.ui.home.chimanew
 
+import android.content.Context
+import android.os.SystemClock
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import cafe.adriel.voyager.navigator.Navigator
+import chimahon.novel.interactor.GetNextNovelChapters
+import chimahon.novel.interactor.UpdateNovel
+import chimahon.novel.model.BookMetadata
+import chimahon.novel.source.LocalNovelFiles
+import chimahon.novel.source.SourceChapterBookBuilder
+import chimahon.novel.ui.detail.NovelDetailScreen
+import chimahon.novel.ui.reader.NovelReaderActivity
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
+import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
-import logcat.LogPriority
-import tachiyomi.core.common.util.system.logcat
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
-import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistMediaArtwork
 import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
-import eu.kanade.tachiyomi.ui.home.chimanew.data.UnifiedArtwork
-import android.os.SystemClock
+import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
+import eu.kanade.tachiyomi.ui.home.chimanew.data.DiscoveryItem
+import eu.kanade.tachiyomi.ui.home.chimanew.data.DiscoveryRepository
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.model.AnimeCategory
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.entries.anime.interactor.GetAnime
+import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.anime.model.AnimeCover
+import tachiyomi.domain.entries.anime.model.asAnimeCover
+import tachiyomi.domain.episode.interactor.GetEpisodesByAnimeId
+import tachiyomi.domain.episode.model.Episode
+import tachiyomi.domain.history.interactor.GetAnimeHistory
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.interactor.GetNextChapters
+import tachiyomi.domain.history.interactor.GetNextEpisodes
+import tachiyomi.domain.history.model.AnimeHistoryWithRelations
 import tachiyomi.domain.history.model.HistoryWithRelations
+import tachiyomi.domain.library.model.LibraryAnime
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.manga.model.asMangaCover
+import tachiyomi.domain.novel.model.Novel
+import tachiyomi.domain.novel.model.NovelCategory
+import tachiyomi.domain.novel.model.NovelHistoryWithRelations
+import tachiyomi.domain.novel.model.toSNNovel
+import tachiyomi.domain.novel.repository.NovelCategoryRepository
+import tachiyomi.domain.novel.repository.NovelChapterRepository
+import tachiyomi.domain.novel.repository.NovelHistoryRepository
+import tachiyomi.domain.novel.repository.NovelRepository
+import tachiyomi.domain.track.anime.interactor.GetAnimeTracks
+import tachiyomi.domain.track.anime.model.AnimeTrack
 import tachiyomi.domain.track.model.Track
 import tachiyomi.domain.track.repository.TrackRepository
-import eu.kanade.tachiyomi.data.cache.CoverCache
-import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
-import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
-import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+
+const val MEDIA_TYPE_MANGA = 0
+const val MEDIA_TYPE_ANIME = 1
+const val MEDIA_TYPE_NOVEL = 2
 
 @Immutable
 data class HomeMangaItem(
     val mangaId: Long,
     val title: String,
-    val coverData: MangaCover,
+    val coverData: Any, // MangaCover, AnimeCover, or String URL
     val highResBannerUrl: String? = null,
     val highResCoverUrl: String? = null,
     val communityRatings: List<CommunityRating> = emptyList(),
@@ -66,7 +115,24 @@ data class HomeMangaItem(
     val description: String? = null,
     val inLibrary: Boolean = false,
     val primaryTrackStatus: Long? = null,
+    val mediaType: Int = MEDIA_TYPE_MANGA,
+    val isDiscovery: Boolean = false,
 )
+
+val HomeMangaItem.coverUrl: String?
+    get() = when (val c = coverData) {
+        is MangaCover -> c.ogUrl ?: c.url
+        is AnimeCover -> c.ogUrl ?: c.url
+        is String -> c.takeIf { it.isNotBlank() }
+        else -> null
+    }
+
+val HomeMangaItem.vibrantColor: Color?
+    get() = when (val c = coverData) {
+        is MangaCover -> c.vibrantCoverColor?.let { Color(it) } ?: c.dominantCoverColors?.first?.let { Color(it) }
+        is AnimeCover -> c.vibrantCoverColor?.let { Color(it) } ?: c.dominantCoverColors?.first?.let { Color(it) }
+        else -> null
+    }
 
 @Immutable
 data class HomeShelf(
@@ -76,83 +142,9 @@ data class HomeShelf(
     val isResumeOnTap: Boolean = false,
 )
 
-@Immutable
-private data class DataBundle(
-    val historyList: List<HistoryWithRelations>,
-    val libraryList: List<LibraryManga>,
-    val categories: List<Category>,
-    val tracks: List<Track>,
-)
-
-@Immutable
-private data class CoreHeroPrefs(
-    val showHero: Boolean,
-    val heroSource: Int,
-    val heroStyle: Int,
-    val heroRequireSelectedArtwork: Boolean,
-    val heroStrictArtworkRequirements: Set<String>,
-)
-
-@Immutable
-private data class HeroPrefs(
-    val showHero: Boolean,
-    val heroSource: Int,
-    val heroStyle: Int,
-    val heroRequireSelectedArtwork: Boolean,
-    val heroStrictArtworkRequirements: Set<String>,
-    val useAnilistArtwork: Boolean,
-    val heroArtworkSources: Set<String>,
-    val heroTrackerStatuses: Set<String>,
-    val artworkWaterfallOrder: String,
-    val artworkBannerOrder: String,
-    val artworkCoverOrder: String,
-)
-
-@Immutable
-private data class ShelvesPrefs(
-    val showContinue: Boolean,
-    val showUpdated: Boolean,
-    val showCategoryShelves: Boolean,
-    val showTrackingShelves: Boolean,
-    val homeShelfOrder: String,
-)
-
-@Immutable
-private data class CardAndHeroPrefs(
-    val showProgressBars: Boolean,
-    val showUnreadBadges: Boolean,
-    val continueReadingTapAction: Int,
-    val shelfTapAction: Int,
-    val heroCategories: Set<String>,
-)
-
-@Immutable
-private data class NuvioHomePrefs(
-    val showHero: Boolean,
-    val heroSource: Int,
-    val heroStyle: Int,
-    val heroRequireSelectedArtwork: Boolean,
-    val heroStrictArtworkRequirements: Set<String>,
-    val useAnilistArtwork: Boolean,
-    val heroArtworkSources: Set<String>,
-    val heroCategories: Set<String>,
-    val heroTrackerStatuses: Set<String>,
-    val artworkWaterfallOrder: String,
-    val artworkBannerOrder: String,
-    val artworkCoverOrder: String,
-    val showContinue: Boolean,
-    val showUpdated: Boolean,
-    val showCategoryShelves: Boolean,
-    val showTrackingShelves: Boolean,
-    val homeShelfOrder: String,
-    val showProgressBars: Boolean,
-    val showUnreadBadges: Boolean,
-    val continueReadingTapAction: Int,
-    val shelfTapAction: Int,
-)
-
 class ChimanewHomeScreenModel(
     private val preferences: ChimanewPreferences = Injekt.get(),
+    // Manga
     private val getHistory: GetHistory = Injekt.get(),
     private val getLibraryManga: GetLibraryManga = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
@@ -162,30 +154,41 @@ class ChimanewHomeScreenModel(
     private val trackerManager: TrackerManager = Injekt.get(),
     private val anilistCoverRepository: AnilistCoverRepository = Injekt.get(),
     private val artworkWaterfallRepository: ArtworkWaterfallRepository = Injekt.get(),
-) : StateScreenModel<ChimanewHomeScreenModel.State>(cachedState ?: State()) {
+    private val discoveryRepository: DiscoveryRepository = Injekt.get(),
+    // Anime
+    private val getAnimeHistory: GetAnimeHistory = Injekt.get(),
+    private val getLibraryAnime: GetLibraryAnime = Injekt.get(),
+    private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
+    private val getNextEpisodes: GetNextEpisodes = Injekt.get(),
+    private val getAnime: GetAnime = Injekt.get(),
+    private val getAnimeTracks: GetAnimeTracks = Injekt.get(),
+    // Novels
+    private val novelRepository: NovelRepository = Injekt.get(),
+    private val novelHistoryRepository: NovelHistoryRepository = Injekt.get(),
+    private val novelCategoryRepository: NovelCategoryRepository = Injekt.get(),
+    private val novelChapterRepository: NovelChapterRepository = Injekt.get(),
+) : StateScreenModel<ChimanewHomeScreenModel.State>(
+    cachedMediaStates[preferences.homeActiveMedia().get()] ?: State(activeMedia = preferences.homeActiveMedia().get())
+) {
 
     companion object {
-        @Volatile
-        private var cachedState: State? = null
-
-        val artworkRefreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0L)
+        private val cachedMediaStates = ConcurrentHashMap<Int, State>()
+        val artworkRefreshTrigger = MutableStateFlow(0L)
 
         fun triggerRefresh() {
-            cachedState = null
+            cachedMediaStates.clear()
             artworkRefreshTrigger.value = System.currentTimeMillis()
         }
     }
 
-    // EaZy Nuvio+ / Chimanew: prevent infinite re-query loops for hero art
-    private val attemptedHeroTitles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-    private var lastArtworkConfigKey: String? = null
-    private var persistentHeroMangaIds: List<Long> = emptyList()
-    private var artworkBatchPrefetchJob: Job? = null
+    private val attemptedHeroTitles = ConcurrentHashMap.newKeySet<String>()
+    private var persistentHeroIds = emptyList<Long>()
 
     @Immutable
     data class State(
         val isLoading: Boolean = true,
         val isRefreshing: Boolean = false,
+        val activeMedia: Int = MEDIA_TYPE_MANGA,
         val heroItems: List<HomeMangaItem> = emptyList(),
         val heroStyle: Int = 0,
         val heroArtworkSources: Set<String> = setOf("banner", "cover", "default"),
@@ -196,397 +199,240 @@ class ChimanewHomeScreenModel(
         val shelfTapAction: Int = 0,
     )
 
+    fun switchMedia(mediaType: Int) {
+        if (mutableState.value.activeMedia == mediaType) return
+        logcat(LogPriority.INFO) { "[NUVIO_HOME] [MediaSwitcher] Switching active media to $mediaType" }
+        preferences.homeActiveMedia().set(mediaType)
+        persistentHeroIds = emptyList()
+        val cached = cachedMediaStates[mediaType]
+        if (cached != null) {
+            mutableState.update { cached.copy(activeMedia = mediaType, isLoading = false) }
+        } else {
+            mutableState.update { it.copy(activeMedia = mediaType, isLoading = true) }
+        }
+    }
+
     fun refreshHero() {
         screenModelScope.launchIO {
             mutableState.update { it.copy(isRefreshing = true) }
-            persistentHeroMangaIds = emptyList()
+            persistentHeroIds = emptyList()
+            discoveryRepository.invalidateCache()
             triggerRefresh()
-            delay(1000L)
+            delay(800L)
             mutableState.update { it.copy(isRefreshing = false) }
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     init {
         screenModelScope.launchIO {
             preferences.categoryArtworkRulesUpdated().changes().collectLatest {
                 artworkRefreshTrigger.value = System.currentTimeMillis()
             }
         }
+
         screenModelScope.launchIO {
-            val dataFlow = combine(
-                getHistory.subscribe("", unfinishedManga = null, unfinishedChapter = null, nonLibraryEntries = null),
-                getLibraryManga.subscribe(),
-                getCategories.subscribe(),
-                trackRepository.getTracksAsFlow(),
-                artworkRefreshTrigger,
-            ) { historyList: List<HistoryWithRelations>, libraryList: List<LibraryManga>, categories: List<Category>, tracks: List<Track>, _ ->
-                DataBundle(historyList, libraryList, categories, tracks)
-            }.throttleLatest(1000L)
+            preferences.homeActiveMedia().changes()
+                .distinctUntilChanged()
+                .flatMapLatest { mediaType ->
+                    logcat(LogPriority.INFO) { "[NUVIO_HOME] [MediaSwitcher] Stream bound for mediaType=$mediaType" }
+                    when (mediaType) {
+                        MEDIA_TYPE_ANIME -> buildAnimeFlow()
+                        MEDIA_TYPE_NOVEL -> buildNovelFlow()
+                        else -> buildMangaFlow()
+                    }
+                }
+                .collectLatest { newState ->
+                    cachedMediaStates[newState.activeMedia] = newState
+                    mutableState.update { newState }
+                    logcat(LogPriority.INFO) {
+                        "[NUVIO_HOME] State emitted for mediaType=${newState.activeMedia}: hero=${newState.heroItems.size}, shelves=${newState.shelves.size}"
+                    }
 
-            val heroPrefsFlow = combine(
-                combine(
-                    preferences.showHeroCarousel().changes(),
-                    preferences.heroSource().changes(),
-                    preferences.heroStyle().changes(),
-                    preferences.heroRequireSelectedArtwork().changes(),
-                    preferences.heroStrictArtworkRequirements().changes(),
-                ) { show, source, style, requireArt, strictReqs -> CoreHeroPrefs(show, source, style, requireArt, strictReqs) },
-                preferences.useAnilistArtwork().changes(),
-                preferences.heroArtworkSources().changes(),
-                preferences.heroTrackerStatuses().changes(),
-                combine(
-                    preferences.artworkWaterfallOrder().changes(),
-                    preferences.artworkBannerOrder().changes(),
-                    preferences.artworkCoverOrder().changes(),
-                ) { waterfall, banner, cover -> Triple(waterfall, banner, cover) },
-            ) { core, useAnilist, artworkSources, trackerStatuses, orders ->
-                HeroPrefs(
-                    showHero = core.showHero,
-                    heroSource = core.heroSource,
-                    heroStyle = core.heroStyle,
-                    heroRequireSelectedArtwork = core.heroRequireSelectedArtwork,
-                    heroStrictArtworkRequirements = core.heroStrictArtworkRequirements,
-                    useAnilistArtwork = useAnilist,
-                    heroArtworkSources = artworkSources,
-                    heroTrackerStatuses = trackerStatuses,
-                    artworkWaterfallOrder = orders.first,
-                    artworkBannerOrder = orders.second,
-                    artworkCoverOrder = orders.third,
+                    // Background pre-fetch waterfall for hero items to guarantee fast artwork rendering
+                    if (newState.heroItems.isNotEmpty()) {
+                        newState.heroItems.take(5).forEach { item ->
+                            artworkWaterfallRepository.resolveArtwork(
+                                rawTitle = item.title,
+                                mangaId = item.mangaId,
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    // =========================================================================
+    // MANGA FLOW
+    // =========================================================================
+    private fun buildMangaFlow(): Flow<State> = flow {
+        val dataFlow = combine(
+            getHistory.subscribe("", unfinishedManga = null, unfinishedChapter = null, nonLibraryEntries = null),
+            getLibraryManga.subscribe(),
+            getCategories.subscribe(),
+            trackRepository.getTracksAsFlow(),
+            artworkRefreshTrigger,
+        ) { h, l, c, t, _ -> MangaData(h, l, c, t) }.throttleLatest(1000L)
+
+        combine(
+            dataFlow,
+            preferences.showHeroCarousel().changes(),
+            preferences.heroSource().changes(),
+            preferences.heroStyle().changes(),
+            preferences.heroArtworkSources().changes(),
+            preferences.heroCategories().changes(),
+            preferences.heroTrackerStatuses().changes(),
+            preferences.homeShelfOrder().changes(),
+            preferences.showProgressBars().changes(),
+            preferences.showUnreadBadges().changes(),
+            preferences.continueReadingTapAction().changes(),
+            preferences.shelfTapAction().changes(),
+        ) { args ->
+            val data = args[0] as MangaData
+            val showHero = args[1] as Boolean
+            val heroSource = args[2] as Int
+            val heroStyle = args[3] as Int
+            val heroArtworkSources = args[4] as Set<String>
+            val heroCategories = args[5] as Set<String>
+            val heroTrackerStatuses = args[6] as Set<String>
+            val homeShelfOrder = args[7] as String
+            val showProgressBars = args[8] as Boolean
+            val showUnreadBadges = args[9] as Boolean
+            val continueReadingTapAction = args[10] as Int
+            val shelfTapAction = args[11] as Int
+
+            val distinctHistory = data.historyList.distinctBy { it.mangaId }
+            val tracksByManga = data.tracks.groupBy { it.mangaId }
+            val libraryByMangaId = data.libraryList.associateBy { it.manga.id }
+
+            fun createItem(
+                mangaId: Long,
+                title: String,
+                coverData: MangaCover,
+                highResBannerUrl: String? = null,
+                highResCoverUrl: String? = null,
+                lastChapterNumber: Double? = null,
+                lastChapterId: Long? = null,
+                totalChapters: Long = 0,
+                readChapters: Long = 0,
+                unreadCount: Long = 0,
+                isChapterRead: Boolean = false,
+                lastPageRead: Long = 0,
+                genres: List<String> = emptyList(),
+                description: String? = null,
+                inLibrary: Boolean = false,
+                primaryTrackStatus: Long? = null,
+            ): HomeMangaItem {
+                val cachedArt = artworkWaterfallRepository.getCached(title)
+                return HomeMangaItem(
+                    mangaId = mangaId,
+                    title = title,
+                    coverData = coverData,
+                    highResBannerUrl = highResBannerUrl ?: cachedArt?.bannerUrl,
+                    highResCoverUrl = highResCoverUrl ?: cachedArt?.posterUrl,
+                    communityRatings = cachedArt?.ratings ?: emptyList(),
+                    lastChapterNumber = lastChapterNumber,
+                    lastChapterId = lastChapterId,
+                    totalChapters = totalChapters,
+                    readChapters = readChapters,
+                    unreadCount = unreadCount,
+                    isChapterRead = isChapterRead,
+                    lastPageRead = lastPageRead,
+                    genres = genres,
+                    description = description,
+                    inLibrary = inLibrary,
+                    primaryTrackStatus = primaryTrackStatus,
+                    mediaType = MEDIA_TYPE_MANGA,
                 )
             }
 
-            val shelvesPrefsFlow = combine(
-                preferences.showContinueReading().changes(),
-                preferences.showRecentlyUpdated().changes(),
-                preferences.showCategoryShelves().changes(),
-                preferences.showTrackingShelves().changes(),
-                preferences.homeShelfOrder().changes(),
-            ) { showContinue: Boolean, showUpdated: Boolean, showCategoryShelves: Boolean, showTrackingShelves: Boolean, homeShelfOrder: String ->
-                ShelvesPrefs(showContinue, showUpdated, showCategoryShelves, showTrackingShelves, homeShelfOrder)
-            }
-
-            val cardPrefsFlow = combine(
-                preferences.showProgressBars().changes(),
-                preferences.showUnreadBadges().changes(),
-                preferences.continueReadingTapAction().changes(),
-                preferences.shelfTapAction().changes(),
-                preferences.heroCategories().changes(),
-            ) { showProgress: Boolean, showUnread: Boolean, continueTap: Int, shelfTap: Int, heroCats: Set<String> ->
-                CardAndHeroPrefs(showProgress, showUnread, continueTap, shelfTap, heroCats)
-            }
-
-            val prefsFlow = combine(heroPrefsFlow, shelvesPrefsFlow, cardPrefsFlow) { heroPrefs, shelvesPrefs, cardPrefs ->
-                NuvioHomePrefs(
-                    showHero = heroPrefs.showHero,
-                    heroSource = heroPrefs.heroSource,
-                    heroStyle = heroPrefs.heroStyle,
-                    heroRequireSelectedArtwork = heroPrefs.heroRequireSelectedArtwork,
-                    heroStrictArtworkRequirements = heroPrefs.heroStrictArtworkRequirements,
-                    useAnilistArtwork = heroPrefs.useAnilistArtwork,
-                    heroArtworkSources = heroPrefs.heroArtworkSources,
-                    heroCategories = cardPrefs.heroCategories,
-                    heroTrackerStatuses = heroPrefs.heroTrackerStatuses,
-                    artworkWaterfallOrder = heroPrefs.artworkWaterfallOrder,
-                    artworkBannerOrder = heroPrefs.artworkBannerOrder,
-                    artworkCoverOrder = heroPrefs.artworkCoverOrder,
-                    showContinue = shelvesPrefs.showContinue,
-                    showUpdated = shelvesPrefs.showUpdated,
-                    showCategoryShelves = shelvesPrefs.showCategoryShelves,
-                    showTrackingShelves = shelvesPrefs.showTrackingShelves,
-                    homeShelfOrder = shelvesPrefs.homeShelfOrder,
-                    showProgressBars = cardPrefs.showProgressBars,
-                    showUnreadBadges = cardPrefs.showUnreadBadges,
-                    continueReadingTapAction = cardPrefs.continueReadingTapAction,
-                    shelfTapAction = cardPrefs.shelfTapAction,
+            // Continue reading list
+            val continueReadingItems = distinctHistory.map { h ->
+                val libManga = libraryByMangaId[h.mangaId]
+                createItem(
+                    mangaId = h.mangaId,
+                    title = h.title,
+                    coverData = h.coverData,
+                    lastChapterNumber = h.chapterNumber.takeIf { it >= 0 },
+                    lastChapterId = h.chapterId,
+                    totalChapters = h.totalCountCalculated,
+                    readChapters = h.readCountCalculated,
+                    unreadCount = h.unreadCount,
+                    isChapterRead = h.read,
+                    lastPageRead = h.lastPageRead,
+                    genres = libManga?.manga?.ogGenre ?: emptyList(),
+                    description = libManga?.manga?.ogDescription,
+                    inLibrary = libManga != null,
                 )
             }
 
-            combine(dataFlow, prefsFlow) { data, prefs ->
-                val currentConfigKey = "${prefs.showHero}|${prefs.heroSource}|${prefs.heroCategories}|${prefs.heroTrackerStatuses}|${prefs.heroStyle}|${prefs.artworkWaterfallOrder}|${prefs.artworkBannerOrder}|${prefs.artworkCoverOrder}|${prefs.heroArtworkSources}|${prefs.heroRequireSelectedArtwork}|${prefs.heroStrictArtworkRequirements}"
-                if (lastArtworkConfigKey != null && lastArtworkConfigKey != currentConfigKey) {
-                    attemptedHeroTitles.clear()
-                    persistentHeroMangaIds = emptyList()
-                }
-                lastArtworkConfigKey = currentConfigKey
+            // Tracking lists
+            val readingList = mutableListOf<HomeMangaItem>()
+            val planToReadList = mutableListOf<HomeMangaItem>()
+            val onHoldList = mutableListOf<HomeMangaItem>()
+            val completedList = mutableListOf<HomeMangaItem>()
+            val droppedList = mutableListOf<HomeMangaItem>()
+            val notTrackedList = mutableListOf<HomeMangaItem>()
 
-                ChimanewDiagnostics.log(DiagnosticCategory.HERO, "Settings") {
-                    "Hero Config: strict=${prefs.heroRequireSelectedArtwork}, reqs=${prefs.heroStrictArtworkRequirements}, sources=${prefs.heroArtworkSources}, style=${prefs.heroStyle}"
-                }
-                ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Settings") {
-                    val bannerOrder = eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.parsePriorityOrder(
-                        preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-                        listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
-                    )
-                    val coverOrder = eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.parsePriorityOrder(
-                        preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-                        listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
-                    )
-                    "Artwork Priority: Banners=$bannerOrder, Covers=$coverOrder"
-                }
+            for (lib in data.libraryList) {
+                val mangaTracks = tracksByManga[lib.manga.id]
+                val activeTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                    ?: mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
+                    ?: mangaTracks?.firstOrNull()
 
-                val distinctHistory = data.historyList.distinctBy { it.mangaId }
-                val tracksByManga = data.tracks.groupBy { it.mangaId }
+                val item = createItem(
+                    mangaId = lib.manga.id,
+                    title = lib.manga.title,
+                    coverData = lib.manga.asMangaCover(),
+                    totalChapters = lib.totalChapters,
+                    readChapters = lib.readCount,
+                    unreadCount = lib.unreadCount,
+                    genres = lib.manga.ogGenre ?: emptyList(),
+                    description = lib.manga.ogDescription,
+                    inLibrary = true,
+                )
 
-                // Gather AniList and MAL IDs for batch artwork query
-                val aniListRemoteIds = if (prefs.useAnilistArtwork) {
-                    data.tracks.filter { it.trackerId == TrackerManager.ANILIST }.map { it.remoteId }
+                if (activeTrack == null) {
+                    notTrackedList.add(item)
                 } else {
-                    emptyList()
-                }
-
-                val malRemoteIds = if (prefs.useAnilistArtwork) {
-                    data.tracks.filter { it.trackerId == trackerManager.myAnimeList.id }.map { it.remoteId }
-                } else {
-                    emptyList()
-                }
-
-                // EaZy Nuvio+ / Chimanew: Asynchronously fetch AniList & MAL high-res artwork in background
-                // NEVER block local Home Screen rendering waiting for external GraphQL network responses!
-                if (aniListRemoteIds.isNotEmpty() || malRemoteIds.isNotEmpty()) {
-                    artworkBatchPrefetchJob?.cancel()
-                    artworkBatchPrefetchJob = screenModelScope.launchIO {
-                        var anyUpdated = false
-                        if (aniListRemoteIds.isNotEmpty()) {
-                            val res = anilistCoverRepository.fetchBatch(aniListRemoteIds)
-                            if (res.isNotEmpty()) anyUpdated = true
-                        }
-                        if (malRemoteIds.isNotEmpty()) {
-                            val res = anilistCoverRepository.fetchBatchByMalIds(malRemoteIds)
-                            if (res.isNotEmpty()) anyUpdated = true
-                        }
-                        if (anyUpdated) {
-                            artworkRefreshTrigger.value = System.currentTimeMillis()
-                        }
+                    when (TrackStatus.parseTrackerStatus(trackerManager, activeTrack.trackerId, activeTrack.status)) {
+                        TrackStatus.READING, TrackStatus.REPEATING -> readingList.add(item)
+                        TrackStatus.PLAN_TO_READ -> planToReadList.add(item)
+                        TrackStatus.PAUSED -> onHoldList.add(item)
+                        TrackStatus.COMPLETED -> completedList.add(item)
+                        TrackStatus.DROPPED -> droppedList.add(item)
+                        else -> notTrackedList.add(item)
                     }
                 }
+            }
 
-                val libraryByMangaId = data.libraryList.associateBy { it.manga.id }
+            // Discovery Manga and Manhwa
+            val trendingMangaRaw = discoveryRepository.getTrendingManga()
+            val trendingManhwaRaw = discoveryRepository.getTrendingManhwa()
 
-                fun getArtwork(mangaId: Long, title: String): UnifiedArtwork? {
-                    if (!prefs.useAnilistArtwork) return null
-                    val defaultCoverUrl = libraryByMangaId[mangaId]?.manga?.thumbnailUrl
-                    val categoryIds = libraryByMangaId[mangaId]?.categories
-                    var cachedUnified = artworkWaterfallRepository.getCached(title, defaultCoverUrl = defaultCoverUrl, mangaId = mangaId, categoryIds = categoryIds)
-                    if (cachedUnified == null) {
-                        val libManga = libraryByMangaId[mangaId]
-                        val og = libManga?.manga?.ogTitle
-                        if (!og.isNullOrBlank() && og != title) {
-                            cachedUnified = artworkWaterfallRepository.getCached(og, defaultCoverUrl = defaultCoverUrl, mangaId = mangaId, categoryIds = categoryIds)
-                        }
-                    }
-                    if (cachedUnified != null) return cachedUnified
+            val trendingMangaItems = trendingMangaRaw.map { d ->
+                val matched = data.libraryList.firstOrNull { it.manga.title.equals(d.title, ignoreCase = true) }
+                d.toHomeMangaItem(matched?.manga?.id, MEDIA_TYPE_MANGA)
+            }
+            val trendingManhwaItems = trendingManhwaRaw.map { d ->
+                val matched = data.libraryList.firstOrNull { it.manga.title.equals(d.title, ignoreCase = true) }
+                d.toHomeMangaItem(matched?.manga?.id, MEDIA_TYPE_MANGA)
+            }
 
-                    val mangaTracks = tracksByManga[mangaId]
-                    val aniListTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
-                    val malTrack = mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
-                    val cachedAniList = if (aniListTrack != null && aniListTrack.remoteId > 0) {
-                        anilistCoverRepository.getCached(aniListTrack.remoteId)
-                    } else if (malTrack != null && malTrack.remoteId > 0) {
-                        anilistCoverRepository.getCachedByMalId(malTrack.remoteId)
-                    } else {
-                        anilistCoverRepository.getCachedByTitle(title)
-                    }
-                    if (cachedAniList != null) {
-                        val alArtwork = UnifiedArtwork(
-                            bannerUrl = cachedAniList.bannerUrl,
-                            posterUrl = cachedAniList.extraLargeCoverUrl,
-                            allAvailableBanners = listOfNotNull(cachedAniList.bannerUrl),
-                            allAvailableCovers = listOfNotNull(
-                                cachedAniList.extraLargeCoverUrl?.let {
-                                    eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkCoverOption(url = it, source = "AniList", subtitle = "HD Poster")
-                                },
-                            ),
-                            bannerOptions = listOfNotNull(
-                                cachedAniList.bannerUrl?.let { eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkBannerOption(it, "ANILIST") },
-                            ),
-                            ratings = listOfNotNull(
-                                run {
-                                    val s10 = cachedAniList.score10 ?: cachedAniList.score100?.let { it / 10f }
-                                    val s100 = cachedAniList.score100 ?: cachedAniList.score10?.let { (it * 10).toInt() }
-                                    if (s10 != null && s100 != null) {
-                                        CommunityRating(
-                                            score10 = s10,
-                                            score100 = s100,
-                                            source = "AniList",
-                                        )
-                                    } else null
-                                },
-                            ),
-                        )
-                        val effective = artworkWaterfallRepository.getEffectiveArtwork(alArtwork, defaultCoverUrl = defaultCoverUrl)
-                        artworkWaterfallRepository.putCached(title, alArtwork)
-                        return effective
-                    }
-                    return null
-                }
-
-                val coverCache = Injekt.get<CoverCache>()
-
-                fun createHomeItem(
-                    mangaId: Long,
-                    title: String,
-                    coverData: MangaCover,
-                    totalChapters: Long = 0,
-                    readChapters: Long = 0,
-                    unreadCount: Long = 0,
-                    lastChapterNumber: Double? = null,
-                    lastChapterId: Long? = null,
-                    isChapterRead: Boolean = false,
-                    lastPageRead: Long = 0,
-                    chapterTotalPages: Long = 0,
-                    genres: List<String> = emptyList(),
-                    description: String? = null,
-                ): HomeMangaItem {
-                    val hasCustomCover = coverCache.hasCustomCover(mangaId)
-                    val customBanner = preferences.mangaCustomBannerUrl(mangaId).get().takeIf { it.isNotBlank() }
-                    val artwork = getArtwork(mangaId, title)
-                    val inLib = libraryByMangaId.containsKey(mangaId)
-                    val mangaTracks = tracksByManga[mangaId]
-                    val primaryStatus = mangaTracks?.firstOrNull()?.status
-                    return HomeMangaItem(
-                        mangaId = mangaId,
-                        title = title,
-                        coverData = coverData,
-                        highResBannerUrl = customBanner ?: artwork?.bannerUrl,
-                        highResCoverUrl = if (hasCustomCover) null else artwork?.posterUrl,
-                        communityRatings = artwork?.ratings ?: emptyList(),
-                        lastChapterNumber = lastChapterNumber,
-                        lastChapterId = lastChapterId,
-                        totalChapters = totalChapters,
-                        readChapters = readChapters,
-                        unreadCount = unreadCount,
-                        isChapterRead = isChapterRead,
-                        lastPageRead = lastPageRead,
-                        chapterTotalPages = chapterTotalPages,
-                        genres = genres,
-                        description = description,
-                        inLibrary = inLib,
-                        primaryTrackStatus = primaryStatus,
-                    )
-                }
-
-                val continueReadingItems = if (prefs.showContinue) {
-                    distinctHistory.map { h ->
-                        val libManga = libraryByMangaId[h.mangaId]
-                        createHomeItem(
-                            mangaId = h.mangaId,
-                            title = h.title,
-                            coverData = h.coverData,
-                            lastChapterNumber = h.chapterNumber.takeIf { it >= 0 },
-                            lastChapterId = h.chapterId,
-                            totalChapters = h.totalCountCalculated,
-                            readChapters = h.readCountCalculated,
-                            unreadCount = h.unreadCount,
-                            isChapterRead = h.read,
-                            lastPageRead = h.lastPageRead,
-                            genres = libManga?.manga?.ogGenre ?: emptyList(),
-                            description = libManga?.manga?.ogDescription,
-                        )
-                    }
-                } else {
-                    emptyList()
-                }
-
-                // Pre-calculate tracker lists so both Hero and Shelves can use them
-                val readingList = mutableListOf<HomeMangaItem>()
-                val planToReadList = mutableListOf<HomeMangaItem>()
-                val onHoldList = mutableListOf<HomeMangaItem>()
-                val completedList = mutableListOf<HomeMangaItem>()
-                val droppedList = mutableListOf<HomeMangaItem>()
-                val notTrackedList = mutableListOf<HomeMangaItem>()
-
-                if ((prefs.showTrackingShelves || prefs.heroSource == 2) && data.libraryList.isNotEmpty()) {
-                    for (lib in data.libraryList) {
-                        val mangaTracks = tracksByManga[lib.manga.id]
-                        val activeTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
-                            ?: mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
-                            ?: mangaTracks?.firstOrNull()
-
-                        val item = createHomeItem(
-                            mangaId = lib.manga.id,
-                            title = lib.manga.title,
-                            coverData = lib.manga.asMangaCover(),
-                            totalChapters = lib.totalChapters,
-                            readChapters = lib.readCount,
-                            unreadCount = lib.unreadCount,
-                            genres = lib.manga.ogGenre ?: emptyList(),
-                            description = lib.manga.ogDescription,
-                        )
-
-                        if (activeTrack == null) {
-                            notTrackedList.add(item)
-                        } else {
-                            when (TrackStatus.parseTrackerStatus(trackerManager, activeTrack.trackerId, activeTrack.status)) {
-                                TrackStatus.READING, TrackStatus.REPEATING -> readingList.add(item)
-                                TrackStatus.PLAN_TO_READ -> planToReadList.add(item)
-                                TrackStatus.PAUSED -> onHoldList.add(item)
-                                TrackStatus.COMPLETED -> completedList.add(item)
-                                TrackStatus.DROPPED -> droppedList.add(item)
-                                else -> notTrackedList.add(item)
-                            }
-                        }
-                    }
-                    ChimanewDiagnostics.log(DiagnosticCategory.SHELVES, "Trackers") {
-                        "Grouped library trackers: Reading=${readingList.size}, PlanToRead=${planToReadList.size}, OnHold=${onHoldList.size}, Completed=${completedList.size}, Dropped=${droppedList.size}, NotTracked=${notTrackedList.size}"
-                    }
-                }
-
-                fun hasRequiredHeroArtwork(mangaId: Long, title: String, heroStyle: Int): Boolean {
-                    val hasCustomCover = coverCache.hasCustomCover(mangaId)
-                    val customBanner = preferences.mangaCustomBannerUrl(mangaId).get().takeIf { it.isNotBlank() }
-                    val artwork = getArtwork(mangaId, title)
-                    val hasBanner = customBanner != null || (artwork != null && !artwork.bannerUrl.isNullOrBlank())
-                    val hasCover = hasCustomCover || (artwork != null && !artwork.posterUrl.isNullOrBlank()) || ("default" in prefs.heroArtworkSources)
-
-                    val enforceBanner = "banner" in prefs.heroStrictArtworkRequirements
-                    val enforceCover = "cover" in prefs.heroStrictArtworkRequirements
-
-                    val bannerPass = if (enforceBanner) hasBanner else true
-                    val coverPass = if (enforceCover && heroStyle != 1) hasCover else true
-
-                    val pass = if (!enforceBanner && !enforceCover) {
-                        hasBanner || hasCover
-                    } else {
-                        bannerPass && coverPass
-                    }
-
-                    ChimanewDiagnostics.log(DiagnosticCategory.HERO, "Candidate") {
-                        val status = if (pass) "[PASS]" else "[FAIL]"
-                        "$status '$title' (id=$mangaId): hasBanner=$hasBanner, hasCover=$hasCover, reqs=${prefs.heroStrictArtworkRequirements}"
-                    }
-
-                    return pass
-                }
-
-                val heroItems = if (!prefs.showHero) {
-                    emptyList()
-                } else if (prefs.heroSource == 1) {
-                    // Selected Categories
-                    val selectedCatIds = prefs.heroCategories.mapNotNull { it.toLongOrNull() }.toSet()
-                    val candidateList = if (selectedCatIds.isNotEmpty()) {
+            // Hero Items
+            val heroItems = if (!showHero) {
+                emptyList()
+            } else when (heroSource) {
+                1 -> {
+                    // Categories
+                    val selectedCatIds = heroCategories.mapNotNull { it.toLongOrNull() }.toSet()
+                    val pool = if (selectedCatIds.isNotEmpty()) {
                         data.libraryList.filter { lib -> lib.categories.any { it in selectedCatIds } }
                     } else {
                         data.libraryList.filter { it.manga.favorite }
                     }
-                    val filteredCandidates = if (prefs.heroRequireSelectedArtwork) {
-                        candidateList.filter { lib ->
-                            val mTitle = lib.manga.ogTitle ?: lib.manga.title
-                            hasRequiredHeroArtwork(lib.manga.id, mTitle, prefs.heroStyle)
-                        }
-                    } else {
-                        candidateList
-                    }
-                    val candidateMap = filteredCandidates.associateBy { it.manga.id }
-                    val stableIds = persistentHeroMangaIds.filter { it in candidateMap }
-                    val finalIds = if (stableIds.size < 7) {
-                        val remaining = filteredCandidates.filter { it.manga.id !in stableIds.toSet() }.shuffled()
-                        stableIds + remaining.take(7 - stableIds.size).map { it.manga.id }
-                    } else {
-                        stableIds.take(7)
-                    }
-                    persistentHeroMangaIds = finalIds
-                    finalIds.mapNotNull { candidateMap[it] }.map { lib ->
-                        createHomeItem(
+                    pool.take(7).map { lib ->
+                        createItem(
                             mangaId = lib.manga.id,
                             title = lib.manga.title,
                             coverData = lib.manga.asMangaCover(),
@@ -595,87 +441,27 @@ class ChimanewHomeScreenModel(
                             unreadCount = lib.unreadCount,
                             genres = lib.manga.ogGenre ?: emptyList(),
                             description = lib.manga.ogDescription,
+                            inLibrary = true,
                         )
                     }
-                } else if (prefs.heroSource == 2) {
-                    // Selected Tracker Statuses
-                    val chosenStatuses = prefs.heroTrackerStatuses
-                    val trackerCandidates = mutableListOf<HomeMangaItem>()
-                    if ("reading" in chosenStatuses) trackerCandidates.addAll(readingList)
-                    if ("plan_to_read" in chosenStatuses) trackerCandidates.addAll(planToReadList)
-                    if ("on_hold" in chosenStatuses) trackerCandidates.addAll(onHoldList)
-                    if ("completed" in chosenStatuses) trackerCandidates.addAll(completedList)
-                    if ("dropped" in chosenStatuses) trackerCandidates.addAll(droppedList)
-
-                    val candidateList = if (trackerCandidates.isNotEmpty()) {
-                        trackerCandidates.distinctBy { it.mangaId }
-                    } else {
-                        readingList.ifEmpty {
-                            data.libraryList.map { lib ->
-                                createHomeItem(
-                                    mangaId = lib.manga.id,
-                                    title = lib.manga.title,
-                                    coverData = lib.manga.asMangaCover(),
-                                    totalChapters = lib.totalChapters,
-                                    readChapters = lib.readCount,
-                                    unreadCount = lib.unreadCount,
-                                    genres = lib.manga.ogGenre ?: emptyList(),
-                                    description = lib.manga.ogDescription,
-                                )
-                            }
-                        }
-                    }
-                    val filteredCandidates = if (prefs.heroRequireSelectedArtwork) {
-                        candidateList.filter { item ->
-                            hasRequiredHeroArtwork(item.mangaId, item.title, prefs.heroStyle)
-                        }
-                    } else {
-                        candidateList
-                    }
-                    val candidateMap = filteredCandidates.associateBy { it.mangaId }
-                    val stableIds = persistentHeroMangaIds.filter { it in candidateMap }
-                    val finalIds = if (stableIds.size < 7) {
-                        val remaining = filteredCandidates.filter { it.mangaId !in stableIds.toSet() }.shuffled()
-                        stableIds + remaining.take(7 - stableIds.size).map { it.mangaId }
-                    } else {
-                        stableIds.take(7)
-                    }
-                    persistentHeroMangaIds = finalIds
-                    finalIds.mapNotNull { candidateMap[it] }
-                } else {
-                    // Default: in-progress history with library fallback
-                    val eligibleHistory = if (prefs.heroRequireSelectedArtwork) {
-                        distinctHistory.filter { h ->
-                            hasRequiredHeroArtwork(h.mangaId, h.title, prefs.heroStyle)
-                        }
-                    } else {
-                        distinctHistory
-                    }
-
-                    val historyItemsByMangaId = eligibleHistory.associate { h ->
-                        val libManga = libraryByMangaId[h.mangaId]
-                        h.mangaId to createHomeItem(
-                            mangaId = h.mangaId,
-                            title = h.title,
-                            coverData = h.coverData,
-                            lastChapterNumber = h.chapterNumber.takeIf { it >= 0 },
-                            lastChapterId = h.chapterId,
-                            totalChapters = h.totalCountCalculated,
-                            readChapters = h.readCountCalculated,
-                            unreadCount = h.unreadCount,
-                            isChapterRead = h.read,
-                            lastPageRead = h.lastPageRead,
-                            genres = libManga?.manga?.ogGenre ?: emptyList(),
-                            description = libManga?.manga?.ogDescription,
-                        )
-                    }
-
-                    val libraryCandidates = data.libraryList.filter { lib ->
-                        !prefs.heroRequireSelectedArtwork || hasRequiredHeroArtwork(lib.manga.id, lib.manga.ogTitle ?: lib.manga.title, prefs.heroStyle)
-                    }
-
-                    val libraryItemsByMangaId = libraryCandidates.associate { lib ->
-                        lib.manga.id to createHomeItem(
+                }
+                2 -> {
+                    // Trackers
+                    val chosen = heroTrackerStatuses
+                    val pool = mutableListOf<HomeMangaItem>()
+                    if ("reading" in chosen) pool.addAll(readingList)
+                    if ("plan_to_read" in chosen) pool.addAll(planToReadList)
+                    if ("on_hold" in chosen) pool.addAll(onHoldList)
+                    if ("completed" in chosen) pool.addAll(completedList)
+                    pool.distinctBy { it.mangaId }.take(7)
+                }
+                3 -> trendingMangaItems.take(7)
+                4 -> trendingManhwaItems.take(7)
+                else -> {
+                    // History with library fallback
+                    val historyPool = continueReadingItems.take(7)
+                    if (historyPool.isNotEmpty()) historyPool else data.libraryList.take(7).map { lib ->
+                        createItem(
                             mangaId = lib.manga.id,
                             title = lib.manga.title,
                             coverData = lib.manga.asMangaCover(),
@@ -684,113 +470,40 @@ class ChimanewHomeScreenModel(
                             unreadCount = lib.unreadCount,
                             genres = lib.manga.ogGenre ?: emptyList(),
                             description = lib.manga.ogDescription,
+                            inLibrary = true,
                         )
                     }
-
-                    val allCandidatesMap = HashMap<Long, HomeMangaItem>().apply {
-                        putAll(libraryItemsByMangaId)
-                        putAll(historyItemsByMangaId)
-                    }
-
-                    val stableIds = persistentHeroMangaIds.filter { it in allCandidatesMap }
-                    val finalIds = if (stableIds.size < 7) {
-                        val historyPool = eligibleHistory.shuffled()
-                        val historyIdsInPool = historyPool.map { it.mangaId }.toSet()
-                        val libraryPool = libraryCandidates.filter { it.manga.id !in historyIdsInPool }.shuffled()
-
-                        val historyTarget = if (libraryPool.isNotEmpty()) 4 else 7
-                        val pickedHistory = historyPool.filter { it.mangaId !in stableIds.toSet() }.take(historyTarget).map { it.mangaId }
-
-                        val neededForLibrary = 7 - (stableIds.size + pickedHistory.size)
-                        val pickedLibrary = libraryPool.filter { it.manga.id !in stableIds.toSet() }.take(neededForLibrary).map { it.manga.id }
-
-                        val remainingNeeded = 7 - (stableIds.size + pickedHistory.size + pickedLibrary.size)
-                        val fallbackHistory = if (remainingNeeded > 0) {
-                            historyPool.filter { it.mangaId !in stableIds.toSet() && it.mangaId !in pickedHistory.toSet() }
-                                .take(remainingNeeded)
-                                .map { it.mangaId }
-                        } else {
-                            emptyList()
-                        }
-
-                        (stableIds + pickedHistory + pickedLibrary + fallbackHistory).distinct().take(7)
-                    } else {
-                        stableIds.take(7)
-                    }
-
-                    persistentHeroMangaIds = finalIds
-                    finalIds.mapNotNull { allCandidatesMap[it] }
                 }
+            }
 
-                if (prefs.useAnilistArtwork) {
-                    val activeBannerOrder = artworkWaterfallRepository.getActiveBannerOrder()
-                    val activeCoverOrder = artworkWaterfallRepository.getActiveCoverOrder()
+            // Assemble Shelves
+            val availableShelves = mutableMapOf<String, List<HomeShelf>>()
+            if (continueReadingItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_CONTINUE_READING] = listOf(
+                    HomeShelf(
+                        id = "shelf_continue_reading",
+                        title = "Continue Reading",
+                        items = continueReadingItems,
+                        isResumeOnTap = continueReadingTapAction == 1,
+                    ),
+                )
+            }
+            if (readingList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_READING] = listOf(HomeShelf("track_reading", "Reading", readingList))
+            if (planToReadList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_PLAN_TO_READ] = listOf(HomeShelf("track_plan_to_read", "Plan to Read", planToReadList))
+            if (onHoldList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_ON_HOLD] = listOf(HomeShelf("track_on_hold", "On Hold", onHoldList))
+            if (completedList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_COMPLETED] = listOf(HomeShelf("track_completed", "Completed", completedList))
+            if (droppedList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_DROPPED] = listOf(HomeShelf("track_dropped", "Dropped", droppedList))
+            if (notTrackedList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_NOT_TRACKED] = listOf(HomeShelf("track_not_tracked", "Not Tracked in Library", notTrackedList))
 
-                    val missingHeroArt = heroItems.filter { item ->
-                        val cached = artworkWaterfallRepository.getCached(item.title)
-                        val needsBanner = activeBannerOrder.isNotEmpty() && (cached == null || cached.bannerUrl.isNullOrBlank())
-                        val needsCover = activeCoverOrder.isNotEmpty() && (cached == null || cached.posterUrl.isNullOrBlank())
-                        (cached == null || needsBanner || needsCover) && attemptedHeroTitles.add(item.title)
-                    }
-                    val missingLibraryArt = data.libraryList.filter { lib ->
-                        val mTitle = lib.manga.ogTitle ?: lib.manga.title
-                        val cached = artworkWaterfallRepository.getCached(mTitle)
-                        val needsBanner = activeBannerOrder.isNotEmpty() && (cached == null || cached.bannerUrl.isNullOrBlank())
-                        val needsCover = activeCoverOrder.isNotEmpty() && (cached == null || cached.posterUrl.isNullOrBlank())
-                        (cached == null || needsBanner || needsCover) && attemptedHeroTitles.add(mTitle)
-                    }
-                    if (missingHeroArt.isNotEmpty() || missingLibraryArt.isNotEmpty()) {
-                        screenModelScope.launchIO {
-                            var anyUpdated = false
-                            for (item in missingHeroArt) {
-                                val mangaTracks = tracksByManga[item.mangaId]
-                                val aniListTrack = mangaTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
-                                val malTrack = mangaTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
-                                val kitsuTrack = mangaTracks?.firstOrNull { it.trackerId == trackerManager.kitsu.id }
-                                val art = artworkWaterfallRepository.resolveArtwork(
-                                    rawTitle = item.title,
-                                    mangaId = item.mangaId,
-                                    defaultCoverUrl = item.coverData.ogUrl,
-                                    anilistRemoteId = aniListTrack?.remoteId?.takeIf { it > 0 },
-                                    kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
-                                    malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
-                                )
-                                if (!art.bannerUrl.isNullOrBlank() || !art.posterUrl.isNullOrBlank()) {
-                                    anyUpdated = true
-                                }
-                                delay(120L)
-                            }
-                            if (anyUpdated) {
-                                artworkRefreshTrigger.value = System.currentTimeMillis()
-                            }
-
-                            // Proactively warm library covers in background
-                            for (lib in missingLibraryArt) {
-                                val mTitle = lib.manga.ogTitle ?: lib.manga.title
-                                val mTracks = tracksByManga[lib.manga.id]
-                                val alTrack = mTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
-                                val malTrack = mTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
-                                val kitsuTrack = mTracks?.firstOrNull { it.trackerId == trackerManager.kitsu.id }
-                                artworkWaterfallRepository.resolveArtwork(
-                                    rawTitle = mTitle,
-                                    mangaId = lib.manga.id,
-                                    defaultCoverUrl = lib.manga.thumbnailUrl,
-                                    anilistRemoteId = alTrack?.remoteId?.takeIf { it > 0 },
-                                    kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
-                                    malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
-                                )
-                                delay(80L)
-                            }
-                        }
-                    }
-                }
-
-                val updatedItems = if (prefs.showUpdated) {
-                    data.libraryList
-                        .sortedByDescending { it.latestUpload.coerceAtLeast(it.chapterFetchedAt) }
-                        .take(15)
-                        .map { lib ->
-                            createHomeItem(
+            // Categories
+            for (cat in data.categories) {
+                val catItems = data.libraryList.filter { cat.id in it.categories }
+                if (catItems.isNotEmpty()) {
+                    val shelf = HomeShelf(
+                        id = "cat_${cat.id}",
+                        title = cat.name.ifBlank { "Library" },
+                        items = catItems.map { lib ->
+                            createItem(
                                 mangaId = lib.manga.id,
                                 title = lib.manga.title,
                                 coverData = lib.manga.asMangaCover(),
@@ -799,222 +512,649 @@ class ChimanewHomeScreenModel(
                                 unreadCount = lib.unreadCount,
                                 genres = lib.manga.ogGenre ?: emptyList(),
                                 description = lib.manga.ogDescription,
+                                inLibrary = true,
                             )
-                        }
-                } else {
-                    emptyList()
+                        },
+                    )
+                    availableShelves["${HomeRowsCustomizerScreen.CATEGORY_PREFIX}${cat.id}"] = listOf(shelf)
                 }
+            }
 
-                val categoryShelves = if (prefs.showCategoryShelves) {
-                    data.categories.mapNotNull { cat ->
-                        val itemsForCat = data.libraryList.filter { cat.id in it.categories }
-                        if (itemsForCat.isEmpty()) {
-                            null
-                        } else {
-                            HomeShelf(
-                                id = "cat_${cat.id}",
-                                title = cat.name.ifBlank { "Library" },
-                                items = itemsForCat.map { lib ->
-                                    createHomeItem(
-                                        mangaId = lib.manga.id,
-                                        title = lib.manga.title,
-                                        coverData = lib.manga.asMangaCover(),
-                                        totalChapters = lib.totalChapters,
-                                        readChapters = lib.readCount,
-                                        unreadCount = lib.unreadCount,
-                                        genres = lib.manga.ogGenre ?: emptyList(),
-                                        description = lib.manga.ogDescription,
-                                    )
-                                },
-                            )
-                        }
-                    }
-                } else {
-                    emptyList()
-                }
-
-                // Assemble shelves strictly according to user custom order & visibility
-                val availableShelvesMap = mutableMapOf<String, List<HomeShelf>>()
-
-                // 1. Continue Reading
-                if (continueReadingItems.isNotEmpty() && prefs.showContinue) {
-                    availableShelvesMap[HomeRowsCustomizerScreen.SHELF_CONTINUE_READING] = listOf(
-                        HomeShelf(
-                            id = "shelf_continue_reading",
-                            title = "Continue Reading",
-                            items = continueReadingItems,
-                            isResumeOnTap = prefs.continueReadingTapAction == 1,
-                        ),
+            // Recently Updated
+            val updatedItems = data.libraryList
+                .sortedByDescending { it.latestUpload.coerceAtLeast(it.chapterFetchedAt) }
+                .take(15)
+                .map { lib ->
+                    createItem(
+                        mangaId = lib.manga.id,
+                        title = lib.manga.title,
+                        coverData = lib.manga.asMangaCover(),
+                        totalChapters = lib.totalChapters,
+                        readChapters = lib.readCount,
+                        unreadCount = lib.unreadCount,
+                        genres = lib.manga.ogGenre ?: emptyList(),
+                        description = lib.manga.ogDescription,
+                        inLibrary = true,
                     )
                 }
+            if (updatedItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_RECENTLY_ADDED] = listOf(HomeShelf("shelf_recently_updated", "Recently Updated", updatedItems))
+            }
 
-                // 2. Tracking shelves
-                if (prefs.showTrackingShelves && data.libraryList.isNotEmpty()) {
-                    if (readingList.isNotEmpty()) {
-                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_READING] = listOf(
-                            HomeShelf(id = "track_reading", title = "Reading", items = readingList),
-                        )
-                    }
-                    if (planToReadList.isNotEmpty()) {
-                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_PLAN_TO_READ] = listOf(
-                            HomeShelf(id = "track_plan_to_read", title = "Plan to Read", items = planToReadList),
-                        )
-                    }
-                    if (onHoldList.isNotEmpty()) {
-                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_ON_HOLD] = listOf(
-                            HomeShelf(id = "track_on_hold", title = "On Hold", items = onHoldList),
-                        )
-                    }
-                    if (completedList.isNotEmpty()) {
-                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_COMPLETED] = listOf(
-                            HomeShelf(id = "track_completed", title = "Completed", items = completedList),
-                        )
-                    }
-                    if (droppedList.isNotEmpty()) {
-                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_DROPPED] = listOf(
-                            HomeShelf(id = "track_dropped", title = "Dropped", items = droppedList),
-                        )
-                    }
-                    if (notTrackedList.isNotEmpty()) {
-                        availableShelvesMap[HomeRowsCustomizerScreen.SHELF_NOT_TRACKED] = listOf(
-                            HomeShelf(id = "track_not_tracked", title = "Not Tracked in Library", items = notTrackedList),
-                        )
-                    }
-                }
-
-                // 3. Category shelves
-                if (prefs.showCategoryShelves && categoryShelves.isNotEmpty()) {
-                    availableShelvesMap[HomeRowsCustomizerScreen.SHELF_CATEGORIES] = categoryShelves
-                    for (cat in data.categories) {
-                        val itemsForCat = data.libraryList.filter { cat.id in it.categories }
-                        if (itemsForCat.isNotEmpty()) {
-                            val shelf = HomeShelf(
-                                id = "cat_${cat.id}",
-                                title = cat.name.ifBlank { "Library" },
-                                items = itemsForCat.map { lib ->
-                                    createHomeItem(
-                                        mangaId = lib.manga.id,
-                                        title = lib.manga.title,
-                                        coverData = lib.manga.asMangaCover(),
-                                        totalChapters = lib.totalChapters,
-                                        readChapters = lib.readCount,
-                                        unreadCount = lib.unreadCount,
-                                        genres = lib.manga.ogGenre ?: emptyList(),
-                                        description = lib.manga.ogDescription,
-                                    )
-                                },
-                            )
-                            availableShelvesMap["${HomeRowsCustomizerScreen.CATEGORY_PREFIX}${cat.id}"] = listOf(shelf)
-                        }
-                    }
-                }
-
-                // 4. Recently updated
-                if (updatedItems.isNotEmpty() && prefs.showUpdated) {
-                    availableShelvesMap[HomeRowsCustomizerScreen.SHELF_RECENTLY_ADDED] = listOf(
-                        HomeShelf(
-                            id = "shelf_recently_updated",
-                            title = "Recently Updated",
-                            items = updatedItems,
-                        ),
-                    )
-                }
-
-                val orderedCustomEntries = HomeRowsCustomizerScreen.parseOrder(prefs.homeShelfOrder, data.categories)
-                val finalShelves = mutableListOf<HomeShelf>()
-                for ((shelfId, isEnabled) in orderedCustomEntries) {
-                    if (isEnabled) {
-                        availableShelvesMap[shelfId]?.let { finalShelves.addAll(it) }
-                    }
-                }
-
-                State(
-                    isLoading = false,
-                    isRefreshing = mutableState.value.isRefreshing,
-                    heroItems = heroItems,
-                    heroStyle = prefs.heroStyle,
-                    heroArtworkSources = prefs.heroArtworkSources,
-                    shelves = finalShelves,
-                    showProgressBars = prefs.showProgressBars,
-                    showUnreadBadges = prefs.showUnreadBadges,
-                    continueReadingTapAction = prefs.continueReadingTapAction,
-                    shelfTapAction = prefs.shelfTapAction,
+            // Discovery
+            if (trendingMangaItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_TRENDING_MANGA] = listOf(
+                    HomeShelf("shelf_trending_manga", "Trending Manga (AniList Discovery)", trendingMangaItems)
                 )
-            }.collectLatest { newState ->
-                cachedState = newState
-                mutableState.update { newState }
+            }
+            if (trendingManhwaItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_TRENDING_MANHWA] = listOf(
+                    HomeShelf("shelf_trending_manhwa", "Trending Manhwa (AniList Discovery)", trendingManhwaItems)
+                )
+            }
 
-                // EaZy Nuvio+ / Chimanew: Pre-resolve waterfall for hero items to ensure 100% visual continuity with Details
-                if (newState.heroItems.isNotEmpty()) {
-                    newState.heroItems.take(7).forEach { item ->
-                        artworkWaterfallRepository.resolveArtwork(
-                            rawTitle = item.title,
-                            mangaId = item.mangaId,
+            val orderedCustomEntries = HomeRowsCustomizerScreen.parseOrder(
+                raw = homeShelfOrder,
+                categories = data.categories.map { it.id to it.name },
+                mediaType = MEDIA_TYPE_MANGA,
+            )
+            val finalShelves = mutableListOf<HomeShelf>()
+            for ((shelfId, isEnabled) in orderedCustomEntries) {
+                if (isEnabled) {
+                    availableShelves[shelfId]?.let { finalShelves.addAll(it) }
+                }
+            }
+
+            State(
+                isLoading = false,
+                isRefreshing = mutableState.value.isRefreshing,
+                activeMedia = MEDIA_TYPE_MANGA,
+                heroItems = heroItems,
+                heroStyle = heroStyle,
+                heroArtworkSources = heroArtworkSources,
+                shelves = finalShelves,
+                showProgressBars = showProgressBars,
+                showUnreadBadges = showUnreadBadges,
+                continueReadingTapAction = continueReadingTapAction,
+                shelfTapAction = shelfTapAction,
+            )
+        }.collect { emit(it) }
+    }
+
+    // =========================================================================
+    // ANIME FLOW
+    // =========================================================================
+    private fun buildAnimeFlow(): Flow<State> = flow {
+        val dataFlow = combine(
+            getAnimeHistory.subscribe(""),
+            getLibraryAnime.subscribe(),
+            getAnimeCategories.subscribe(),
+            getAnimeTracks.subscribe(),
+            artworkRefreshTrigger,
+        ) { h, l, c, t, _ -> AnimeData(h, l, c, t) }.throttleLatest(1000L)
+
+        combine(
+            dataFlow,
+            preferences.showHeroCarouselAnime().changes(),
+            preferences.heroSourceAnime().changes(),
+            preferences.heroStyle().changes(),
+            preferences.heroArtworkSources().changes(),
+            preferences.heroCategoriesAnime().changes(),
+            preferences.heroTrackerStatusesAnime().changes(),
+            preferences.homeShelfOrderAnime().changes(),
+            preferences.showProgressBars().changes(),
+            preferences.showUnreadBadges().changes(),
+            preferences.continueReadingTapAction().changes(),
+            preferences.shelfTapAction().changes(),
+        ) { args ->
+            val data = args[0] as AnimeData
+            val showHero = args[1] as Boolean
+            val heroSource = args[2] as Int
+            val heroStyle = args[3] as Int
+            val heroArtworkSources = args[4] as Set<String>
+            val heroCategories = args[5] as Set<String>
+            val heroTrackerStatuses = args[6] as Set<String>
+            val homeShelfOrder = args[7] as String
+            val showProgressBars = args[8] as Boolean
+            val showUnreadBadges = args[9] as Boolean
+            val continueReadingTapAction = args[10] as Int
+            val shelfTapAction = args[11] as Int
+
+            val distinctHistory = data.historyList.distinctBy { it.animeId }
+            val tracksByAnime = data.tracks.groupBy { it.animeId }
+            val libraryByAnimeId = data.libraryList.associateBy { it.anime.id }
+
+            fun createAnimeItem(
+                animeId: Long,
+                title: String,
+                coverData: AnimeCover,
+                lastEpisodeNumber: Double? = null,
+                lastEpisodeId: Long? = null,
+                totalEpisodes: Long = 0,
+                seenEpisodes: Long = 0,
+                unseenCount: Long = 0,
+                isEpisodeSeen: Boolean = false,
+                genres: List<String> = emptyList(),
+                description: String? = null,
+                inLibrary: Boolean = false,
+            ): HomeMangaItem {
+                val cachedArt = artworkWaterfallRepository.getCached(title)
+                return HomeMangaItem(
+                    mangaId = animeId,
+                    title = title,
+                    coverData = coverData,
+                    highResBannerUrl = cachedArt?.bannerUrl,
+                    highResCoverUrl = cachedArt?.posterUrl,
+                    communityRatings = cachedArt?.ratings ?: emptyList(),
+                    lastChapterNumber = lastEpisodeNumber,
+                    lastChapterId = lastEpisodeId,
+                    totalChapters = totalEpisodes,
+                    readChapters = seenEpisodes,
+                    unreadCount = unseenCount,
+                    isChapterRead = isEpisodeSeen,
+                    genres = genres,
+                    description = description,
+                    inLibrary = inLibrary,
+                    mediaType = MEDIA_TYPE_ANIME,
+                )
+            }
+
+            // Continue watching
+            val continueWatchingItems = distinctHistory.map { h ->
+                val lib = libraryByAnimeId[h.animeId]
+                createAnimeItem(
+                    animeId = h.animeId,
+                    title = h.title,
+                    coverData = h.coverData,
+                    lastEpisodeNumber = h.episodeNumber.takeIf { it >= 0 },
+                    lastEpisodeId = h.episodeId,
+                    totalEpisodes = lib?.totalEpisodes ?: 0L,
+                    seenEpisodes = lib?.seenCount ?: 0L,
+                    unseenCount = lib?.unseenCount ?: 0L,
+                    isEpisodeSeen = h.seen,
+                    genres = lib?.anime?.genre ?: emptyList(),
+                    description = lib?.anime?.description,
+                    inLibrary = lib != null,
+                )
+            }
+
+            // Tracking lists
+            val watchingList = mutableListOf<HomeMangaItem>()
+            val planToWatchList = mutableListOf<HomeMangaItem>()
+            val onHoldList = mutableListOf<HomeMangaItem>()
+            val completedList = mutableListOf<HomeMangaItem>()
+            val droppedList = mutableListOf<HomeMangaItem>()
+            val notTrackedList = mutableListOf<HomeMangaItem>()
+
+            for (lib in data.libraryList) {
+                val animeTracks = tracksByAnime[lib.anime.id]
+                val activeTrack = animeTracks?.firstOrNull { it.trackerId == TrackerManager.ANILIST }
+                    ?: animeTracks?.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
+                    ?: animeTracks?.firstOrNull()
+
+                val item = createAnimeItem(
+                    animeId = lib.anime.id,
+                    title = lib.anime.title,
+                    coverData = lib.anime.asAnimeCover(),
+                    totalEpisodes = lib.totalEpisodes,
+                    seenEpisodes = lib.seenCount,
+                    unseenCount = lib.unseenCount,
+                    genres = lib.anime.genre ?: emptyList(),
+                    description = lib.anime.description,
+                    inLibrary = true,
+                )
+
+                if (activeTrack == null) {
+                    notTrackedList.add(item)
+                } else {
+                    when (TrackStatus.parseTrackerStatus(trackerManager, activeTrack.trackerId, activeTrack.status)) {
+                        TrackStatus.READING, TrackStatus.REPEATING -> watchingList.add(item)
+                        TrackStatus.PLAN_TO_READ -> planToWatchList.add(item)
+                        TrackStatus.PAUSED -> onHoldList.add(item)
+                        TrackStatus.COMPLETED -> completedList.add(item)
+                        TrackStatus.DROPPED -> droppedList.add(item)
+                        else -> notTrackedList.add(item)
+                    }
+                }
+            }
+
+            // Discovery Anime
+            val trendingAnimeRaw = discoveryRepository.getTrendingAnime()
+            val trendingAnimeItems = trendingAnimeRaw.map { d ->
+                val matched = data.libraryList.firstOrNull { it.anime.title.equals(d.title, ignoreCase = true) }
+                d.toHomeMangaItem(matched?.anime?.id, MEDIA_TYPE_ANIME)
+            }
+
+            // Hero Items
+            val heroItems = if (!showHero) {
+                emptyList()
+            } else when (heroSource) {
+                1 -> {
+                    // Categories
+                    val selectedCatIds = heroCategories.mapNotNull { it.toLongOrNull() }.toSet()
+                    val pool = if (selectedCatIds.isNotEmpty()) {
+                        data.libraryList.filter { lib -> lib.categories.any { it in selectedCatIds } }
+                    } else {
+                        data.libraryList.filter { it.anime.favorite }
+                    }
+                    pool.take(7).map { lib ->
+                        createAnimeItem(
+                            animeId = lib.anime.id,
+                            title = lib.anime.title,
+                            coverData = lib.anime.asAnimeCover(),
+                            totalEpisodes = lib.totalEpisodes,
+                            seenEpisodes = lib.seenCount,
+                            unseenCount = lib.unseenCount,
+                            genres = lib.anime.genre ?: emptyList(),
+                            description = lib.anime.description,
+                            inLibrary = true,
+                        )
+                    }
+                }
+                2 -> {
+                    // Trackers
+                    val chosen = heroTrackerStatuses
+                    val pool = mutableListOf<HomeMangaItem>()
+                    if ("reading" in chosen) pool.addAll(watchingList)
+                    if ("plan_to_read" in chosen) pool.addAll(planToWatchList)
+                    if ("on_hold" in chosen) pool.addAll(onHoldList)
+                    if ("completed" in chosen) pool.addAll(completedList)
+                    pool.distinctBy { it.mangaId }.take(7)
+                }
+                3 -> trendingAnimeItems.take(7)
+                else -> {
+                    // History with library fallback
+                    val pool = continueWatchingItems.take(7)
+                    if (pool.isNotEmpty()) pool else data.libraryList.take(7).map { lib ->
+                        createAnimeItem(
+                            animeId = lib.anime.id,
+                            title = lib.anime.title,
+                            coverData = lib.anime.asAnimeCover(),
+                            totalEpisodes = lib.totalEpisodes,
+                            seenEpisodes = lib.seenCount,
+                            unseenCount = lib.unseenCount,
+                            genres = lib.anime.genre ?: emptyList(),
+                            description = lib.anime.description,
+                            inLibrary = true,
                         )
                     }
                 }
             }
-        }
+
+            // Assemble Shelves
+            val availableShelves = mutableMapOf<String, List<HomeShelf>>()
+            if (continueWatchingItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_CONTINUE_WATCHING] = listOf(
+                    HomeShelf(
+                        id = "shelf_continue_watching",
+                        title = "Continue Watching",
+                        items = continueWatchingItems,
+                        isResumeOnTap = continueReadingTapAction == 1,
+                    ),
+                )
+            }
+            if (watchingList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_WATCHING] = listOf(HomeShelf("track_watching", "Watching", watchingList))
+            if (planToWatchList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_PLAN_TO_WATCH] = listOf(HomeShelf("track_plan_to_watch", "Plan to Watch", planToWatchList))
+            if (onHoldList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_ON_HOLD] = listOf(HomeShelf("track_on_hold", "On Hold", onHoldList))
+            if (completedList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_COMPLETED] = listOf(HomeShelf("track_completed", "Completed", completedList))
+            if (droppedList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_DROPPED] = listOf(HomeShelf("track_dropped", "Dropped", droppedList))
+            if (notTrackedList.isNotEmpty()) availableShelves[HomeRowsCustomizerScreen.SHELF_NOT_TRACKED] = listOf(HomeShelf("track_not_tracked", "Not Tracked in Library", notTrackedList))
+
+            // Categories
+            for (cat in data.categories) {
+                val catItems = data.libraryList.filter { cat.id in it.categories }
+                if (catItems.isNotEmpty()) {
+                    val shelf = HomeShelf(
+                        id = "cat_${cat.id}",
+                        title = cat.name.ifBlank { "Anime" },
+                        items = catItems.map { lib ->
+                            createAnimeItem(
+                                animeId = lib.anime.id,
+                                title = lib.anime.title,
+                                coverData = lib.anime.asAnimeCover(),
+                                totalEpisodes = lib.totalEpisodes,
+                                seenEpisodes = lib.seenCount,
+                                unseenCount = lib.unseenCount,
+                                genres = lib.anime.genre ?: emptyList(),
+                                description = lib.anime.description,
+                                inLibrary = true,
+                            )
+                        },
+                    )
+                    availableShelves["${HomeRowsCustomizerScreen.CATEGORY_PREFIX}${cat.id}"] = listOf(shelf)
+                }
+            }
+
+            // Recently Added
+            val addedItems = data.libraryList
+                .sortedByDescending { it.anime.dateAdded }
+                .take(15)
+                .map { lib ->
+                    createAnimeItem(
+                        animeId = lib.anime.id,
+                        title = lib.anime.title,
+                        coverData = lib.anime.asAnimeCover(),
+                        totalEpisodes = lib.totalEpisodes,
+                        seenEpisodes = lib.seenCount,
+                        unseenCount = lib.unseenCount,
+                        genres = lib.anime.genre ?: emptyList(),
+                        description = lib.anime.description,
+                        inLibrary = true,
+                    )
+                }
+            if (addedItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_RECENTLY_ADDED] = listOf(HomeShelf("shelf_recently_added_anime", "Recently Added", addedItems))
+            }
+
+            // Discovery
+            if (trendingAnimeItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_TRENDING_ANIME] = listOf(
+                    HomeShelf("shelf_trending_anime", "Trending Anime (AniList Discovery)", trendingAnimeItems)
+                )
+            }
+
+            val orderedCustomEntries = HomeRowsCustomizerScreen.parseOrder(
+                raw = homeShelfOrder,
+                categories = data.categories.map { it.id to it.name },
+                mediaType = MEDIA_TYPE_ANIME,
+            )
+            val finalShelves = mutableListOf<HomeShelf>()
+            for ((shelfId, isEnabled) in orderedCustomEntries) {
+                if (isEnabled) {
+                    availableShelves[shelfId]?.let { finalShelves.addAll(it) }
+                }
+            }
+
+            State(
+                isLoading = false,
+                isRefreshing = mutableState.value.isRefreshing,
+                activeMedia = MEDIA_TYPE_ANIME,
+                heroItems = heroItems,
+                heroStyle = heroStyle,
+                heroArtworkSources = heroArtworkSources,
+                shelves = finalShelves,
+                showProgressBars = showProgressBars,
+                showUnreadBadges = showUnreadBadges,
+                continueReadingTapAction = continueReadingTapAction,
+                shelfTapAction = shelfTapAction,
+            )
+        }.collect { emit(it) }
     }
 
+    // =========================================================================
+    // NOVEL FLOW
+    // =========================================================================
+    private fun buildNovelFlow(): Flow<State> = flow {
+        val dataFlow = combine(
+            novelHistoryRepository.subscribeToHistoryWithRelations(""),
+            novelRepository.getFavoritesAsFlow(),
+            novelCategoryRepository.subscribe(),
+            artworkRefreshTrigger,
+        ) { h, f, c, _ -> NovelData(h, f, c) }.throttleLatest(1000L)
+
+        combine(
+            dataFlow,
+            preferences.showHeroCarouselNovel().changes(),
+            preferences.heroSourceNovel().changes(),
+            preferences.heroStyle().changes(),
+            preferences.heroArtworkSources().changes(),
+            preferences.heroCategoriesNovel().changes(),
+            preferences.homeShelfOrderNovel().changes(),
+            preferences.showProgressBars().changes(),
+            preferences.showUnreadBadges().changes(),
+            preferences.continueReadingTapAction().changes(),
+            preferences.shelfTapAction().changes(),
+        ) { args ->
+            val data = args[0] as NovelData
+            val showHero = args[1] as Boolean
+            val heroSource = args[2] as Int
+            val heroStyle = args[3] as Int
+            val heroArtworkSources = args[4] as Set<String>
+            val heroCategories = args[5] as Set<String>
+            val homeShelfOrder = args[6] as String
+            val showProgressBars = args[7] as Boolean
+            val showUnreadBadges = args[8] as Boolean
+            val continueReadingTapAction = args[9] as Int
+            val shelfTapAction = args[10] as Int
+
+            val distinctHistory = data.historyList.distinctBy { it.novelId }
+            val favoritesByNovelId = data.favoritesList.associateBy { it.id }
+
+            fun createNovelItem(
+                novelId: Long,
+                title: String,
+                thumbnailUrl: String?,
+                lastChapterNumber: Double? = null,
+                lastChapterId: Long? = null,
+                genres: List<String> = emptyList(),
+                description: String? = null,
+                inLibrary: Boolean = false,
+            ): HomeMangaItem {
+                val cachedArt = artworkWaterfallRepository.getCached(title)
+                return HomeMangaItem(
+                    mangaId = novelId,
+                    title = title,
+                    coverData = thumbnailUrl ?: "",
+                    highResBannerUrl = cachedArt?.bannerUrl,
+                    highResCoverUrl = cachedArt?.posterUrl ?: thumbnailUrl,
+                    communityRatings = cachedArt?.ratings ?: emptyList(),
+                    lastChapterNumber = lastChapterNumber,
+                    lastChapterId = lastChapterId,
+                    genres = genres,
+                    description = description,
+                    inLibrary = inLibrary,
+                    mediaType = MEDIA_TYPE_NOVEL,
+                )
+            }
+
+            // Continue reading
+            val continueReadingItems = distinctHistory.map { h ->
+                val fav = favoritesByNovelId[h.novelId]
+                createNovelItem(
+                    novelId = h.novelId,
+                    title = h.novelTitle,
+                    thumbnailUrl = h.novelThumbnailUrl,
+                    lastChapterNumber = h.chapterNumber.toDouble().takeIf { it >= 0 },
+                    lastChapterId = h.chapterId,
+                    genres = fav?.genre ?: emptyList(),
+                    description = fav?.description,
+                    inLibrary = fav != null,
+                )
+            }
+
+            // Library items
+            val libraryItems = data.favoritesList.map { novel ->
+                createNovelItem(
+                    novelId = novel.id,
+                    title = novel.title,
+                    thumbnailUrl = novel.thumbnailUrl,
+                    genres = novel.genre ?: emptyList(),
+                    description = novel.description,
+                    inLibrary = true,
+                )
+            }
+
+            // Discovery Novels
+            val trendingNovelsRaw = discoveryRepository.getTrendingNovels()
+            val trendingNovelsItems = trendingNovelsRaw.map { d ->
+                val matched = data.favoritesList.firstOrNull { it.title.equals(d.title, ignoreCase = true) }
+                d.toHomeMangaItem(matched?.id, MEDIA_TYPE_NOVEL)
+            }
+
+            // Hero Items
+            val heroItems = if (!showHero) {
+                emptyList()
+            } else when (heroSource) {
+                1 -> {
+                    // Categories
+                    val selectedCatIds = heroCategories.mapNotNull { it.toLongOrNull() }.toSet()
+                    val pool = if (selectedCatIds.isNotEmpty()) {
+                        val categoryMap = novelCategoryRepository.getCategoryIdsByNovelIds(data.favoritesList.map { it.id })
+                        data.favoritesList.filter { novel ->
+                            val ids = categoryMap[novel.id].orEmpty()
+                            ids.any { it in selectedCatIds }
+                        }
+                    } else {
+                        data.favoritesList
+                    }
+                    pool.take(7).map { novel ->
+                        createNovelItem(
+                            novelId = novel.id,
+                            title = novel.title,
+                            thumbnailUrl = novel.thumbnailUrl,
+                            genres = novel.genre ?: emptyList(),
+                            description = novel.description,
+                            inLibrary = true,
+                        )
+                    }
+                }
+                2 -> continueReadingItems.take(7)
+                3 -> trendingNovelsItems.take(7)
+                else -> {
+                    val pool = continueReadingItems.take(7)
+                    if (pool.isNotEmpty()) pool else libraryItems.take(7)
+                }
+            }
+
+            // Assemble Shelves
+            val availableShelves = mutableMapOf<String, List<HomeShelf>>()
+            if (continueReadingItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_CONTINUE_READING] = listOf(
+                    HomeShelf(
+                        id = "shelf_continue_reading_novel",
+                        title = "Continue Reading",
+                        items = continueReadingItems,
+                        isResumeOnTap = continueReadingTapAction == 1,
+                    ),
+                )
+            }
+            if (libraryItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_READING] = listOf(
+                    HomeShelf("shelf_library_novels", "Reading", libraryItems)
+                )
+            }
+
+            // Categories
+            for (cat in data.categories) {
+                val categoryMap = novelCategoryRepository.getCategoryIdsByNovelIds(data.favoritesList.map { it.id })
+                val catItems = data.favoritesList.filter { novel ->
+                    cat.id in categoryMap[novel.id].orEmpty()
+                }
+                if (catItems.isNotEmpty()) {
+                    val shelf = HomeShelf(
+                        id = "cat_${cat.id}",
+                        title = cat.name.ifBlank { "Novels" },
+                        items = catItems.map { novel ->
+                            createNovelItem(
+                                novelId = novel.id,
+                                title = novel.title,
+                                thumbnailUrl = novel.thumbnailUrl,
+                                genres = novel.genre ?: emptyList(),
+                                description = novel.description,
+                                inLibrary = true,
+                            )
+                        },
+                    )
+                    availableShelves["${HomeRowsCustomizerScreen.CATEGORY_PREFIX}${cat.id}"] = listOf(shelf)
+                }
+            }
+
+            // Recently Added
+            val addedItems = data.favoritesList.take(15).map { novel ->
+                createNovelItem(
+                    novelId = novel.id,
+                    title = novel.title,
+                    thumbnailUrl = novel.thumbnailUrl,
+                    genres = novel.genre ?: emptyList(),
+                    description = novel.description,
+                    inLibrary = true,
+                )
+            }
+            if (addedItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_RECENTLY_ADDED] = listOf(
+                    HomeShelf("shelf_recently_added_novels", "Recently Added", addedItems)
+                )
+            }
+
+            // Discovery
+            if (trendingNovelsItems.isNotEmpty()) {
+                availableShelves[HomeRowsCustomizerScreen.SHELF_TRENDING_NOVELS] = listOf(
+                    HomeShelf("shelf_trending_novels", "Trending Light Novels (AniList Discovery)", trendingNovelsItems)
+                )
+            }
+
+            val orderedCustomEntries = HomeRowsCustomizerScreen.parseOrder(
+                raw = homeShelfOrder,
+                categories = data.categories.map { it.id to it.name },
+                mediaType = MEDIA_TYPE_NOVEL,
+            )
+            val finalShelves = mutableListOf<HomeShelf>()
+            for ((shelfId, isEnabled) in orderedCustomEntries) {
+                if (isEnabled) {
+                    availableShelves[shelfId]?.let { finalShelves.addAll(it) }
+                }
+            }
+
+            State(
+                isLoading = false,
+                isRefreshing = mutableState.value.isRefreshing,
+                activeMedia = MEDIA_TYPE_NOVEL,
+                heroItems = heroItems,
+                heroStyle = heroStyle,
+                heroArtworkSources = heroArtworkSources,
+                shelves = finalShelves,
+                showProgressBars = showProgressBars,
+                showUnreadBadges = showUnreadBadges,
+                continueReadingTapAction = continueReadingTapAction,
+                shelfTapAction = shelfTapAction,
+            )
+        }.collect { emit(it) }
+    }
+
+    // Navigation and Resume Helpers
     suspend fun getResumeChapter(mangaId: Long, lastChapterId: Long?): Chapter? {
         return withIOContext {
-            if (lastChapterId != null) {
-                getNextChapters.await(mangaId, lastChapterId, onlyUnread = false).firstOrNull()
-            } else {
-                getNextChapters.await(mangaId, onlyUnread = true).firstOrNull()
-                    ?: getNextChapters.await(mangaId, onlyUnread = false).firstOrNull()
+            val nextChapters = getNextChapters.await(mangaId, onlyUnread = true)
+            nextChapters.firstOrNull() ?: lastChapterId?.let { getNextChapters.await(mangaId, it).firstOrNull() }
+        }
+    }
+
+    suspend fun getResumeEpisode(animeId: Long, lastEpisodeId: Long?): Episode? {
+        return withIOContext {
+            val episodes = getNextEpisodes.await(animeId, onlyUnseen = true)
+            episodes.firstOrNull() ?: lastEpisodeId?.let { getNextEpisodes.await(animeId, it, onlyUnseen = false).firstOrNull() }
+        }
+    }
+
+    suspend fun getDbNovel(novelId: Long): Novel? = withIOContext {
+        runCatching { novelRepository.getNovelById(novelId) }.getOrNull()
+    }
+
+    fun resumeNovel(context: Context, novelId: Long, onFallback: (Screen) -> Unit) {
+        screenModelScope.launchIO {
+            val novel = getDbNovel(novelId)
+            if (novel == null) return@launchIO
+            val localFolder = novel.localFolder
+            if (localFolder != null) {
+                val dir = LocalNovelFiles.ensureReadableDir(context, File(localFolder))
+                if (dir != null) {
+                    withContext(Dispatchers.Main) {
+                        NovelReaderActivity.launch(context, dir, novelId)
+                    }
+                    return@launchIO
+                }
+            }
+            withContext(Dispatchers.Main) {
+                onFallback(NovelDetailScreen.fromDbNovel(novel))
             }
         }
     }
 
-    fun updateMangaTrackStatus(mangaId: Long, trackStatus: TrackStatus) {
+    fun openNovelDetails(novelId: Long, onNavigate: (Screen) -> Unit) {
         screenModelScope.launchIO {
-            try {
-                val mangaTracks = trackRepository.getTracksByMangaId(mangaId)
-                if (mangaTracks.isNotEmpty()) {
-                    mangaTracks.forEach { track ->
-                        val tracker = trackerManager.get(track.trackerId)
-                        if (tracker != null && tracker.isLoggedIn) {
-                            val newStatus = when (track.trackerId) {
-                                trackerManager.aniList.id -> when (trackStatus) {
-                                    TrackStatus.READING -> 1L
-                                    TrackStatus.PLAN_TO_READ -> 2L
-                                    TrackStatus.COMPLETED -> 3L
-                                    TrackStatus.PAUSED -> 4L
-                                    TrackStatus.DROPPED -> 5L
-                                    TrackStatus.REPEATING -> 6L
-                                    else -> 1L
-                                }
-                                trackerManager.myAnimeList.id -> when (trackStatus) {
-                                    TrackStatus.READING -> 1L
-                                    TrackStatus.COMPLETED -> 2L
-                                    TrackStatus.PAUSED -> 3L
-                                    TrackStatus.DROPPED -> 4L
-                                    TrackStatus.PLAN_TO_READ -> 6L
-                                    TrackStatus.REPEATING -> 7L
-                                    else -> 1L
-                                }
-                                trackerManager.kitsu.id -> when (trackStatus) {
-                                    TrackStatus.READING -> 1L
-                                    TrackStatus.PLAN_TO_READ -> 2L
-                                    TrackStatus.COMPLETED -> 3L
-                                    TrackStatus.PAUSED -> 4L
-                                    TrackStatus.DROPPED -> 5L
-                                    else -> 1L
-                                }
-                                else -> 1L
-                            }
-                            val updatedTrack = track.copy(status = newStatus)
-                            try {
-                                tracker.setRemoteStatus(updatedTrack.toDbTrack(), newStatus)
-                            } catch (_: Exception) {}
-                            trackRepository.insert(updatedTrack)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                logcat(LogPriority.ERROR, e) { "Failed to update track status for manga $mangaId" }
+            val novel = getDbNovel(novelId) ?: return@launchIO
+            withContext(Dispatchers.Main) {
+                onNavigate(NovelDetailScreen.fromDbNovel(novel))
             }
         }
     }
@@ -1030,36 +1170,89 @@ class ChimanewHomeScreenModel(
             }
         }
     }
+
+    fun updateTrackStatus(mangaId: Long, trackerId: Long, status: Long) {
+        screenModelScope.launchIO {
+            try {
+                val track = trackRepository.getTrackByMangaId(mangaId) ?: return@launchIO
+                val updatedTrack = track.copy(status = status)
+                trackRepository.insert(updatedTrack)
+                val tracker = trackerManager.get(trackerId)
+                if (tracker != null && tracker.isLoggedIn) {
+                    tracker.update(updatedTrack.toDbTrack())
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Failed to update track status for manga $mangaId" }
+            }
+        }
+    }
 }
 
-private fun <T> kotlinx.coroutines.flow.Flow<T>.throttleLatest(periodMillis: Long): kotlinx.coroutines.flow.Flow<T> =
-    channelFlow {
-        var lastEmitTime = 0L
-        val mutex = Mutex()
-        var latestValue: T? = null
-        var emitJob: Job? = null
+private fun DiscoveryItem.toHomeMangaItem(libraryId: Long?, mediaType: Int): HomeMangaItem {
+    return HomeMangaItem(
+        mangaId = libraryId ?: -remoteId,
+        title = title,
+        coverData = coverUrl ?: "",
+        highResBannerUrl = bannerUrl,
+        highResCoverUrl = coverUrl,
+        genres = genres,
+        description = description,
+        communityRatings = averageScore?.let {
+            listOf(CommunityRating("AniList", it / 10f, 10f))
+        } ?: emptyList(),
+        inLibrary = libraryId != null,
+        mediaType = mediaType,
+        isDiscovery = libraryId == null,
+    )
+}
 
-        collect { value ->
-            mutex.withLock {
-                latestValue = value
-                val currentTime = SystemClock.elapsedRealtime()
-                val elapsed = currentTime - lastEmitTime
+private data class MangaData(
+    val historyList: List<HistoryWithRelations>,
+    val libraryList: List<LibraryManga>,
+    val categories: List<Category>,
+    val tracks: List<Track>,
+)
 
-                if (elapsed >= periodMillis || lastEmitTime == 0L) {
-                    emitJob?.cancel()
-                    lastEmitTime = currentTime
-                    send(value)
-                } else if (emitJob?.isActive != true) {
-                    emitJob = launch {
-                        delay(periodMillis - elapsed)
-                        mutex.withLock {
-                            latestValue?.let {
-                                lastEmitTime = SystemClock.elapsedRealtime()
-                                send(it)
-                            }
+private data class AnimeData(
+    val historyList: List<AnimeHistoryWithRelations>,
+    val libraryList: List<LibraryAnime>,
+    val categories: List<AnimeCategory>,
+    val tracks: List<AnimeTrack>,
+)
+
+private data class NovelData(
+    val historyList: List<NovelHistoryWithRelations>,
+    val favoritesList: List<Novel>,
+    val categories: List<NovelCategory>,
+)
+
+private fun <T> Flow<T>.throttleLatest(periodMillis: Long): Flow<T> = channelFlow {
+    var lastEmitTime = 0L
+    val mutex = Mutex()
+    var latestValue: T? = null
+    var emitJob: Job? = null
+
+    collect { value ->
+        mutex.withLock {
+            latestValue = value
+            val currentTime = SystemClock.elapsedRealtime()
+            val elapsed = currentTime - lastEmitTime
+
+            if (elapsed >= periodMillis || lastEmitTime == 0L) {
+                emitJob?.cancel()
+                lastEmitTime = currentTime
+                send(value)
+            } else if (emitJob?.isActive != true) {
+                emitJob = launch {
+                    delay(periodMillis - elapsed)
+                    mutex.withLock {
+                        latestValue?.let {
+                            lastEmitTime = SystemClock.elapsedRealtime()
+                            send(it)
                         }
                     }
                 }
             }
         }
     }
+}

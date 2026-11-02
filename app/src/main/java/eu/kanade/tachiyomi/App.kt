@@ -122,6 +122,8 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     override fun onCreate() {
         super<Application>.onCreate()
 
+        registerActivityLifecycleCallbacks(eu.kanade.tachiyomi.network.interceptor.ActivityTracker)
+
         // Preload default preferences on another thread to avoid blocking UI thread on disk read
         kotlin.concurrent.thread(name = "PreferencesPreload") {
             androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
