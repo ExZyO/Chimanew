@@ -4,6 +4,7 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,6 +49,8 @@ import eu.kanade.presentation.updates.UpdateScreen
 import eu.kanade.presentation.updates.UpdatesDeleteConfirmationDialog
 import eu.kanade.presentation.updates.UpdatesFilterDialog
 import eu.kanade.presentation.updates.anime.AnimeUpdateScreen
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import eu.kanade.presentation.updates.anime.AnimeUpdatesFilterDialog
 import eu.kanade.presentation.updates.novel.NovelUpdatesScreen
 import eu.kanade.presentation.util.Tab
@@ -235,7 +238,12 @@ data object UpdatesTab : Tab {
                             state = animeState,
                             snackbarHostState = animeScreenModel.snackbarHostState,
                             lastUpdated = animeScreenModel.lastUpdated,
-                            onClickCover = { item -> navigator.push(AnimeScreen(item.update.animeId)) },
+                            onClickCover = { item ->
+                                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "AnimeUpdates") {
+                                    "Cover clicked -> opening details for anime ID ${item.update.animeId}"
+                                }
+                                navigator.push(AnimeScreen(item.update.animeId))
+                            },
                             onSelectAll = animeScreenModel::toggleAllSelection,
                             onUpdateLibrary = animeScreenModel::updateLibrary,
                             onDownloadEpisode = animeScreenModel::downloadEpisodes,
@@ -247,6 +255,9 @@ data object UpdatesTab : Tab {
                             onOpenEpisode = { item, altPlayer ->
                                 val animeId = item.update.animeId
                                 val episodeId = item.update.episodeId
+                                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "AnimeUpdates") {
+                                    "Smart tap -> opening episode ID $episodeId ('${item.update.episodeName}') for anime ID $animeId"
+                                }
                                 launchIO {
                                     // Tapping an update used to be a no-op, which also made the
                                     // play external / play internal buttons in the selection bar do
@@ -278,6 +289,9 @@ data object UpdatesTab : Tab {
                                 collapseToggle = novelScreenModel::toggleExpandedState,
                                 contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
                                 onClickItem = { update ->
+                                    ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "NovelUpdates") {
+                                        "Clicked novel update -> opening details for '${update.novelTitle}' (novelId=${update.novelId})"
+                                    }
                                     navigator.push(
                                         chimahon.novel.ui.detail.NovelDetailScreen(
                                             novel = eu.kanade.tachiyomi.sourcenovel.model.SNNovel(
@@ -298,7 +312,12 @@ data object UpdatesTab : Tab {
                             // SY -->
                             preserveReadingPosition = screenModel.preserveReadingPosition,
                             // SY <--
-                            onClickCover = { item -> navigator.push(MangaScreen(item.update.mangaId)) },
+                            onClickCover = { item ->
+                                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "MangaUpdates") {
+                                    "Cover clicked -> opening details for manga ID ${item.update.mangaId}"
+                                }
+                                navigator.push(MangaScreen(item.update.mangaId))
+                            },
                             onSelectAll = screenModel::toggleAllSelection,
                             onUpdateLibrary = screenModel::updateLibrary,
                             onDownloadChapter = screenModel::downloadChapters,
@@ -312,6 +331,9 @@ data object UpdatesTab : Tab {
                             // KMK <--
                             onUpdateSelected = screenModel::toggleSelection,
                             onOpenChapter = {
+                                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "MangaUpdates") {
+                                    "Smart tap -> opening chapter ID ${it.update.chapterId} ('${it.update.chapterName}') for manga ID ${it.update.mangaId}"
+                                }
                                 val intent = ReaderActivity.newIntent(context, it.update.mangaId, it.update.chapterId)
                                 context.startActivity(intent)
                             },

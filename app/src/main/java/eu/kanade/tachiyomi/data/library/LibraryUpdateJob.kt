@@ -429,6 +429,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED -> {
+                        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                            "Skipping completed title '${it.manga.title}' (status=COMPLETED, MANGA_NON_COMPLETED active)."
+                        }
                         skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_completed))
                         false
                     }

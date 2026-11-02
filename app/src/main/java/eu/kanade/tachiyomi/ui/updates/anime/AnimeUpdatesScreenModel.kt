@@ -13,6 +13,8 @@ import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.episode.interactor.SetSeenStatus
 import eu.kanade.presentation.entries.anime.components.EpisodeDownloadAction
 import eu.kanade.presentation.updates.anime.AnimeUpdatesUiModel
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import eu.kanade.tachiyomi.data.animedownload.AnimeDownloadCache
 import eu.kanade.tachiyomi.data.animedownload.AnimeDownloadManager
 import eu.kanade.tachiyomi.data.animedownload.model.AnimeDownload
@@ -119,6 +121,10 @@ class AnimeUpdatesScreenModel(
                     _events.send(Event.InternalError)
                 }
                 .collectLatest { updates ->
+                    val animeCount = updates.groupBy { it.update.animeId }.size
+                    ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "AnimeUpdates") {
+                        "Loaded ${updates.size} raw episode update rows from DB (SQL limit=10,000) across $animeCount unique anime series."
+                    }
                     mutableState.update {
                         it.copy(
                             isLoading = false,

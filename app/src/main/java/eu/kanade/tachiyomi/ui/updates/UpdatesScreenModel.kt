@@ -12,6 +12,8 @@ import eu.kanade.core.util.addOrRemove
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.updates.UpdatesUiModel
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
@@ -125,6 +127,10 @@ class UpdatesScreenModel(
                     _events.send(Event.InternalError)
                 }
                 .collectLatest { updateItems ->
+                    val seriesCount = updateItems.groupBy { it.update.mangaId }.size
+                    ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "MangaUpdates") {
+                        "Loaded ${updateItems.size} raw chapter update rows from DB (SQL limit=10,000) across $seriesCount unique manga series."
+                    }
                     mutableState.update { state ->
                         state.copy(
                             isLoading = false,
@@ -257,6 +263,9 @@ class UpdatesScreenModel(
 
     fun downloadChapters(items: List<UpdatesItem>, action: ChapterDownloadAction) {
         if (items.isEmpty()) return
+        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "MangaUpdates") {
+            "Download triggered (action=$action) for ${items.size} chapters of '${items.firstOrNull()?.update?.mangaTitle}'."
+        }
         screenModelScope.launch {
             when (action) {
                 ChapterDownloadAction.START -> {
@@ -513,6 +522,10 @@ class UpdatesScreenModel(
 
     // KMK -->
     fun toggleExpandedState(key: String) {
+        val willExpand = !mutableState.value.expandedState.contains(key)
+        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "MangaUpdates") {
+            "Series card $key -> ${if (willExpand) "EXPANDED" else "COLLAPSED"}"
+        }
         mutableState.update {
             it.copy(
                 expandedState = it.expandedState.toMutableSet().apply {
@@ -549,6 +562,9 @@ class UpdatesScreenModel(
         swipeAction: LibraryPreferences.ChapterSwipeAction,
     ) {
         if (items.isEmpty()) return
+        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "MangaUpdates") {
+            "Swipe action ($swipeAction) executed on ${items.size} chapters of '${items.firstOrNull()?.update?.mangaTitle}'."
+        }
         when (swipeAction) {
             LibraryPreferences.ChapterSwipeAction.ToggleRead -> {
                 val anyUnread = items.any { !it.update.read }

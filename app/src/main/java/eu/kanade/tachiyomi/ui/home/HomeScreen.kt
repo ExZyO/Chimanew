@@ -125,6 +125,8 @@ import soup.compose.material.motion.animation.materialFadeThroughIn
 import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import tachiyomi.presentation.core.components.material.LocalFloatingDockBottomPadding
 import tachiyomi.presentation.core.components.material.NavigationBar
 import tachiyomi.presentation.core.components.material.NavigationRail
@@ -278,6 +280,9 @@ object HomeScreen : Screen() {
                             contentKey = { it.key },
                         ) {
                             val floatingDockPadding = if (!isTabletUi()) 96.dp else 0.dp
+                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "FloatingDock") {
+                                "Applied LocalFloatingDockBottomPadding = ${floatingDockPadding.value}dp (tabletMode=${isTabletUi()})"
+                            }
                             CompositionLocalProvider(
                                 LocalFloatingDockBottomPadding provides floatingDockPadding,
                             ) {

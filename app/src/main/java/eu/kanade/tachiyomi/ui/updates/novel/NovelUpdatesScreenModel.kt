@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import tachiyomi.domain.updates.novel.model.NovelUpdatesWithRelations
 import tachiyomi.domain.updates.novel.repository.NovelUpdatesRepository
 import tachiyomi.domain.updates.service.UpdatesPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.ZonedDateTime
@@ -36,6 +38,10 @@ class NovelUpdatesScreenModel(
             runCatching {
                 novelUpdatesRepository.awaitUpdates(after = after, limit = 10000L)
             }.onSuccess { updates ->
+                val novelCount = updates.groupBy { it.novelId }.size
+                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "NovelUpdates") {
+                    "Loaded ${updates.size} raw novel update rows from DB (SQL limit=10,000) across $novelCount unique novels."
+                }
                 mutableState.update {
                     it.copy(isLoading = false, items = updates)
                 }
