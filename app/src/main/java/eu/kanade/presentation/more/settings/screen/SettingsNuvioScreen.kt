@@ -3,31 +3,18 @@ package eu.kanade.presentation.more.settings.screen
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
-import eu.kanade.presentation.more.settings.screen.chimanew.ArtworkPriorityCustomizerScreen
-import eu.kanade.presentation.more.settings.screen.chimanew.CategoryArtworkRulesScreen
-import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
-import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
-import eu.kanade.tachiyomi.util.system.copyToClipboard
-import eu.kanade.tachiyomi.util.system.toast
+import eu.kanade.presentation.more.settings.screen.chimanew.SettingsNuvioAppearanceScreen
+import eu.kanade.presentation.more.settings.screen.chimanew.SettingsNuvioArtworkScreen
+import eu.kanade.presentation.more.settings.screen.chimanew.SettingsNuvioDiagnosticsScreen
+import eu.kanade.presentation.more.settings.screen.chimanew.SettingsNuvioHeroScreen
+import eu.kanade.presentation.more.settings.screen.chimanew.SettingsNuvioRatingsScreen
+import eu.kanade.presentation.more.settings.screen.chimanew.SettingsNuvioShelvesScreen
+import eu.kanade.presentation.more.settings.screen.chimanew.SettingsNuvioUpdatesScreen
 import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.toPersistentMap
-import tachiyomi.core.common.i18n.stringResource as contextStringResource
-import tachiyomi.domain.category.interactor.GetAnimeCategories
-import tachiyomi.domain.novel.repository.NovelCategoryRepository
-import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 object SettingsNuvioScreen : SearchableSettings {
     @Suppress("unused")
@@ -40,552 +27,46 @@ object SettingsNuvioScreen : SearchableSettings {
     @Composable
     override fun getPreferences(): List<Preference> {
         val navigator = LocalNavigator.currentOrThrow
-        val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
 
         return listOf(
-            getMediaSectionsGroup(chimanewPreferences),
-            getHeroGroup(chimanewPreferences),
-            getShelvesGroup(chimanewPreferences, navigator),
-            getCardsGroup(chimanewPreferences),
-            getArtworkGroup(chimanewPreferences, navigator),
-            getRatingsGroup(chimanewPreferences),
-            getDetailsPageGroup(chimanewPreferences),
-            getNavbarGroup(chimanewPreferences),
-            getDiagnosticsGroup(chimanewPreferences, navigator),
-        )
-    }
-
-    @Composable
-    private fun getHeroGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
-        val getCategories = remember { Injekt.get<GetCategories>() }
-        val categories by getCategories.subscribe().collectAsState(initial = emptyList())
-        val categoryEntries = remember(categories) {
-            categories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
-        }
-
-        val getAnimeCategories = remember { Injekt.get<GetAnimeCategories>() }
-        val animeCategories by getAnimeCategories.subscribe().collectAsState(initial = emptyList())
-        val animeCategoryEntries = remember(animeCategories) {
-            animeCategories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
-        }
-
-        val novelCategoryRepository = remember { Injekt.get<NovelCategoryRepository>() }
-        val novelCategories by novelCategoryRepository.subscribe().collectAsState(initial = emptyList())
-        val novelCategoryEntries = remember(novelCategories) {
-            novelCategories.associate { it.id.toString() to it.name.ifBlank { "Default" } }.toPersistentMap()
-        }
-
-        val heroSource by preferences.heroSource().collectPrefAsState()
-        val heroSourceAnime by preferences.heroSourceAnime().collectPrefAsState()
-        val heroSourceNovel by preferences.heroSourceNovel().collectPrefAsState()
-        val heroStyle by preferences.heroStyle().collectPrefAsState()
-        val useAnilistArtwork by preferences.useAnilistArtwork().collectPrefAsState()
-        val showHero by preferences.showHeroCarousel().collectPrefAsState()
-        val heroRequireSelectedArtwork by preferences.heroRequireSelectedArtwork().collectPrefAsState()
-
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_nuvio_hero_section),
-            preferenceItems = persistentListOf(
-                // Manga Hero
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showHeroCarousel(),
-                    title = "Show Manga Hero Banner",
-                    subtitle = stringResource(MR.strings.pref_nuvio_show_hero_summary),
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.heroSource(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_nuvio_hero_source_history),
-                        1 to stringResource(MR.strings.pref_nuvio_hero_source_favorites),
-                        2 to stringResource(MR.strings.pref_nuvio_hero_source_trackers),
-                        3 to "Trending Manga (AniList Discovery)",
-                        4 to "Trending Manhwa (AniList Discovery)",
+            Preference.PreferenceGroup(
+                title = "Configuration Hub",
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Appearance & Posters",
+                        subtitle = "Poster dimensions, corner radius, card badges, ambient canvas, and details layout",
+                        onClick = { navigator.push(SettingsNuvioAppearanceScreen) },
                     ),
-                    title = "Manga Hero Source",
-                ),
-                Preference.PreferenceItem.MultiSelectListPreference(
-                    preference = preferences.heroCategories(),
-                    entries = categoryEntries,
-                    title = stringResource(MR.strings.pref_chimanew_hero_categories),
-                    subtitle = stringResource(MR.strings.pref_chimanew_hero_categories_summary),
-                    enabled = heroSource == 1,
-                ),
-                Preference.PreferenceItem.MultiSelectListPreference(
-                    preference = preferences.heroTrackerStatuses(),
-                    entries = persistentMapOf(
-                        "reading" to stringResource(MR.strings.pref_tracker_reading),
-                        "plan_to_read" to stringResource(MR.strings.pref_tracker_plan_to_read),
-                        "on_hold" to stringResource(MR.strings.pref_tracker_on_hold),
-                        "completed" to stringResource(MR.strings.pref_tracker_completed),
-                        "dropped" to stringResource(MR.strings.pref_tracker_dropped),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Home & Hero Banner",
+                        subtitle = "Hero banner carousel for Manga, Anime, and Novels, source filtering, and styles",
+                        onClick = { navigator.push(SettingsNuvioHeroScreen) },
                     ),
-                    title = stringResource(MR.strings.pref_chimanew_hero_tracker_statuses),
-                    subtitle = stringResource(MR.strings.pref_chimanew_hero_tracker_statuses_summary),
-                    enabled = heroSource == 2,
-                ),
-
-                // Anime Hero
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showHeroCarouselAnime(),
-                    title = "Show Anime Hero Banner",
-                    subtitle = "Display dynamic hero banner in Anime tab",
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.heroSourceAnime(),
-                    entries = persistentMapOf(
-                        0 to "Continue Watching",
-                        1 to "Anime Library Categories",
-                        2 to "Anime Trackers",
-                        3 to "Trending Anime (AniList Discovery)",
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Shelves & Rows",
+                        subtitle = "Home shelf ordering, visibility toggles, and tap behaviors across all media feeds",
+                        onClick = { navigator.push(SettingsNuvioShelvesScreen) },
                     ),
-                    title = "Anime Hero Source",
-                ),
-                Preference.PreferenceItem.MultiSelectListPreference(
-                    preference = preferences.heroCategoriesAnime(),
-                    entries = animeCategoryEntries,
-                    title = "Anime Hero Categories",
-                    subtitle = "Filter Anime Hero banner to specific categories",
-                    enabled = heroSourceAnime == 1,
-                ),
-                Preference.PreferenceItem.MultiSelectListPreference(
-                    preference = preferences.heroTrackerStatusesAnime(),
-                    entries = persistentMapOf(
-                        "reading" to "Watching",
-                        "plan_to_read" to "Plan to Watch",
-                        "on_hold" to "On Hold",
-                        "completed" to "Completed",
-                        "dropped" to "Dropped",
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Artwork Sources & Priority",
+                        subtitle = "Separate Manga, Anime, and Novel waterfall orders, category rules, and cache reset",
+                        onClick = { navigator.push(SettingsNuvioArtworkScreen) },
                     ),
-                    title = "Anime Hero Tracker Statuses",
-                    subtitle = "Filter Anime Hero banner to specific tracking statuses",
-                    enabled = heroSourceAnime == 2,
-                ),
-
-                // Novel Hero
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showHeroCarouselNovel(),
-                    title = "Show Novel Hero Banner",
-                    subtitle = "Display dynamic hero banner in Novels tab",
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.heroSourceNovel(),
-                    entries = persistentMapOf(
-                        0 to "Continue Reading",
-                        1 to "Novel Library Categories",
-                        2 to "In-Progress Novels",
-                        3 to "Trending Light Novels (AniList Discovery)",
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Library & Updates Engine",
+                        subtitle = "Tracker-assisted updates, app launch checks, series consolidation, and restrictions",
+                        onClick = { navigator.push(SettingsNuvioUpdatesScreen) },
                     ),
-                    title = "Novel Hero Source",
-                ),
-                Preference.PreferenceItem.MultiSelectListPreference(
-                    preference = preferences.heroCategoriesNovel(),
-                    entries = novelCategoryEntries,
-                    title = "Novel Hero Categories",
-                    subtitle = "Filter Novel Hero banner to specific categories",
-                    enabled = heroSourceNovel == 1,
-                ),
-
-                // Hero Visuals
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.heroStyle(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_nuvio_hero_style_ambient),
-                        1 to stringResource(MR.strings.pref_nuvio_hero_style_fullbleed),
-                        2 to stringResource(MR.strings.pref_nuvio_hero_style_crisp_ambient),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Community Ratings",
+                        subtitle = "Aggregated ratings from AniList, MyAnimeList, and Kitsu, formats, and placement",
+                        onClick = { navigator.push(SettingsNuvioRatingsScreen) },
                     ),
-                    title = stringResource(MR.strings.pref_nuvio_hero_style),
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.heroMetadataLayout(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_hero_layout_clean_separation),
-                        1 to stringResource(MR.strings.pref_chimanew_hero_layout_stacked_progress),
-                        2 to stringResource(MR.strings.pref_chimanew_hero_layout_compact_hero),
-                        3 to stringResource(MR.strings.pref_chimanew_hero_layout_integrated_button),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Diagnostics & Logs",
+                        subtitle = "Real-time logging, subsystem diagnostics, export logs, and log viewer",
+                        onClick = { navigator.push(SettingsNuvioDiagnosticsScreen) },
                     ),
-                    title = stringResource(MR.strings.pref_chimanew_hero_metadata_layout),
-                    subtitle = stringResource(MR.strings.pref_chimanew_hero_metadata_layout_summary),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.heroDimBanner(),
-                    title = stringResource(MR.strings.pref_nuvio_hero_dim_banner),
-                    subtitle = stringResource(MR.strings.pref_nuvio_hero_dim_banner_summary),
-                    enabled = heroStyle != 1,
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.heroAllowCroppedFallback(),
-                    title = stringResource(MR.strings.pref_nuvio_hero_allow_cropped_fallback),
-                    subtitle = stringResource(MR.strings.pref_nuvio_hero_allow_cropped_fallback_summary),
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.ambientCanvasStyle(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_artwork_ambient_cinematic_blur),
-                        1 to stringResource(MR.strings.pref_chimanew_artwork_ambient_palette_mesh),
-                        2 to stringResource(MR.strings.pref_chimanew_artwork_ambient_hybrid_texture),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_artwork_ambient_style),
-                    subtitle = stringResource(MR.strings.pref_chimanew_artwork_ambient_style_summary),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.heroRequireSelectedArtwork(),
-                    title = stringResource(MR.strings.pref_chimanew_hero_require_selected_artwork),
-                    subtitle = stringResource(MR.strings.pref_chimanew_hero_require_selected_artwork_summary),
-                    enabled = showHero && useAnilistArtwork,
-                ),
-                Preference.PreferenceItem.MultiSelectListPreference(
-                    preference = preferences.heroStrictArtworkRequirements(),
-                    entries = persistentMapOf(
-                        "banner" to stringResource(MR.strings.pref_chimanew_hero_strict_banner),
-                        "cover" to stringResource(MR.strings.pref_chimanew_hero_strict_cover),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_hero_strict_artwork_requirements),
-                    subtitle = stringResource(MR.strings.pref_chimanew_hero_strict_artwork_requirements_summary),
-                    enabled = showHero && useAnilistArtwork && heroRequireSelectedArtwork,
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.heroArtworkPairing(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_nuvio_hero_artwork_pairing_separate),
-                        1 to stringResource(MR.strings.pref_nuvio_hero_artwork_pairing_unified),
-                    ),
-                    title = stringResource(MR.strings.pref_nuvio_hero_artwork_pairing),
-                    subtitle = stringResource(MR.strings.pref_nuvio_hero_artwork_pairing_summary),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.heroShowUnreadBadges(),
-                    title = stringResource(MR.strings.pref_nuvio_hero_show_unread_badges),
-                    subtitle = stringResource(MR.strings.pref_nuvio_hero_show_unread_badges_summary),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.useAnilistArtwork(),
-                    title = stringResource(MR.strings.pref_nuvio_use_anilist_artwork),
-                    subtitle = stringResource(MR.strings.pref_nuvio_use_anilist_artwork_summary),
-                ),
-                Preference.PreferenceItem.MultiSelectListPreference(
-                    preference = preferences.heroArtworkSources(),
-                    entries = persistentMapOf(
-                        "banner" to stringResource(MR.strings.pref_chimanew_hero_artwork_banner),
-                        "cover" to stringResource(MR.strings.pref_chimanew_hero_artwork_cover),
-                        "default" to stringResource(MR.strings.pref_chimanew_hero_artwork_default),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_hero_artwork_sources),
-                    subtitle = stringResource(MR.strings.pref_chimanew_hero_artwork_sources_summary),
-                    enabled = useAnilistArtwork,
-                ),
-            ),
-        )
-    }
-
-    @Composable
-    private fun getShelvesGroup(preferences: ChimanewPreferences, navigator: Navigator): Preference.PreferenceGroup {
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_nuvio_shelves_section),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_nuvio_reorder_shelves),
-                    subtitle = stringResource(MR.strings.pref_nuvio_reorder_shelves_summary),
-                    onClick = {
-                        navigator.push(HomeRowsCustomizerScreen())
-                    },
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showContinueReading(),
-                    title = stringResource(MR.strings.pref_nuvio_show_continue_reading),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showRecentlyUpdated(),
-                    title = stringResource(MR.strings.pref_nuvio_show_recently_updated),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showCategoryShelves(),
-                    title = stringResource(MR.strings.pref_nuvio_show_category_shelves),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showTrackingShelves(),
-                    title = stringResource(MR.strings.pref_nuvio_show_tracking_shelves),
-                    subtitle = stringResource(MR.strings.pref_nuvio_show_tracking_shelves_summary),
-                ),
-            ),
-        )
-    }
-
-    @Composable
-    private fun getCardsGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_nuvio_cards_section),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.continueReadingTapAction(),
-                    entries = persistentMapOf(
-                        1 to stringResource(MR.strings.pref_chimanew_tap_action_reader),
-                        0 to stringResource(MR.strings.pref_chimanew_tap_action_details),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_continue_reading_tap_action),
-                    subtitle = stringResource(MR.strings.pref_chimanew_continue_reading_tap_action_summary),
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.shelfTapAction(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_tap_action_details),
-                        1 to stringResource(MR.strings.pref_chimanew_tap_action_reader),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_shelf_tap_action),
-                    subtitle = stringResource(MR.strings.pref_chimanew_shelf_tap_action_summary),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showProgressBars(),
-                    title = stringResource(MR.strings.pref_nuvio_show_progress),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showUnreadBadges(),
-                    title = stringResource(MR.strings.pref_nuvio_show_unread_badge),
-                ),
-            ),
-        )
-    }
-
-    @Composable
-    private fun getDetailsPageGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
-        val useAnilistInDetails by preferences.useAnilistArtworkInDetails().collectPrefAsState()
-
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_chimanew_details_category),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.useAnilistArtworkInDetails(),
-                    title = stringResource(MR.strings.pref_chimanew_details_use_anilist),
-                    subtitle = stringResource(MR.strings.pref_chimanew_details_use_anilist_summary),
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.detailsPageLayout(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_details_page_layout_nuvio),
-                        1 to stringResource(MR.strings.pref_chimanew_details_page_layout_stack),
-                        2 to stringResource(MR.strings.pref_chimanew_details_page_layout_vignette),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_details_page_layout),
-                    subtitle = stringResource(MR.strings.pref_chimanew_details_page_layout_summary),
-                    enabled = useAnilistInDetails,
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.detailsBackdropStyle(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_fade),
-                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_blur),
-                        2 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_crisp),
-                        3 to stringResource(MR.strings.pref_chimanew_details_backdrop_style_local),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_details_backdrop_style),
-                    enabled = useAnilistInDetails,
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.detailsBackdropArtwork(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_artwork_banner),
-                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_artwork_cover),
-                        2 to stringResource(MR.strings.pref_chimanew_details_backdrop_artwork_local),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_details_backdrop_artwork),
-                    enabled = useAnilistInDetails,
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.detailsBackdropScale(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_card),
-                        1 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_vignette),
-                        2 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_crop),
-                        3 to stringResource(MR.strings.pref_chimanew_details_backdrop_scale_natural),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_details_backdrop_scale),
-                    subtitle = stringResource(MR.strings.pref_chimanew_details_backdrop_scale_summary),
-                    enabled = useAnilistInDetails,
-                ),
-            ),
-        )
-    }
-
-    @Composable
-    private fun getMediaSectionsGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_chimanew_media_sections_title),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.enableAnimeModule(),
-                    title = stringResource(MR.strings.pref_chimanew_enable_anime_title),
-                    subtitle = stringResource(MR.strings.pref_chimanew_enable_anime_summary),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.enableNovelModule(),
-                    title = stringResource(MR.strings.pref_chimanew_enable_novels_title),
-                    subtitle = stringResource(MR.strings.pref_chimanew_enable_novels_summary),
-                ),
-            ),
-        )
-    }
-
-    @Composable
-    private fun getNavbarGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_chimanew_navbar_category),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.navbarAutoHideOnScroll(),
-                    title = stringResource(MR.strings.pref_chimanew_navbar_autohide),
-                    subtitle = stringResource(MR.strings.pref_chimanew_navbar_autohide_summary),
-                ),
-            ),
-        )
-    }
-
-    @Composable
-    private fun getArtworkGroup(preferences: ChimanewPreferences, navigator: Navigator): Preference.PreferenceGroup {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_chimanew_artwork_category),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.useAnilistArtworkInLibrary(),
-                    title = stringResource(MR.strings.pref_nuvio_use_anilist_artwork_in_library),
-                    subtitle = stringResource(MR.strings.pref_nuvio_use_anilist_artwork_in_library_summary),
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_chimanew_artwork_waterfall),
-                    subtitle = stringResource(MR.strings.pref_chimanew_artwork_waterfall_summary),
-                    onClick = {
-                        navigator.push(ArtworkPriorityCustomizerScreen())
-                    },
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_chimanew_category_artwork_rules_title),
-                    subtitle = stringResource(MR.strings.pref_chimanew_category_artwork_rules_summary),
-                    onClick = {
-                        navigator.push(CategoryArtworkRulesScreen())
-                    },
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_chimanew_reset_artwork_cache),
-                    subtitle = stringResource(MR.strings.pref_chimanew_reset_artwork_cache_summary),
-                    onClick = {
-                        val repo: eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository = Injekt.get()
-                        repo.clearCache()
-                        context.toast(MR.strings.pref_chimanew_artwork_cache_cleared)
-                    },
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.ambientCanvasStyle(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_artwork_ambient_cinematic_blur),
-                        1 to stringResource(MR.strings.pref_chimanew_artwork_ambient_palette_mesh),
-                        2 to stringResource(MR.strings.pref_chimanew_artwork_ambient_hybrid_texture),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_artwork_ambient_style),
-                    subtitle = stringResource(MR.strings.pref_chimanew_artwork_ambient_style_summary),
-                ),
-            ),
-        )
-    }
-
-    @Composable
-    private fun getRatingsGroup(preferences: ChimanewPreferences): Preference.PreferenceGroup {
-        val showRatings by preferences.showCommunityRatings().collectPrefAsState()
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_chimanew_ratings_category),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showCommunityRatings(),
-                    title = stringResource(MR.strings.pref_chimanew_show_community_ratings),
-                    subtitle = stringResource(MR.strings.pref_chimanew_show_community_ratings_summary),
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = preferences.communityRatingFormat(),
-                    entries = persistentMapOf(
-                        0 to stringResource(MR.strings.pref_chimanew_community_rating_format_star),
-                        1 to stringResource(MR.strings.pref_chimanew_community_rating_format_percentage),
-                        2 to stringResource(MR.strings.pref_chimanew_community_rating_format_star_source),
-                        3 to stringResource(MR.strings.pref_chimanew_community_rating_format_percentage_source),
-                        4 to stringResource(MR.strings.pref_chimanew_community_rating_format_multi),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_community_rating_format),
-                    enabled = showRatings,
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showRatingsOnHero(),
-                    title = stringResource(MR.strings.pref_chimanew_show_ratings_on_hero),
-                    subtitle = stringResource(MR.strings.pref_chimanew_show_ratings_on_hero_summary),
-                    enabled = showRatings,
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.showRatingsInDetails(),
-                    title = stringResource(MR.strings.pref_chimanew_show_ratings_in_details),
-                    subtitle = stringResource(MR.strings.pref_chimanew_show_ratings_in_details_summary),
-                    enabled = showRatings,
-                ),
-            ),
-        )
-    }
-
-    @Composable
-    private fun getDiagnosticsGroup(
-        preferences: ChimanewPreferences,
-        navigator: Navigator,
-    ): Preference.PreferenceGroup {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val enableDiagnostics by preferences.enableDiagnostics().collectPrefAsState()
-
-        return Preference.PreferenceGroup(
-            title = stringResource(MR.strings.pref_chimanew_diagnostics_group),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = preferences.enableDiagnostics(),
-                    title = stringResource(MR.strings.pref_chimanew_enable_diagnostics),
-                    subtitle = stringResource(MR.strings.pref_chimanew_enable_diagnostics_summary),
-                ),
-                Preference.PreferenceItem.MultiSelectListPreference(
-                    preference = preferences.diagnosticCategories(),
-                    entries = persistentMapOf(
-                        "network" to stringResource(MR.strings.pref_chimanew_diag_cat_network),
-                        "artwork" to stringResource(MR.strings.pref_chimanew_diag_cat_artwork),
-                        "hero" to stringResource(MR.strings.pref_chimanew_diag_cat_hero),
-                        "details" to stringResource(MR.strings.pref_chimanew_diag_cat_details),
-                        "shelves" to stringResource(MR.strings.pref_chimanew_diag_cat_shelves),
-                        "updates" to stringResource(MR.strings.pref_chimanew_diag_cat_updates),
-                    ),
-                    title = stringResource(MR.strings.pref_chimanew_diagnostic_categories),
-                    subtitle = stringResource(MR.strings.pref_chimanew_diagnostic_categories_summary),
-                    enabled = enableDiagnostics,
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_chimanew_view_diagnostics),
-                    subtitle = stringResource(MR.strings.pref_chimanew_view_diagnostics_summary),
-                    enabled = enableDiagnostics,
-                    onClick = {
-                        navigator.push(eu.kanade.presentation.more.settings.screen.debug.ChimanewDiagnosticLogViewerScreen())
-                    },
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_chimanew_copy_diagnostics),
-                    subtitle = stringResource(MR.strings.pref_chimanew_copy_diagnostics_summary),
-                    enabled = enableDiagnostics,
-                    onClick = {
-                        val text = eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.exportText()
-                        if (text.isBlank()) {
-                            context.toast(MR.strings.pref_chimanew_diagnostics_empty)
-                        } else {
-                            val count = eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.getLogs().size
-                            context.copyToClipboard("Nuvio Diagnostics", text)
-                            context.toast(context.contextStringResource(MR.strings.pref_chimanew_diagnostics_copied, count))
-                        }
-                    },
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_chimanew_clear_diagnostics),
-                    subtitle = stringResource(MR.strings.pref_chimanew_clear_diagnostics_summary),
-                    enabled = enableDiagnostics,
-                    onClick = {
-                        eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.clear()
-                        context.toast(MR.strings.pref_chimanew_diagnostics_cleared)
-                    },
                 ),
             ),
         )

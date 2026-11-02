@@ -1575,6 +1575,11 @@ class AnimeScreenModel(
         data object SeasonSettingsSheet : Dialog
         data object TrackSheet : Dialog
         data object FullImages : Dialog
+        data object ArtworkPickerSheet : Dialog
+    }
+
+    fun showArtworkPickerDialog() {
+        updateSuccessState { it.copy(dialog = Dialog.ArtworkPickerSheet) }
     }
 
     fun dismissDialog() {

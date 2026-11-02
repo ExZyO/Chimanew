@@ -123,7 +123,7 @@ class AnimeUpdatesScreenModel(
                 .collectLatest { updates ->
                     val animeCount = updates.groupBy { it.update.animeId }.size
                     ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "AnimeUpdates") {
-                        "Loaded ${updates.size} raw episode update rows from DB (SQL limit=10,000) across $animeCount unique anime series."
+                        "Loaded ${updates.size} raw episode update rows from DB (uncapped, limit=250,000) across $animeCount unique anime series."
                     }
                     mutableState.update {
                         it.copy(

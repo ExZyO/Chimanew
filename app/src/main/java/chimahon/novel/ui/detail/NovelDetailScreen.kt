@@ -2,6 +2,11 @@ package chimahon.novel.ui.detail
 
 import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import coil3.imageLoader
+import eu.kanade.presentation.entries.novel.components.NovelArtworkPickerBottomSheet
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -453,11 +458,48 @@ data class NovelDetailScreen(
         ) { contentPadding ->
             val topPadding = contentPadding.calculateTopPadding()
             var showCoverDialog by rememberSaveable { mutableStateOf(false) }
+            var showArtworkPickerSheet by rememberSaveable { mutableStateOf(false) }
             if (showCoverDialog) {
                 NovelCoverDialog(
                     imageUrl = state.novel.thumbnail_url,
                     title = state.novel.title,
                     onDismiss = { showCoverDialog = false },
+                    onArtworkPickerClick = { showArtworkPickerSheet = true },
+                )
+            }
+            if (showArtworkPickerSheet && state.novel.id > 0) {
+                val getContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                    if (uri == null) return@rememberLauncherForActivityResult
+                }
+                val novelObj = tachiyomi.domain.novel.model.Novel(
+                    id = state.novel.id,
+                    source = state.novel.source,
+                    url = state.novel.url,
+                    title = state.novel.title,
+                    thumbnailUrl = state.novel.thumbnail_url,
+                    description = state.novel.description,
+                    genre = state.novel.genre,
+                    author = state.novel.author,
+                    artist = state.novel.artist,
+                    status = state.novel.status.toLong(),
+                    favorite = state.novel.favorite,
+                    lastUpdate = state.novel.last_update,
+                    nextUpdate = 0L,
+                    fetchInterval = 0,
+                    dateAdded = 0L,
+                    viewerFlags = 0L,
+                    chapterFlags = 0L,
+                    coverLastModified = 0L,
+                )
+                NovelArtworkPickerBottomSheet(
+                    novel = novelObj,
+                    onDismissRequest = { showArtworkPickerSheet = false },
+                    onCustomCoverFilePick = { getContent.launch("image/*") },
+                    onCoverUpdated = {
+                        context.imageLoader.memoryCache?.clear()
+                        screenModel.refresh()
+                        ChimanewHomeScreenModel.triggerRefresh()
+                    },
                 )
             }
             when {

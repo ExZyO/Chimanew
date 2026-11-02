@@ -10,7 +10,7 @@ class GetAnimeUpdates(
 ) {
 
     suspend fun await(seen: Boolean, after: Long): List<AnimeUpdatesWithRelations> {
-        return repository.awaitWithSeen(seen, after, limit = 500)
+        return repository.awaitWithSeen(seen, after, limit = 250000L)
     }
 
     fun subscribe(
@@ -22,7 +22,7 @@ class GetAnimeUpdates(
     ): Flow<List<AnimeUpdatesWithRelations>> {
         return repository.subscribeAllAnimeUpdates(
             after = instant.toEpochMilli(),
-            limit = 10000,
+            limit = 250000L,
             seen = seen,
             started = started,
             bookmarked = bookmarked,
@@ -31,6 +31,6 @@ class GetAnimeUpdates(
     }
 
     fun subscribe(seen: Boolean, after: Long): Flow<List<AnimeUpdatesWithRelations>> {
-        return repository.subscribeWithSeen(seen, after, limit = 10000)
+        return repository.subscribeWithSeen(seen, after, limit = 250000L)
     }
 }

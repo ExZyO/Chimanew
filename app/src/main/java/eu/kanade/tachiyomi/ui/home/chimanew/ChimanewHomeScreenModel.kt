@@ -184,6 +184,19 @@ class ChimanewHomeScreenModel(
     private val attemptedHeroTitles = ConcurrentHashMap.newKeySet<String>()
     private var persistentHeroIds = emptyList<Long>()
 
+    private fun selectHeroItems(candidates: List<HomeMangaItem>, maxCount: Int = 7): List<HomeMangaItem> {
+        if (candidates.isEmpty()) return emptyList()
+        val saved = persistentHeroIds
+        if (saved.isNotEmpty()) {
+            val byId = candidates.associateBy { it.mangaId }
+            val matched = saved.mapNotNull { byId[it] }
+            if (matched.isNotEmpty()) return matched
+        }
+        val selected = candidates.shuffled().take(maxCount)
+        persistentHeroIds = selected.map { it.mangaId }
+        return selected
+    }
+
     @Immutable
     data class State(
         val isLoading: Boolean = true,
@@ -254,6 +267,7 @@ class ChimanewHomeScreenModel(
                             artworkWaterfallRepository.resolveArtwork(
                                 rawTitle = item.title,
                                 mangaId = item.mangaId,
+                                mediaType = newState.activeMedia,
                             )
                         }
                     }
@@ -322,7 +336,7 @@ class ChimanewHomeScreenModel(
                 inLibrary: Boolean = false,
                 primaryTrackStatus: Long? = null,
             ): HomeMangaItem {
-                val cachedArt = artworkWaterfallRepository.getCached(title)
+                val cachedArt = artworkWaterfallRepository.getCached(title, mediaType = MEDIA_TYPE_MANGA)
                 return HomeMangaItem(
                     mangaId = mangaId,
                     title = title,
@@ -430,7 +444,7 @@ class ChimanewHomeScreenModel(
                     } else {
                         data.libraryList.filter { it.manga.favorite }
                     }
-                    pool.take(7).map { lib ->
+                    val items = pool.map { lib ->
                         createItem(
                             mangaId = lib.manga.id,
                             title = lib.manga.title,
@@ -443,6 +457,7 @@ class ChimanewHomeScreenModel(
                             inLibrary = true,
                         )
                     }
+                    selectHeroItems(items)
                 }
                 2 -> {
                     // Trackers
@@ -452,25 +467,29 @@ class ChimanewHomeScreenModel(
                     if ("plan_to_read" in chosen) pool.addAll(planToReadList)
                     if ("on_hold" in chosen) pool.addAll(onHoldList)
                     if ("completed" in chosen) pool.addAll(completedList)
-                    pool.distinctBy { it.mangaId }.take(7)
+                    selectHeroItems(pool.distinctBy { it.mangaId })
                 }
-                3 -> trendingMangaItems.take(7)
-                4 -> trendingManhwaItems.take(7)
+                3 -> selectHeroItems(trendingMangaItems)
+                4 -> selectHeroItems(trendingManhwaItems)
                 else -> {
                     // History with library fallback
-                    val historyPool = continueReadingItems.take(7)
-                    if (historyPool.isNotEmpty()) historyPool else data.libraryList.take(7).map { lib ->
-                        createItem(
-                            mangaId = lib.manga.id,
-                            title = lib.manga.title,
-                            coverData = lib.manga.asMangaCover(),
-                            totalChapters = lib.totalChapters,
-                            readChapters = lib.readCount,
-                            unreadCount = lib.unreadCount,
-                            genres = lib.manga.ogGenre ?: emptyList(),
-                            description = lib.manga.ogDescription,
-                            inLibrary = true,
-                        )
+                    if (continueReadingItems.isNotEmpty()) {
+                        selectHeroItems(continueReadingItems.take(15))
+                    } else {
+                        val libItems = data.libraryList.map { lib ->
+                            createItem(
+                                mangaId = lib.manga.id,
+                                title = lib.manga.title,
+                                coverData = lib.manga.asMangaCover(),
+                                totalChapters = lib.totalChapters,
+                                readChapters = lib.readCount,
+                                unreadCount = lib.unreadCount,
+                                genres = lib.manga.ogGenre ?: emptyList(),
+                                description = lib.manga.ogDescription,
+                                inLibrary = true,
+                            )
+                        }
+                        selectHeroItems(libItems)
                     }
                 }
             }
@@ -596,7 +615,7 @@ class ChimanewHomeScreenModel(
             dataFlow,
             preferences.showHeroCarouselAnime().changes(),
             preferences.heroSourceAnime().changes(),
-            preferences.heroStyle().changes(),
+            preferences.heroStyleAnime().changes(),
             preferences.heroArtworkSources().changes(),
             preferences.heroCategoriesAnime().changes(),
             preferences.heroTrackerStatusesAnime().changes(),
@@ -637,7 +656,7 @@ class ChimanewHomeScreenModel(
                 description: String? = null,
                 inLibrary: Boolean = false,
             ): HomeMangaItem {
-                val cachedArt = artworkWaterfallRepository.getCached(title)
+                val cachedArt = artworkWaterfallRepository.getCached(title, mediaType = MEDIA_TYPE_ANIME)
                 return HomeMangaItem(
                     mangaId = animeId,
                     title = title,
@@ -736,7 +755,7 @@ class ChimanewHomeScreenModel(
                     } else {
                         data.libraryList.filter { it.anime.favorite }
                     }
-                    pool.take(7).map { lib ->
+                    val items = pool.map { lib ->
                         createAnimeItem(
                             animeId = lib.anime.id,
                             title = lib.anime.title,
@@ -749,6 +768,7 @@ class ChimanewHomeScreenModel(
                             inLibrary = true,
                         )
                     }
+                    selectHeroItems(items)
                 }
                 2 -> {
                     // Trackers
@@ -758,24 +778,28 @@ class ChimanewHomeScreenModel(
                     if ("plan_to_read" in chosen) pool.addAll(planToWatchList)
                     if ("on_hold" in chosen) pool.addAll(onHoldList)
                     if ("completed" in chosen) pool.addAll(completedList)
-                    pool.distinctBy { it.mangaId }.take(7)
+                    selectHeroItems(pool.distinctBy { it.mangaId })
                 }
-                3 -> trendingAnimeItems.take(7)
+                3 -> selectHeroItems(trendingAnimeItems)
                 else -> {
                     // History with library fallback
-                    val pool = continueWatchingItems.take(7)
-                    if (pool.isNotEmpty()) pool else data.libraryList.take(7).map { lib ->
-                        createAnimeItem(
-                            animeId = lib.anime.id,
-                            title = lib.anime.title,
-                            coverData = lib.anime.asAnimeCover(),
-                            totalEpisodes = lib.totalEpisodes,
-                            seenEpisodes = lib.seenCount,
-                            unseenCount = lib.unseenCount,
-                            genres = lib.anime.genre ?: emptyList(),
-                            description = lib.anime.description,
-                            inLibrary = true,
-                        )
+                    if (continueWatchingItems.isNotEmpty()) {
+                        selectHeroItems(continueWatchingItems.take(15))
+                    } else {
+                        val libItems = data.libraryList.map { lib ->
+                            createAnimeItem(
+                                animeId = lib.anime.id,
+                                title = lib.anime.title,
+                                coverData = lib.anime.asAnimeCover(),
+                                totalEpisodes = lib.totalEpisodes,
+                                seenEpisodes = lib.seenCount,
+                                unseenCount = lib.unseenCount,
+                                genres = lib.anime.genre ?: emptyList(),
+                                description = lib.anime.description,
+                                inLibrary = true,
+                            )
+                        }
+                        selectHeroItems(libItems)
                     }
                 }
             }
@@ -895,7 +919,7 @@ class ChimanewHomeScreenModel(
             dataFlow,
             preferences.showHeroCarouselNovel().changes(),
             preferences.heroSourceNovel().changes(),
-            preferences.heroStyle().changes(),
+            preferences.heroStyleNovel().changes(),
             preferences.heroArtworkSources().changes(),
             preferences.heroCategoriesNovel().changes(),
             preferences.homeShelfOrderNovel().changes(),
@@ -933,7 +957,7 @@ class ChimanewHomeScreenModel(
                 description: String? = null,
                 inLibrary: Boolean = false,
             ): HomeMangaItem {
-                val cachedArt = artworkWaterfallRepository.getCached(title)
+                val cachedArt = artworkWaterfallRepository.getCached(title, mediaType = MEDIA_TYPE_NOVEL)
                 return HomeMangaItem(
                     mangaId = novelId,
                     title = title,
@@ -1000,7 +1024,7 @@ class ChimanewHomeScreenModel(
                     } else {
                         data.favoritesList
                     }
-                    pool.take(7).map { novel ->
+                    val items = pool.map { novel ->
                         createNovelItem(
                             novelId = novel.id,
                             title = novel.title,
@@ -1010,12 +1034,16 @@ class ChimanewHomeScreenModel(
                             inLibrary = true,
                         )
                     }
+                    selectHeroItems(items)
                 }
-                2 -> continueReadingItems.take(7)
-                3 -> trendingNovelsItems.take(7)
+                2 -> selectHeroItems(continueReadingItems)
+                3 -> selectHeroItems(trendingNovelsItems)
                 else -> {
-                    val pool = continueReadingItems.take(7)
-                    if (pool.isNotEmpty()) pool else libraryItems.take(7)
+                    if (continueReadingItems.isNotEmpty()) {
+                        selectHeroItems(continueReadingItems.take(15))
+                    } else {
+                        selectHeroItems(libraryItems)
+                    }
                 }
             }
 

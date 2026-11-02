@@ -296,18 +296,23 @@ class AnilistCoverRepository(
 
     fun getCachedByMalId(malId: Long): AnilistMediaArtwork? = malCache[malId]
 
-    fun getCachedByTitle(rawTitle: String): AnilistMediaArtwork? = titleCache[cleanTitle(rawTitle)]
+    fun getCachedByTitle(rawTitle: String, isAnime: Boolean = false): AnilistMediaArtwork? {
+        val clean = cleanTitle(rawTitle)
+        val key = if (isAnime) "ANIME:$clean" else "MANGA:$clean"
+        return titleCache[key] ?: if (!isAnime) titleCache[clean] else null
+    }
 
-    suspend fun fetchByMalId(malId: Long): AnilistMediaArtwork? {
+    suspend fun fetchByMalId(malId: Long, isAnime: Boolean = false): AnilistMediaArtwork? {
         if (malId <= 0) return null
         malCache[malId]?.let { return it }
         awaitRateLimit()
 
+        val typeStr = if (isAnime) "ANIME" else "MANGA"
         return withContext(Dispatchers.IO) {
             try {
                 val query = """
                     query (${'$'}idMal: Int) {
-                        Media(idMal: ${'$'}idMal, type: MANGA) {
+                        Media(idMal: ${'$'}idMal, type: $typeStr) {
                             id
                             idMal
                             countryOfOrigin
@@ -391,8 +396,9 @@ class AnilistCoverRepository(
         }
     }
 
-    suspend fun fetchBatchByMalIds(malIds: List<Long>): Map<Long, AnilistMediaArtwork> {
+    suspend fun fetchBatchByMalIds(malIds: List<Long>, isAnime: Boolean = false): Map<Long, AnilistMediaArtwork> {
         val uncached = malIds.distinct().filter { it > 0 && !malCache.containsKey(it) }
+        val typeStr = if (isAnime) "ANIME" else "MANGA"
         if (uncached.isNotEmpty()) {
             awaitRateLimit()
             withContext(Dispatchers.IO) {
@@ -403,7 +409,7 @@ class AnilistCoverRepository(
                         val query = """
                             query (${'$'}ids: [Int]) {
                                 Page(perPage: 50) {
-                                    media(idMal_in: ${'$'}ids, type: MANGA) {
+                                    media(idMal_in: ${'$'}ids, type: $typeStr) {
                                         id
                                         idMal
                                         countryOfOrigin
@@ -500,8 +506,9 @@ class AnilistCoverRepository(
         return malIds.associateWith { malCache[it] ?: EMPTY_ARTWORK }
     }
 
-    suspend fun fetchBatch(remoteIds: List<Long>): Map<Long, AnilistMediaArtwork> {
+    suspend fun fetchBatch(remoteIds: List<Long>, isAnime: Boolean = false): Map<Long, AnilistMediaArtwork> {
         val uncached = remoteIds.distinct().filter { !cache.containsKey(it) }
+        val typeStr = if (isAnime) "ANIME" else "MANGA"
         if (uncached.isNotEmpty()) {
             awaitRateLimit()
             withContext(Dispatchers.IO) {
@@ -512,7 +519,7 @@ class AnilistCoverRepository(
                         val query = """
                             query (${'$'}ids: [Int]) {
                                 Page(perPage: 50) {
-                                    media(id_in: ${'$'}ids, type: MANGA) {
+                                    media(id_in: ${'$'}ids, type: $typeStr) {
                                         id
                                         countryOfOrigin
                                         title {
@@ -604,17 +611,22 @@ class AnilistCoverRepository(
         return remoteIds.associateWith { cache[it] ?: EMPTY_ARTWORK }
     }
 
-    suspend fun fetchByTitle(rawTitle: String): AnilistMediaArtwork? {
+    suspend fun fetchByTitle(rawTitle: String, isAnime: Boolean = false): AnilistMediaArtwork? {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return null
-        titleCache[title]?.let { return it }
+        val cacheKey = if (isAnime) "ANIME:$title" else "MANGA:$title"
+        titleCache[cacheKey]?.let { return it }
+        if (!isAnime) {
+            titleCache[title]?.let { return it }
+        }
         awaitRateLimit()
 
+        val typeStr = if (isAnime) "ANIME" else "MANGA"
         return withContext(Dispatchers.IO) {
             try {
                 val query = """
                     query (${'$'}title: String) {
-                        Media(search: ${'$'}title, type: MANGA) {
+                        Media(search: ${'$'}title, type: $typeStr) {
                             id
                             countryOfOrigin
                             title {
@@ -679,14 +691,20 @@ class AnilistCoverRepository(
                         englishTitle = english,
                         synonyms = synonymsList,
                     )
-                    titleCache[title] = artwork
+                    titleCache[cacheKey] = artwork
+                    if (!isAnime) {
+                        titleCache[title] = artwork
+                    }
                     if (id != null) {
                         cache[id] = artwork
                     }
                     scheduleSaveToDisk()
                     artwork
                 } else {
-                    titleCache[title] = EMPTY_ARTWORK
+                    titleCache[cacheKey] = EMPTY_ARTWORK
+                    if (!isAnime) {
+                        titleCache[title] = EMPTY_ARTWORK
+                    }
                     scheduleSaveToDisk()
                     EMPTY_ARTWORK
                 }

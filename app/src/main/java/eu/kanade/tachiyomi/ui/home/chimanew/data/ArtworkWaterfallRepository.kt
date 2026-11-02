@@ -3,6 +3,9 @@ package eu.kanade.tachiyomi.ui.home.chimanew.data
 
 import android.app.Application
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_MANGA
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_NOVEL
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
 import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.CoroutineScope
@@ -267,7 +270,7 @@ class ArtworkWaterfallRepository(
                             if (entry.allCovers.any { it.source.equals("MangaDex", true) }) inferred.add("MANGADEX")
                             inferred
                         }
-                        cache[title] = UnifiedArtwork(
+                        val unified = UnifiedArtwork(
                             bannerUrl = null,
                             posterUrl = null,
                             allAvailableBanners = cleanAllBanners,
@@ -276,6 +279,11 @@ class ArtworkWaterfallRepository(
                             ratings = entry.ratings.map { CommunityRating(it.score10, it.score100, it.source) },
                             queriedProviders = loadedQueried,
                         )
+                        val finalKey = if (title.contains(":")) title else "manga:$title"
+                        cache[finalKey] = unified
+                        if (!title.contains(":")) {
+                            cache[title] = unified
+                        }
                     }
                 }
             }
@@ -315,16 +323,38 @@ class ArtworkWaterfallRepository(
         }
     }
 
-    fun isCached(title: String): Boolean = cache.containsKey(cleanTitle(title))
+    fun makeKey(title: String, mediaType: Int = MEDIA_TYPE_MANGA): String {
+        val clean = cleanTitle(title)
+        val prefix = when (mediaType) {
+            MEDIA_TYPE_ANIME -> "anime"
+            MEDIA_TYPE_NOVEL -> "novel"
+            else -> "manga"
+        }
+        return "$prefix:$clean"
+    }
+
+    fun isCached(title: String, mediaType: Int = MEDIA_TYPE_MANGA): Boolean =
+        cache.containsKey(makeKey(title, mediaType)) || (mediaType == MEDIA_TYPE_MANGA && cache.containsKey(cleanTitle(title)))
 
     fun getEffectiveArtwork(
         raw: UnifiedArtwork,
         defaultCoverUrl: String? = null,
         mangaId: Long? = null,
         categoryIds: List<Long>? = null,
+        mediaType: Int = MEDIA_TYPE_MANGA,
     ): UnifiedArtwork {
-        val excludedBanners = if (mangaId != null) preferences.mangaExcludedBannerSources(mangaId).get() else emptySet()
-        val excludedCovers = if (mangaId != null) preferences.mangaExcludedCoverSources(mangaId).get() else emptySet()
+        val excludedBanners = when {
+            mangaId == null -> emptySet()
+            mediaType == MEDIA_TYPE_ANIME -> preferences.animeExcludedBannerSources(mangaId).get()
+            mediaType == MEDIA_TYPE_NOVEL -> preferences.novelExcludedBannerSources(mangaId).get()
+            else -> preferences.mangaExcludedBannerSources(mangaId).get()
+        }
+        val excludedCovers = when {
+            mangaId == null -> emptySet()
+            mediaType == MEDIA_TYPE_ANIME -> preferences.animeExcludedCoverSources(mangaId).get()
+            mediaType == MEDIA_TYPE_NOVEL -> preferences.novelExcludedCoverSources(mangaId).get()
+            else -> preferences.mangaExcludedCoverSources(mangaId).get()
+        }
 
         if (mangaId != null && categoryIds != null) {
             mangaCategoriesCache[mangaId] = categoryIds
@@ -334,17 +364,37 @@ class ArtworkWaterfallRepository(
             ?: emptyList()
 
         val rulesConfig = getCategoryRulesConfig()
-        val rule = rulesConfig.getRuleForManga(effCategories)
+        val rule = if (mediaType == MEDIA_TYPE_MANGA) rulesConfig.getRuleForManga(effCategories) else null
 
-        val globalBannerOrder = parsePriorityOrder(
-            preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
-        ).filterNot { it in excludedBanners }
+        val globalBannerOrder = when (mediaType) {
+            MEDIA_TYPE_ANIME -> parsePriorityOrder(
+                preferences.animeArtworkBannerOrder().get(),
+                allowed = listOf("ANILIST", "KITSU", "BANGUMI", "DEFAULT"),
+            )
+            MEDIA_TYPE_NOVEL -> parsePriorityOrder(
+                preferences.novelArtworkBannerOrder().get(),
+                allowed = listOf("BOOKWALKER", "NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "DEFAULT"),
+            )
+            else -> parsePriorityOrder(
+                preferences.artworkBannerOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
+                allowed = listOf("NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "KITSU"),
+            )
+        }.filterNot { it in excludedBanners }
 
-        val globalCoverOrder = parsePriorityOrder(
-            preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
-            allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
-        ).filterNot { it in excludedCovers }
+        val globalCoverOrder = when (mediaType) {
+            MEDIA_TYPE_ANIME -> parsePriorityOrder(
+                preferences.animeArtworkCoverOrder().get(),
+                allowed = listOf("ANILIST", "KITSU", "BANGUMI", "DEFAULT"),
+            )
+            MEDIA_TYPE_NOVEL -> parsePriorityOrder(
+                preferences.novelArtworkCoverOrder().get(),
+                allowed = listOf("BOOKWALKER", "NAVER", "KUAIKAN", "BANGUMI", "ANILIST", "DEFAULT"),
+            )
+            else -> parsePriorityOrder(
+                preferences.artworkCoverOrder().get().ifBlank { preferences.artworkWaterfallOrder().get() },
+                allowed = listOf("MANGADEX", "BOOKWALKER", "BANGUMI", "ANILIST", "NAVER", "KUAIKAN", "KITSU", "DEFAULT"),
+            )
+        }.filterNot { it in excludedCovers }
 
         val defaultCover = defaultCoverUrl?.takeIf { it.isNotBlank() }
             ?: raw.allAvailableCovers.firstOrNull { it.source.equals("Default", ignoreCase = true) }?.url
@@ -474,19 +524,25 @@ class ArtworkWaterfallRepository(
         defaultCoverUrl: String? = null,
         mangaId: Long? = null,
         categoryIds: List<Long>? = null,
+        mediaType: Int = MEDIA_TYPE_MANGA,
     ): UnifiedArtwork? {
-        val raw = cache[cleanTitle(title)] ?: return null
-        val effective = getEffectiveArtwork(raw, defaultCoverUrl, mangaId, categoryIds)
+        val key = makeKey(title, mediaType)
+        val raw = cache[key] ?: (if (mediaType == MEDIA_TYPE_MANGA) cache[cleanTitle(title)] else null) ?: return null
+        val effective = getEffectiveArtwork(raw, defaultCoverUrl, mangaId, categoryIds, mediaType)
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Cache") {
-            "Memory cache HIT for '$title': banner=${effective?.bannerUrl}, poster=${effective?.posterUrl}"
+            "Memory cache HIT for '[$mediaType] $title': banner=${effective.bannerUrl}, poster=${effective.posterUrl}"
         }
         return effective
     }
 
-    fun putCached(title: String, artwork: UnifiedArtwork) {
+    fun putCached(title: String, artwork: UnifiedArtwork, mediaType: Int = MEDIA_TYPE_MANGA) {
         val clean = cleanTitle(title)
         if (clean.isNotBlank()) {
-            cache[clean] = artwork
+            val key = makeKey(title, mediaType)
+            cache[key] = artwork
+            if (mediaType == MEDIA_TYPE_MANGA) {
+                cache[clean] = artwork
+            }
             scheduleSaveToDisk()
         }
     }
@@ -539,9 +595,12 @@ class ArtworkWaterfallRepository(
         forceRefresh: Boolean = false,
         altTitle: String? = null,
         categoryIds: List<Long>? = null,
+        mediaType: Int = MEDIA_TYPE_MANGA,
     ): UnifiedArtwork = withContext(Dispatchers.IO) {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return@withContext UnifiedArtwork()
+
+        val cacheKey = makeKey(title, mediaType)
 
         if (mangaId != null) {
             if (categoryIds != null) {
@@ -557,17 +616,136 @@ class ArtworkWaterfallRepository(
             ?: (if (mangaId != null) mangaCategoriesCache[mangaId] else null)
             ?: emptyList()
 
+        if (forceRefresh) {
+            cache.remove(cacheKey)
+            if (mediaType == MEDIA_TYPE_MANGA) {
+                cache.remove(title)
+                mangadexRepo.removeTitleFromCache(title)
+                if (!altTitle.isNullOrBlank()) {
+                    mangadexRepo.removeTitleFromCache(altTitle)
+                }
+                mangadexRepo.resetRateLimit()
+            }
+        }
+
+        if (mediaType == MEDIA_TYPE_ANIME) {
+            val cachedEntry = cache[cacheKey]
+            if (cachedEntry != null && !forceRefresh) {
+                return@withContext getEffectiveArtwork(
+                    raw = cachedEntry,
+                    defaultCoverUrl = defaultCoverUrl,
+                    mangaId = mangaId,
+                    categoryIds = effCategories,
+                    mediaType = MEDIA_TYPE_ANIME,
+                )
+            }
+
+            val banners = mutableListOf<String>()
+            val bannerOptions = mutableListOf<ArtworkBannerOption>()
+            val covers = mutableListOf<ArtworkCoverOption>()
+            val ratings = mutableListOf<CommunityRating>()
+
+            if (!defaultCoverUrl.isNullOrBlank()) {
+                covers.add(ArtworkCoverOption(url = defaultCoverUrl, source = "Default", subtitle = "Source Cover"))
+            }
+
+            // 1. ANILIST ANIME (Official TV visual & wide banner)
+            try {
+                val alArt = if (anilistRemoteId != null && anilistRemoteId > 0) {
+                    anilistRepo.fetchBatch(listOf(anilistRemoteId), isAnime = true)[anilistRemoteId]
+                } else if (malRemoteId != null && malRemoteId > 0) {
+                    anilistRepo.fetchByMalId(malRemoteId, isAnime = true)
+                } else {
+                    anilistRepo.fetchByTitle(title, isAnime = true)
+                }
+
+                alArt?.bannerUrl?.let {
+                    if (it.isNotBlank()) {
+                        banners.add(it)
+                        bannerOptions.add(ArtworkBannerOption(it, "ANILIST"))
+                    }
+                }
+                alArt?.extraLargeCoverUrl?.let {
+                    if (it.isNotBlank()) {
+                        covers.add(ArtworkCoverOption(url = it, source = "AniList", subtitle = "TV Anime Poster"))
+                    }
+                }
+                if (alArt?.score10 != null && alArt.score100 != null) {
+                    ratings.add(CommunityRating(score10 = alArt.score10, score100 = alArt.score100, source = "AniList"))
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "Failed AniList anime fetch for $title" }
+            }
+
+            // 2. KITSU ANIME
+            try {
+                val kitsuArt = if (kitsuRemoteId != null && kitsuRemoteId > 0) {
+                    kitsuRepo.fetchByKitsuId(kitsuRemoteId, isAnime = true)
+                } else {
+                    kitsuRepo.fetchByTitle(title, isAnime = true)
+                }
+                kitsuArt?.bannerUrl?.let {
+                    if (it.isNotBlank()) {
+                        banners.add(it)
+                        bannerOptions.add(ArtworkBannerOption(it, "KITSU"))
+                    }
+                }
+                kitsuArt?.posterUrl?.let {
+                    if (it.isNotBlank()) {
+                        covers.add(ArtworkCoverOption(url = it, source = "Kitsu", subtitle = "Key Visual"))
+                    }
+                }
+                if (kitsuArt?.score10 != null && kitsuArt.score100 != null) {
+                    ratings.add(CommunityRating(score10 = kitsuArt.score10, score100 = kitsuArt.score100, source = "Kitsu"))
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "Failed Kitsu anime fetch for $title" }
+            }
+
+            // 3. BANGUMI ANIME
+            try {
+                val bangumiArt = bangumiRepo.fetchArtwork(title, isAnime = true)
+                bangumiArt?.bannerUrl?.let {
+                    if (it.isNotBlank()) {
+                        banners.add(it)
+                        bannerOptions.add(ArtworkBannerOption(it, "BANGUMI"))
+                    }
+                }
+                bangumiArt?.coverUrl?.let {
+                    if (it.isNotBlank()) {
+                        covers.add(ArtworkCoverOption(url = it, source = "Bangumi", subtitle = "Official Anime Art"))
+                    }
+                }
+                if (bangumiArt?.score10 != null && bangumiArt.score100 != null) {
+                    ratings.add(CommunityRating(score10 = bangumiArt.score10, score100 = bangumiArt.score100, source = "Bangumi"))
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "Failed Bangumi anime fetch for $title" }
+            }
+
+            val unified = UnifiedArtwork(
+                bannerUrl = null,
+                posterUrl = null,
+                allAvailableBanners = banners.distinct(),
+                allAvailableCovers = covers.distinctBy { it.url },
+                bannerOptions = bannerOptions.distinctBy { it.url },
+                ratings = ratings,
+                queriedProviders = setOf("ANILIST", "KITSU", "BANGUMI"),
+            )
+            cache[cacheKey] = unified
+            scheduleSaveToDisk()
+
+            return@withContext getEffectiveArtwork(
+                raw = unified,
+                defaultCoverUrl = defaultCoverUrl,
+                mangaId = mangaId,
+                categoryIds = effCategories,
+                mediaType = MEDIA_TYPE_ANIME,
+            )
+        }
+
         val rulesConfig = getCategoryRulesConfig()
         val rule = rulesConfig.getRuleForManga(effCategories)
-
-        if (forceRefresh) {
-            cache.remove(title)
-            mangadexRepo.removeTitleFromCache(title)
-            if (!altTitle.isNullOrBlank()) {
-                mangadexRepo.removeTitleFromCache(altTitle)
-            }
-            mangadexRepo.resetRateLimit()
-        }
 
         val excludedBanners = if (mangaId != null) preferences.mangaExcludedBannerSources(mangaId).get() else emptySet()
         val excludedCovers = if (mangaId != null) preferences.mangaExcludedCoverSources(mangaId).get() else emptySet()
@@ -939,10 +1117,13 @@ class ArtworkWaterfallRepository(
             queriedProviders = updatedQueriedProviders,
         )
         if (mergedBanners.isNotEmpty() || mergedCovers.isNotEmpty() || mergedRatings.isNotEmpty()) {
-            cache[title] = rawResult
+            cache[cacheKey] = rawResult
+            if (mediaType == MEDIA_TYPE_MANGA) {
+                cache[title] = rawResult
+            }
             scheduleSaveToDisk()
         }
-        val effective = getEffectiveArtwork(rawResult, defaultCoverUrl, mangaId, effCategories)
+        val effective = getEffectiveArtwork(rawResult, defaultCoverUrl, mangaId, effCategories, mediaType)
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
             "Network discovery completed for '$title' -> banner=${effective.bannerUrl}, cover=${effective.posterUrl} (covers=${mergedCovers.size}, banners=${mergedBanners.size})"
         }

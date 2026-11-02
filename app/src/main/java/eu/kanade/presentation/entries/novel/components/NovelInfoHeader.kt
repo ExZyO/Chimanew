@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Favorite
@@ -335,6 +337,7 @@ fun NovelCoverDialog(
     imageUrl: String?,
     title: String,
     onDismiss: () -> Unit,
+    onArtworkPickerClick: (() -> Unit)? = null,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -360,6 +363,22 @@ fun NovelCoverDialog(
                 )
             } else {
                 Spacer(modifier = Modifier.width(1.dp))
+            }
+
+            if (onArtworkPickerClick != null) {
+                FilledTonalButton(
+                    onClick = {
+                        onDismiss()
+                        onArtworkPickerClick()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 32.dp),
+                ) {
+                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Select Artwork")
+                }
             }
         }
     }

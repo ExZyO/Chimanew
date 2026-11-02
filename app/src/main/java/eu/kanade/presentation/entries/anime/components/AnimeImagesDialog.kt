@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Share
@@ -54,6 +55,7 @@ import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.tachiyomi.data.coil.useBackground
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.i18n.MR
@@ -72,6 +74,7 @@ fun AnimeImagesDialog(
     onSaveClick: () -> Unit,
     onEditClick: ((EditCoverAction) -> Unit)?,
     onDismissRequest: () -> Unit,
+    onArtworkPickerClick: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val isCover = pagerState.currentPage != 1
@@ -128,18 +131,31 @@ fun AnimeImagesDialog(
                     Spacer(modifier = Modifier.weight(1f))
                     ActionsPill {
                         AppBarActions(
-                            actions = persistentListOf(
-                                AppBar.Action(
-                                    title = stringResource(MR.strings.action_share),
-                                    icon = Icons.Outlined.Share,
-                                    onClick = onShareClick,
-                                ),
-                                AppBar.Action(
-                                    title = stringResource(MR.strings.action_save),
-                                    icon = Icons.Outlined.Save,
-                                    onClick = onSaveClick,
-                                ),
-                            ),
+                            actions = buildList {
+                                if (onArtworkPickerClick != null) {
+                                    add(
+                                        AppBar.Action(
+                                            title = "Select Artwork",
+                                            icon = Icons.Outlined.Collections,
+                                            onClick = onArtworkPickerClick,
+                                        ),
+                                    )
+                                }
+                                add(
+                                    AppBar.Action(
+                                        title = stringResource(MR.strings.action_share),
+                                        icon = Icons.Outlined.Share,
+                                        onClick = onShareClick,
+                                    ),
+                                )
+                                add(
+                                    AppBar.Action(
+                                        title = stringResource(MR.strings.action_save),
+                                        icon = Icons.Outlined.Save,
+                                        onClick = onSaveClick,
+                                    ),
+                                )
+                            }.toPersistentList(),
                         )
                         if (onEditClick != null) {
                             Box {

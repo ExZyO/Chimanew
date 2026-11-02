@@ -122,6 +122,39 @@ class ChimanewPreferences(
         "mangadex:true,bookwalker:true,bangumi:true,anilist:true,naver:true,kuaikan:true,kitsu:true,default:true",
     )
 
+    // Separate Anime Artwork Orders
+    fun animeArtworkBannerOrder() = preferenceStore.getString(
+        "pref_chimanew_anime_artwork_banner_order",
+        "anilist:true,kitsu:true,bangumi:true,default:true",
+    )
+
+    fun animeArtworkCoverOrder() = preferenceStore.getString(
+        "pref_chimanew_anime_artwork_cover_order",
+        "anilist:true,kitsu:true,bangumi:true,default:true",
+    )
+
+    // Separate Novel Artwork Orders
+    fun novelArtworkBannerOrder() = preferenceStore.getString(
+        "pref_chimanew_novel_artwork_banner_order",
+        "bookwalker:true,naver:true,kuaikan:true,bangumi:true,anilist:true,default:true",
+    )
+
+    fun novelArtworkCoverOrder() = preferenceStore.getString(
+        "pref_chimanew_novel_artwork_cover_order",
+        "bookwalker:true,naver:true,kuaikan:true,bangumi:true,anilist:true,default:true",
+    )
+
+    fun heroStyleAnime() = preferenceStore.getInt("pref_nuvio_hero_style_anime", 0)
+    fun heroStyleNovel() = preferenceStore.getInt("pref_nuvio_hero_style_novel", 0)
+
+    fun animeCustomBannerUrl(animeId: Long) = preferenceStore.getString("pref_chimanew_anime_banner_$animeId", "")
+    fun animeExcludedCoverSources(animeId: Long) = preferenceStore.getStringSet("pref_chimanew_anime_excluded_cover_sources_$animeId", emptySet())
+    fun animeExcludedBannerSources(animeId: Long) = preferenceStore.getStringSet("pref_chimanew_anime_excluded_banner_sources_$animeId", emptySet())
+
+    fun novelCustomBannerUrl(novelId: Long) = preferenceStore.getString("pref_chimanew_novel_banner_$novelId", "")
+    fun novelExcludedCoverSources(novelId: Long) = preferenceStore.getStringSet("pref_chimanew_novel_excluded_cover_sources_$novelId", emptySet())
+    fun novelExcludedBannerSources(novelId: Long) = preferenceStore.getStringSet("pref_chimanew_novel_excluded_banner_sources_$novelId", emptySet())
+
     fun showCommunityRatings() = preferenceStore.getBoolean("pref_chimanew_show_community_ratings", true)
 
     fun communityRatingFormat() = preferenceStore.getInt(

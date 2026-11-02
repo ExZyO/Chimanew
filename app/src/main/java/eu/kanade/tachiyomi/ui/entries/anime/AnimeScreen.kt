@@ -41,7 +41,10 @@ import eu.kanade.presentation.entries.anime.DuplicateAnimeDialog
 import eu.kanade.presentation.entries.anime.EpisodeOptionsDialogScreen
 import eu.kanade.presentation.entries.anime.EpisodeSettingsDialog
 import eu.kanade.presentation.entries.anime.SeasonSettingsDialog
+import eu.kanade.presentation.entries.anime.components.AnimeArtworkPickerBottomSheet
 import eu.kanade.presentation.entries.anime.components.AnimeImagesDialog
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
+import coil3.imageLoader
 import eu.kanade.presentation.entries.anime.components.AnimeScanlatorFilterDialog
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
 import eu.kanade.presentation.entries.components.SetIntervalDialog
@@ -409,10 +412,25 @@ class AnimeScreen(
                             }
                         },
                         onDismissRequest = onDismissRequest,
+                        onArtworkPickerClick = {
+                            onDismissRequest()
+                            screenModel.showArtworkPickerDialog()
+                        },
                     )
                 } else {
                     LoadingScreen(Modifier.systemBarsPadding())
                 }
+            }
+            AnimeScreenModel.Dialog.ArtworkPickerSheet -> {
+                AnimeArtworkPickerBottomSheet(
+                    anime = successState.anime,
+                    onDismissRequest = onDismissRequest,
+                    onCustomCoverFilePick = { getContent.launch("image/*") },
+                    onCoverUpdated = {
+                        context.imageLoader.memoryCache?.clear()
+                        ChimanewHomeScreenModel.triggerRefresh()
+                    },
+                )
             }
             is AnimeScreenModel.Dialog.SetAnimeFetchInterval -> {
                 SetIntervalDialog(

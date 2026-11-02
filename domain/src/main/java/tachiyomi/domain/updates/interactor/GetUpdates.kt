@@ -16,7 +16,7 @@ class GetUpdates(
 ) {
 
     suspend fun await(read: Boolean, after: Long): List<UpdatesWithRelations> {
-        return repository.awaitWithRead(read, after, limit = 10000)
+        return repository.awaitWithRead(read, after, limit = 250000L)
     }
 
     fun subscribe(
@@ -28,7 +28,7 @@ class GetUpdates(
     ): Flow<List<UpdatesWithRelations>> {
         return repository.subscribeAll(
             instant.toEpochMilli(),
-            limit = 10000,
+            limit = 250000L,
             unread = unread,
             started = started,
             bookmarked = bookmarked,
@@ -40,7 +40,7 @@ class GetUpdates(
     }
 
     fun subscribe(read: Boolean, after: Long): Flow<List<UpdatesWithRelations>> {
-        return repository.subscribeWithRead(read, after, limit = 10000)
+        return repository.subscribeWithRead(read, after, limit = 250000L)
             // SY -->
             .catchNPE()
         // SY <--

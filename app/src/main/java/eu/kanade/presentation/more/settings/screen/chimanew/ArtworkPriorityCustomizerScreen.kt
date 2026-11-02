@@ -42,7 +42,11 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_MANGA
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_NOVEL
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import sh.calvin.reorderable.ReorderableItem
@@ -62,7 +66,9 @@ data class ArtworkPriorityItem(
     val enabled: Boolean,
 )
 
-class ArtworkPriorityCustomizerScreen : Screen() {
+class ArtworkPriorityCustomizerScreen(
+    val initialMediaType: Int = MEDIA_TYPE_MANGA,
+) : Screen() {
 
     companion object {
         const val PROVIDER_DEFAULT = "default"
@@ -131,6 +137,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
         val navigator = LocalNavigator.currentOrThrow
         val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
         val waterfallRepo = remember { Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository>() }
+        var activeMedia by rememberSaveable { mutableIntStateOf(initialMediaType) }
         var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
         val providerTitles = mapOf(
@@ -169,6 +176,28 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                     .fillMaxSize()
                     .padding(contentPadding),
             ) {
+                // Media Type Selector (Manga / Anime / Novels)
+                TabRow(
+                    selectedTabIndex = activeMedia,
+                ) {
+                    Tab(
+                        selected = activeMedia == MEDIA_TYPE_MANGA,
+                        onClick = { activeMedia = MEDIA_TYPE_MANGA },
+                        text = { Text("Manga") },
+                    )
+                    Tab(
+                        selected = activeMedia == MEDIA_TYPE_ANIME,
+                        onClick = { activeMedia = MEDIA_TYPE_ANIME },
+                        text = { Text("Anime") },
+                    )
+                    Tab(
+                        selected = activeMedia == MEDIA_TYPE_NOVEL,
+                        onClick = { activeMedia = MEDIA_TYPE_NOVEL },
+                        text = { Text("Novels") },
+                    )
+                }
+
+                // Covers vs Banners Selector
                 TabRow(
                     selectedTabIndex = selectedTabIndex,
                 ) {
@@ -184,16 +213,20 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                     )
                 }
 
-                key(selectedTabIndex) {
-                    val orderPref = if (selectedTabIndex == 0) {
-                        chimanewPreferences.artworkCoverOrder()
-                    } else {
-                        chimanewPreferences.artworkBannerOrder()
+                key(activeMedia, selectedTabIndex) {
+                    val orderPref = when (activeMedia) {
+                        MEDIA_TYPE_ANIME -> if (selectedTabIndex == 0) chimanewPreferences.animeArtworkCoverOrder() else chimanewPreferences.animeArtworkBannerOrder()
+                        MEDIA_TYPE_NOVEL -> if (selectedTabIndex == 0) chimanewPreferences.novelArtworkCoverOrder() else chimanewPreferences.novelArtworkBannerOrder()
+                        else -> if (selectedTabIndex == 0) chimanewPreferences.artworkCoverOrder() else chimanewPreferences.artworkBannerOrder()
                     }
-                    val allowed = if (selectedTabIndex == 0) {
-                        listOf(PROVIDER_MANGADEX, PROVIDER_BOOKWALKER, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_KITSU, PROVIDER_DEFAULT)
-                    } else {
-                        listOf(PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_KITSU)
+                    val allowed = when (activeMedia) {
+                        MEDIA_TYPE_ANIME -> listOf(PROVIDER_ANILIST, PROVIDER_KITSU, PROVIDER_BANGUMI, PROVIDER_DEFAULT)
+                        MEDIA_TYPE_NOVEL -> listOf(PROVIDER_BOOKWALKER, PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_DEFAULT)
+                        else -> if (selectedTabIndex == 0) {
+                            listOf(PROVIDER_MANGADEX, PROVIDER_BOOKWALKER, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_KITSU, PROVIDER_DEFAULT)
+                        } else {
+                            listOf(PROVIDER_NAVER, PROVIDER_KUAIKAN, PROVIDER_BANGUMI, PROVIDER_ANILIST, PROVIDER_KITSU)
+                        }
                     }
 
                     val rawOrder = remember { orderPref.get() }
@@ -225,6 +258,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                                     val serialized = serializeOrder(itemsState.map { it.id to it.enabled })
                                     orderPref.set(serialized)
                                     waterfallRepo.checkAndHandlePriorityChange()
+                                    ChimanewHomeScreenModel.triggerRefresh()
                                 }
                             }
                     }
@@ -236,6 +270,7 @@ class ArtworkPriorityCustomizerScreen : Screen() {
                             val serialized = serializeOrder(itemsState.map { it.id to it.enabled })
                             orderPref.set(serialized)
                             waterfallRepo.checkAndHandlePriorityChange()
+                            ChimanewHomeScreenModel.triggerRefresh()
                         }
                     }
 

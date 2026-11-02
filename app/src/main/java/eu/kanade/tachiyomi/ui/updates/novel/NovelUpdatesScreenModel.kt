@@ -36,11 +36,11 @@ class NovelUpdatesScreenModel(
         screenModelScope.launch {
             val after = ZonedDateTime.now().minusMonths(3).toInstant().toEpochMilli()
             runCatching {
-                novelUpdatesRepository.awaitUpdates(after = after, limit = 10000L)
+                novelUpdatesRepository.awaitUpdates(after = after, limit = 250000L)
             }.onSuccess { updates ->
                 val novelCount = updates.groupBy { it.novelId }.size
                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "NovelUpdates") {
-                    "Loaded ${updates.size} raw novel update rows from DB (SQL limit=10,000) across $novelCount unique novels."
+                    "Loaded ${updates.size} raw novel update rows from DB (uncapped, limit=250,000) across $novelCount unique novels."
                 }
                 mutableState.update {
                     it.copy(isLoading = false, items = updates)

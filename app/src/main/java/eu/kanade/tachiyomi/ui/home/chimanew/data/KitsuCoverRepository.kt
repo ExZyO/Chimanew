@@ -45,14 +45,19 @@ class KitsuCoverRepository(
 
     fun getCached(kitsuId: Long): KitsuMediaArtwork? = idCache[kitsuId]
 
-    fun getCachedByTitle(rawTitle: String): KitsuMediaArtwork? = titleCache[cleanTitle(rawTitle)]
+    fun getCachedByTitle(rawTitle: String, isAnime: Boolean = false): KitsuMediaArtwork? {
+        val clean = cleanTitle(rawTitle)
+        val key = if (isAnime) "anime:$clean" else "manga:$clean"
+        return titleCache[key] ?: if (!isAnime) titleCache[clean] else null
+    }
 
-    suspend fun fetchByKitsuId(kitsuId: Long): KitsuMediaArtwork? {
+    suspend fun fetchByKitsuId(kitsuId: Long, isAnime: Boolean = false): KitsuMediaArtwork? {
         idCache[kitsuId]?.let { return it }
         if (isRateLimited()) return null
+        val endpoint = if (isAnime) "anime" else "manga"
         return withContext(Dispatchers.IO) {
             try {
-                val url = "$API_URL/manga/$kitsuId"
+                val url = "$API_URL/$endpoint/$kitsuId"
                 val headers = Headers.Builder()
                     .add("Accept", "application/vnd.api+json")
                     .add("User-Agent", "Chimanew/2.6.1")
@@ -88,16 +93,21 @@ class KitsuCoverRepository(
         }
     }
 
-    suspend fun fetchByTitle(rawTitle: String): KitsuMediaArtwork? {
+    suspend fun fetchByTitle(rawTitle: String, isAnime: Boolean = false): KitsuMediaArtwork? {
         val title = cleanTitle(rawTitle)
         if (title.isBlank()) return null
-        titleCache[title]?.let { return it }
+        val cacheKey = if (isAnime) "anime:$title" else "manga:$title"
+        titleCache[cacheKey]?.let { return it }
+        if (!isAnime) {
+            titleCache[title]?.let { return it }
+        }
         if (isRateLimited()) return null
 
+        val endpoint = if (isAnime) "anime" else "manga"
         return withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(title, "UTF-8")
-                val url = "$API_URL/manga?filter[text]=$encoded&page[limit]=5"
+                val url = "$API_URL/$endpoint?filter[text]=$encoded&page[limit]=5"
                 val headers = Headers.Builder()
                     .add("Accept", "application/vnd.api+json")
                     .add("User-Agent", "Chimanew/2.6.1")
@@ -109,7 +119,8 @@ class KitsuCoverRepository(
                 val dataArr = root?.get("data") as? JsonArray ?: return@withContext null
                 if (dataArr.isEmpty()) {
                     val empty = KitsuMediaArtwork()
-                    titleCache[title] = empty
+                    titleCache[cacheKey] = empty
+                    if (!isAnime) titleCache[title] = empty
                     ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kitsu") {
                         "No Kitsu results returned for '$title'"
                     }
@@ -131,7 +142,8 @@ class KitsuCoverRepository(
 
                 if (matchedObj == null) {
                     val empty = KitsuMediaArtwork()
-                    titleCache[title] = empty
+                    titleCache[cacheKey] = empty
+                    if (!isAnime) titleCache[title] = empty
                     ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kitsu") {
                         "No title match for '$title' among Kitsu candidates: $candidateSummaries"
                     }
@@ -149,7 +161,8 @@ class KitsuCoverRepository(
                 val score100 = avgRating?.toInt()
 
                 val artwork = KitsuMediaArtwork(bannerUrl, posterUrl, score10, score100)
-                titleCache[title] = artwork
+                titleCache[cacheKey] = artwork
+                if (!isAnime) titleCache[title] = artwork
                 ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Kitsu") {
                     "Found Kitsu match for '$title': canonical='${matchedObj["canonicalTitle"]?.jsonPrimitive?.contentOrNull}', banner=${!bannerUrl.isNullOrBlank()}, poster=${!posterUrl.isNullOrBlank()}"
                 }

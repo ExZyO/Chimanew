@@ -53,21 +53,28 @@ class BangumiCoverRepository(
         return System.currentTimeMillis() < rateLimitedUntil
     }
 
-    fun getCached(query: String): BangumiArtwork? = cache[normalizeKey(query)]
+    fun getCached(query: String, isAnime: Boolean = false): BangumiArtwork? {
+        val key = normalizeKey(query)
+        val cacheKey = if (isAnime) "anime:$key" else "manga:$key"
+        return cache[cacheKey] ?: if (!isAnime) cache[key] else null
+    }
 
-    suspend fun fetchArtwork(query: String): BangumiArtwork? {
+    suspend fun fetchArtwork(query: String, isAnime: Boolean = false): BangumiArtwork? {
         val key = normalizeKey(query)
         if (key.isBlank()) return null
-        cache[key]?.let { return it }
+        val cacheKey = if (isAnime) "anime:$key" else "manga:$key"
+        cache[cacheKey]?.let { return it }
+        if (!isAnime) cache[key]?.let { return it }
         if (isRateLimited()) return null
 
         return withContext(Dispatchers.IO) {
             try {
+                val typeVal = if (isAnime) 2 else 1 // 1 = Book / Manga, 2 = Anime
                 val payload = buildJsonObject {
                     put("keyword", query.trim())
                     putJsonObject("filter") {
                         putJsonArray("type") {
-                            add(1) // 1 = Book / Manga
+                            add(typeVal)
                         }
                     }
                 }
@@ -138,7 +145,8 @@ class BangumiCoverRepository(
                         score100 = score100,
                         subjectId = subjectId,
                     )
-                    cache[key] = artwork
+                    cache[cacheKey] = artwork
+                    if (!isAnime) cache[key] = artwork
                     ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Bangumi") {
                         "Found Bangumi artwork for '$query': banner=$bannerUrl, cover=$coverUrl, score=$score"
                     }
@@ -146,7 +154,8 @@ class BangumiCoverRepository(
                     artwork
                 } else {
                     val empty = BangumiArtwork()
-                    cache[key] = empty
+                    cache[cacheKey] = empty
+                    if (!isAnime) cache[key] = empty
                     ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "Bangumi") {
                         "No Bangumi hits for '$query'"
                     }

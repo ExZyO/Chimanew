@@ -1,0 +1,795 @@
+// EaZy Nuvio+ / Chimanew
+package eu.kanade.presentation.entries.anime.components
+
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Photo
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import eu.kanade.domain.entries.anime.interactor.UpdateAnime
+import eu.kanade.presentation.components.AdaptiveSheet
+import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
+import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkCoverOption
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
+import eu.kanade.tachiyomi.ui.home.chimanew.data.UnifiedArtwork
+import eu.kanade.tachiyomi.util.editCover
+import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import logcat.LogPriority
+import okio.buffer
+import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.track.anime.interactor.GetAnimeTracks
+import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
+import tachiyomi.source.local.image.anime.LocalAnimeCoverManager
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+
+@Composable
+fun AnimeArtworkPickerBottomSheet(
+    anime: Anime,
+    onDismissRequest: () -> Unit,
+    onCustomCoverFilePick: () -> Unit,
+    onCoverUpdated: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val preferences = remember { Injekt.get<ChimanewPreferences>() }
+    val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
+    val customBannerPref = remember(anime.id) { preferences.animeCustomBannerUrl(anime.id) }
+    val currentCustomBanner by customBannerPref.collectPrefAsState()
+
+    val excludedCoversPref = remember(anime.id) { preferences.animeExcludedCoverSources(anime.id) }
+    val excludedBannersPref = remember(anime.id) { preferences.animeExcludedBannerSources(anime.id) }
+    val excludedCovers by excludedCoversPref.collectPrefAsState()
+    val excludedBanners by excludedBannersPref.collectPrefAsState()
+
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isApplying by remember { mutableStateOf(false) }
+    var artwork by remember { mutableStateOf<UnifiedArtwork?>(null) }
+
+    val fetchArtwork: (Boolean) -> Unit = { force ->
+        scope.launch {
+            isLoading = true
+            withContext(Dispatchers.IO) {
+                val trackerManager = Injekt.get<TrackerManager>()
+                val getAnimeTracks = Injekt.get<GetAnimeTracks>()
+                val tracks = runCatching { getAnimeTracks.await(anime.id) }.getOrDefault(emptyList())
+                val anilistTrack = tracks.firstOrNull { it.trackerId == trackerManager.aniList.id }
+                val kitsuTrack = tracks.firstOrNull { it.trackerId == trackerManager.kitsu.id }
+                val malTrack = tracks.firstOrNull { it.trackerId == trackerManager.myAnimeList.id }
+                val title = anime.ogTitle ?: anime.title
+                val altTitle = if (!anime.ogTitle.isNullOrBlank() && anime.ogTitle != anime.title) anime.title else anime.ogTitle
+                val res = waterfallRepo.resolveArtwork(
+                    rawTitle = title,
+                    anilistRemoteId = anilistTrack?.remoteId?.takeIf { it > 0 },
+                    kitsuRemoteId = kitsuTrack?.remoteId?.takeIf { it > 0 },
+                    malRemoteId = malTrack?.remoteId?.takeIf { it > 0 },
+                    mangaId = anime.id,
+                    defaultCoverUrl = anime.thumbnailUrl,
+                    forceRefresh = force,
+                    altTitle = altTitle,
+                    mediaType = MEDIA_TYPE_ANIME,
+                )
+                artwork = res
+            }
+            isLoading = false
+            if (force) {
+                context.toast("Artwork refreshed")
+            }
+        }
+    }
+
+    LaunchedEffect(anime.id) {
+        fetchArtwork(false)
+    }
+
+    AdaptiveSheet(
+        modifier = modifier,
+        onDismissRequest = onDismissRequest,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+        ) {
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Anime Artwork Selection",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp,
+                    ),
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = { fetchArtwork(true) },
+                    enabled = !isLoading,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = "Refresh artwork",
+                    )
+                }
+                IconButton(onClick = onDismissRequest) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(MR.strings.action_close),
+                    )
+                }
+            }
+
+            // Tab bar
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.primary,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = {
+                        Text(
+                            text = "Covers",
+                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
+                        )
+                    },
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = {
+                        Text(
+                            text = "Banners",
+                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium,
+                        )
+                    },
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = {
+                        Text(
+                            text = "Exclusions",
+                            fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Medium,
+                        )
+                    },
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val displayedCovers = remember(artwork, excludedCovers) {
+                val all = artwork?.allAvailableCovers ?: emptyList()
+                if (excludedCovers.contains("ALL")) {
+                    all.filter { it.source.equals("Default", ignoreCase = true) }
+                } else {
+                    all.filterNot { it.source.uppercase() in excludedCovers }
+                }
+            }
+
+            val displayedBanners = remember(artwork, excludedBanners) {
+                if (excludedBanners.contains("ALL")) {
+                    emptyList()
+                } else {
+                    val filteredOpts = artwork?.bannerOptions?.filterNot { it.source.uppercase() in excludedBanners }
+                    if (!filteredOpts.isNullOrEmpty()) {
+                        filteredOpts.map { it.url }
+                    } else {
+                        artwork?.allAvailableBanners ?: emptyList()
+                    }
+                }
+            }
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 3.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = "Fetching anime artwork...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else if (selectedTab != 2 && (artwork == null || (selectedTab == 0 && displayedCovers.isEmpty()) || (selectedTab == 1 && displayedBanners.isEmpty()))) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Photo,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(48.dp),
+                        )
+                        Text(
+                            text = if (selectedTab == 0 && excludedCovers.contains("ALL")) {
+                                "All remote anime cover sources are excluded for this entry."
+                            } else if (selectedTab == 1 && excludedBanners.contains("ALL")) {
+                                "All remote anime banner sources are excluded for this entry."
+                            } else {
+                                "No anime artwork found for this title"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                        if (selectedTab == 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(onClick = onCustomCoverFilePick) {
+                                Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Choose from Gallery")
+                            }
+                        }
+                    }
+                }
+            } else {
+                when (selectedTab) {
+                    0 -> {
+                        // Covers Tab
+                        AnimeCoversTabContent(
+                            anime = anime,
+                            covers = displayedCovers,
+                            isApplying = isApplying,
+                            onApplyCover = { coverUrl ->
+                                scope.launch {
+                                    isApplying = true
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            val diskCache = context.imageLoader.diskCache
+                                            val snapshot = diskCache?.openSnapshot(coverUrl)
+                                            if (snapshot != null) {
+                                                try {
+                                                    diskCache.fileSystem.source(snapshot.data).buffer().inputStream().use { stream ->
+                                                        anime.editCover(
+                                                            coverManager = Injekt.get<LocalAnimeCoverManager>(),
+                                                            stream = stream,
+                                                            updateAnime = Injekt.get<UpdateAnime>(),
+                                                            coverCache = Injekt.get<AnimeCoverCache>(),
+                                                        )
+                                                    }
+                                                } finally {
+                                                    snapshot.close()
+                                                }
+                                            } else {
+                                                val client = Injekt.get<NetworkHelper>().client
+                                                val response = client.newCall(GET(coverUrl)).awaitSuccess()
+                                                response.body.byteStream().use { stream ->
+                                                    anime.editCover(
+                                                        coverManager = Injekt.get<LocalAnimeCoverManager>(),
+                                                        stream = stream,
+                                                        updateAnime = Injekt.get<UpdateAnime>(),
+                                                        coverCache = Injekt.get<AnimeCoverCache>(),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        context.imageLoader.memoryCache?.clear()
+                                        ChimanewHomeScreenModel.triggerRefresh()
+                                        context.toast("Cover applied")
+                                        onCoverUpdated()
+                                    } catch (e: Exception) {
+                                        logcat(throwable = e) { "Failed to set custom anime cover: $coverUrl" }
+                                    } finally {
+                                        isApplying = false
+                                    }
+                                }
+                            },
+                            onResetCover = {
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        val coverCache = Injekt.get<AnimeCoverCache>()
+                                        val updateAnime = Injekt.get<UpdateAnime>()
+                                        coverCache.deleteCustomCover(anime.id)
+                                        updateAnime.awaitUpdateCoverLastModified(anime.id)
+                                    }
+                                    context.imageLoader.memoryCache?.clear()
+                                    ChimanewHomeScreenModel.triggerRefresh()
+                                    context.toast("Cover reset to default")
+                                    onCoverUpdated()
+                                }
+                            },
+                            onCustomCoverFilePick = onCustomCoverFilePick,
+                        )
+                    }
+                    1 -> {
+                        // Banners Tab
+                        AnimeBannersTabContent(
+                            banners = displayedBanners,
+                            currentCustomBanner = currentCustomBanner,
+                            onSelectBanner = { bannerUrl ->
+                                customBannerPref.set(bannerUrl)
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        val updateAnime = Injekt.get<UpdateAnime>()
+                                        updateAnime.awaitUpdateCoverLastModified(anime.id)
+                                    }
+                                }
+                                context.imageLoader.memoryCache?.clear()
+                                ChimanewHomeScreenModel.triggerRefresh()
+                                context.toast("Banner applied")
+                                onCoverUpdated()
+                            },
+                            onResetBanner = {
+                                customBannerPref.delete()
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        val updateAnime = Injekt.get<UpdateAnime>()
+                                        updateAnime.awaitUpdateCoverLastModified(anime.id)
+                                    }
+                                }
+                                context.imageLoader.memoryCache?.clear()
+                                ChimanewHomeScreenModel.triggerRefresh()
+                                context.toast("Banner reset")
+                                onCoverUpdated()
+                            },
+                        )
+                    }
+                    2 -> {
+                        // Excluded Sources Tab
+                        AnimeArtworkExclusionsTabContent(
+                            animeId = anime.id,
+                            preferences = preferences,
+                            onExclusionsChanged = {
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        val updateAnime = Injekt.get<UpdateAnime>()
+                                        updateAnime.awaitUpdateCoverLastModified(anime.id)
+                                    }
+                                }
+                                fetchArtwork(false)
+                                context.imageLoader.memoryCache?.clear()
+                                ChimanewHomeScreenModel.triggerRefresh()
+                                onCoverUpdated()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnimeCoversTabContent(
+    anime: Anime,
+    covers: List<ArtworkCoverOption>,
+    isApplying: Boolean,
+    onApplyCover: (String) -> Unit,
+    onResetCover: () -> Unit,
+    onCustomCoverFilePick: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilledTonalButton(
+                onClick = onCustomCoverFilePick,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Pick File", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            OutlinedButton(
+                onClick = onResetCover,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Icon(Icons.Outlined.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Reset", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 110.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(340.dp),
+        ) {
+            items(covers, key = { it.url }) { cover ->
+                AnimeCoverGridItem(
+                    cover = cover,
+                    isSelected = cover.url == anime.thumbnailUrl,
+                    isApplying = isApplying,
+                    onClick = { onApplyCover(cover.url) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnimeCoverGridItem(
+    cover: ArtworkCoverOption,
+    isSelected: Boolean,
+    isApplying: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = !isApplying, onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(12.dp))
+                .border(
+                    width = if (isSelected) 3.dp else 1.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                ),
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(cover.url)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "${cover.source} cover",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .align(Alignment.TopEnd),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = cover.source,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (!cover.subtitle.isNullOrBlank()) {
+            Text(
+                text = cover.subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnimeBannersTabContent(
+    banners: List<String>,
+    currentCustomBanner: String,
+    onSelectBanner: (String) -> Unit,
+    onResetBanner: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (currentCustomBanner.isNotBlank()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                OutlinedButton(
+                    onClick = onResetBanner,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Icon(Icons.Outlined.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reset Custom Banner")
+                }
+            }
+        }
+
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(340.dp),
+        ) {
+            items(banners, key = { it }) { bannerUrl ->
+                val isSelected = bannerUrl == currentCustomBanner
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 7f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(14.dp),
+                        )
+                        .clickable { onSelectBanner(bannerUrl) },
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(bannerUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Anime banner",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .align(Alignment.TopEnd),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Active Banner",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnimeArtworkExclusionsTabContent(
+    animeId: Long,
+    preferences: ChimanewPreferences,
+    onExclusionsChanged: () -> Unit,
+) {
+    val coverExclusionsPref = remember(animeId) { preferences.animeExcludedCoverSources(animeId) }
+    val bannerExclusionsPref = remember(animeId) { preferences.animeExcludedBannerSources(animeId) }
+    val excludedCovers by coverExclusionsPref.collectPrefAsState()
+    val excludedBanners by bannerExclusionsPref.collectPrefAsState()
+
+    val coverProviders = listOf(
+        "ALL" to "All Remote Sources (Default Only)",
+        "ANILIST" to "AniList Anime",
+        "KITSU" to "Kitsu Anime",
+        "BANGUMI" to "Bangumi Anime",
+    )
+
+    val bannerProviders = listOf(
+        "ALL" to "All Remote Banners",
+        "ANILIST" to "AniList Anime",
+        "KITSU" to "Kitsu Anime",
+        "BANGUMI" to "Bangumi Anime",
+    )
+
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(340.dp),
+    ) {
+        item {
+            Text(
+                text = "Exclude Anime Cover Sources",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
+            Text(
+                text = "Checked sources will not be queried for this anime's poster.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+
+        items(coverProviders, key = { "cover_${it.first}" }) { (id, label) ->
+            val isChecked = if (id == "ALL") excludedCovers.contains("ALL") else excludedCovers.contains("ALL") || excludedCovers.contains(id)
+            val isIndividuallyDisabled = id != "ALL" && excludedCovers.contains("ALL")
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(enabled = !isIndividuallyDisabled) {
+                        val current = excludedCovers.toMutableSet()
+                        if (id == "ALL") {
+                            if (current.contains("ALL")) current.remove("ALL") else { current.clear(); current.add("ALL") }
+                        } else {
+                            if (current.contains(id)) current.remove(id) else current.add(id)
+                        }
+                        coverExclusionsPref.set(current)
+                        onExclusionsChanged()
+                    }
+                    .padding(vertical = 4.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = isChecked, onCheckedChange = null, enabled = !isIndividuallyDisabled)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isIndividuallyDisabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Exclude Anime Banner Sources",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
+            Text(
+                text = "Checked sources will not be queried for this anime's banner.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+
+        items(bannerProviders, key = { "banner_${it.first}" }) { (id, label) ->
+            val isChecked = if (id == "ALL") excludedBanners.contains("ALL") else excludedBanners.contains("ALL") || excludedBanners.contains(id)
+            val isIndividuallyDisabled = id != "ALL" && excludedBanners.contains("ALL")
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(enabled = !isIndividuallyDisabled) {
+                        val current = excludedBanners.toMutableSet()
+                        if (id == "ALL") {
+                            if (current.contains("ALL")) current.remove("ALL") else { current.clear(); current.add("ALL") }
+                        } else {
+                            if (current.contains(id)) current.remove(id) else current.add(id)
+                        }
+                        bannerExclusionsPref.set(current)
+                        onExclusionsChanged()
+                    }
+                    .padding(vertical = 4.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = isChecked, onCheckedChange = null, enabled = !isIndividuallyDisabled)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isIndividuallyDisabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
+}

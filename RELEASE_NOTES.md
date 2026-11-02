@@ -1,25 +1,28 @@
-# What's New in Chimanew v2.6.63
+# What's New in Chimanew v2.6.64
 
-### Home Media Switcher and Multi-Media Feed
-* **Compact Media Switcher**: Added a clean, dark translucent pill in the ambient header allowing seamless switching between Manga, Anime, and Novels feeds without cluttering the screen.
-* **Dedicated Anime Shelves**: Added Continue Watching, Watching, Plan to Watch, On Hold, Completed, Anime Categories, Recently Added, and AniList Trending Anime shelves.
-* **Dedicated Novel Shelves**: Added Continue Reading, Reading, Plan to Read, On Hold, Completed, Novel Categories, Recently Added, and AniList Trending Light Novels shelves.
-* **AniList Discovery Integration**: Added curated discovery shelves for Trending Manga, Trending Manhwa, Trending Anime, and Trending Light Novels backed by a two-hour disk cache for zero-latency startup and minimal network overhead.
-* **Universal Multi-Media Routing**: Tapping any card routes directly to its native experience (video player for anime, reader for novels/manga, and global search with source selection for discovery items).
+### Consolidated Settings Hub and Submenus
+* **Organized Submenu Architecture**: Restructured the Chimanew settings screen into seven dedicated sub-screens matching the standard app settings hierarchy:
+  - Appearance and Posters: Interactive poster size customizer, card corner radius, ambient canvas, navbar auto-hide, badges, and details page backdrops.
+  - Home and Hero Banner: Media switcher controls, independent Manga, Anime, and Novel hero carousel configurations, source filtering, and visual banner styles.
+  - Shelves and Rows: Home shelf customizer for reordering, visibility switches for standard shelves, and configurable card tap interactions.
+  - Artwork Sources and Priority: Separate waterfall priority orders for Manga, Anime, and Novels, per-category artwork override rules, and cache management.
+  - Library and Updates Engine: Tracker-assisted updates, automatic check on app launch, series consolidation in updates feed, and media update restrictions.
+  - Community Ratings: Public aggregate ratings from AniList, MyAnimeList, and Kitsu with customizable display formats and placement switches.
+  - Diagnostics and Logs: Real-time subsystem diagnostic logging, category filtering, log export to clipboard, and integrated live log viewer.
 
-### Multi-Media Hero Banners and Shelf Customizer
-* **Per-Media Hero Customization**: Configurable hero banner sources for Manga, Anime, and Novels, allowing users to feature in-progress titles, custom library categories, tracker statuses, or trending discovery selections.
-* **Multi-Media Shelf Reorder Screen**: Unified shelf customizer supporting Manga, Anime, and Novel tabs for reordering, enabling, or disabling any shelf or discovery row.
+### Media-Isolated Artwork Waterfall and Sources
+* **Dedicated Anime and Novel Artwork Waterfall**: Separated artwork priority lists and source exclusions across Manga, Anime, and Light Novels.
+* **Accurate Anime Artwork Queries**: AniList GraphQL queries now dynamically pass media type ANIME for anime entries, Kitsu queries the anime endpoint, and Bangumi targets anime type. This permanently stops manga volume covers from appearing on TV anime titles.
+* **Namespaced Artwork Cache**: All cached entries now use media-isolated cache keys (manga:, anime:, novel:) to prevent cross-media cover collisions.
 
-### Official Poster Card Styling and Depth Effects
-* **Poster and Card Customization**: Added dedicated styling controls under Settings > Appearance with live interactive preview.
-* **Custom Dimensions and Visuals**: Adjustable card width, corner radius, 3D highlight edge glow, sheen coverage, and label visibility toggles.
+### Anime and Novel Manual Artwork Pickers
+* **Interactive Bottom Sheets**: Added dedicated artwork pickers for both Anime and Light Novel details screens, accessible directly from cover preview dialogs.
+* **Full Source Control**: Browse remote high-resolution covers and banners across all active providers, select custom local image files, preview aspect ratios, or exclude specific providers for individual titles.
 
-### Cloudflare Turnstile Bypass Engine
-* **Native Touch Event Injection**: Implemented trusted hardware touchscreen motion event dispatching to solve modern Cloudflare Turnstile verification loops on AnimePahe and protected sources.
-* **Chromium Metadata and User-Agent Pinning**: Stripped webview fingerprints, spoofed Chromium brand metadata via AndroidX Webkit, and pinned the solving User-Agent to wire requests carrying clearance tokens.
+### Artwork Cache Reset Confirmation Dialog
+* **Accidental Tap Protection**: Tapping Reset Artwork Cache now presents a confirmation dialog with Cancel and Reset actions before clearing downloaded artwork and metadata.
 
-### Anime Migration and Library Update Fixes
-* **Migration Actions Restored**: Fixed disabled Migrate All and Copy All buttons, and restored entry action menus in the migration list.
-* **Manual Update Bypass**: Ongoing titles are no longer silently skipped during manual library updates when unread or release window restrictions are active.
-* **Comprehensive Diagnostic Logging**: Added targeted diagnostic log tags across updates, Cloudflare verification, migration, discovery feeds, and home media switching.
+### Updates Feed Uncapped and Frame Rate Polish
+* **Uncapped Update Feed**: Raised database update query ceilings from 10,000 to 250,000 rows across Manga, Anime, and Novels, ensuring ongoing titles are never truncated in large libraries.
+* **Recomposition Log Throttle**: Wrapped floating dock logging in LaunchedEffect, eliminating high-frequency frame spam during screen animations.
+* **Hero Banner Shuffle on Refresh**: Pulling down to refresh on Home now shuffles and rotates featured hero banner entries across all media types.
