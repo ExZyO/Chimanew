@@ -5,7 +5,10 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -92,25 +95,27 @@ internal fun LazyListScope.animeUpdatesUiItems(
     collapseToggle: (key: String) -> Unit,
     usePanoramaCover: Boolean,
     selectionMode: Boolean,
-    onUpdateSelected: (AnimeUpdatesItem, Boolean, Boolean, Boolean) -> Unit,
+    onUpdateSelected: (AnimeUpdatesItem, Boolean, Boolean, Boolean, Boolean) -> Unit,
     onClickCover: (AnimeUpdatesItem) -> Unit,
     onClickUpdate: (AnimeUpdatesItem, altPlayer: Boolean) -> Unit,
     onDownloadEpisode: (List<AnimeUpdatesItem>, EpisodeDownloadAction) -> Unit,
     updateSwipeStartAction: LibraryPreferences.EpisodeSwipeAction,
     updateSwipeEndAction: LibraryPreferences.EpisodeSwipeAction,
-    onUpdateSwipe: (AnimeUpdatesItem, LibraryPreferences.EpisodeSwipeAction) -> Unit,
+    onUpdateSwipe: (List<AnimeUpdatesItem>, LibraryPreferences.EpisodeSwipeAction) -> Unit,
 ) {
     items(
         items = uiModels,
         contentType = {
             when (it) {
                 is AnimeUpdatesUiModel.Header -> "header"
+                is AnimeUpdatesUiModel.Leader -> "leader"
                 is AnimeUpdatesUiModel.Item -> "item"
             }
         },
         key = {
             when (it) {
-                is AnimeUpdatesUiModel.Header -> "animeUpdatesHeader-${it.hashCode()}"
+                is AnimeUpdatesUiModel.Header -> "animeUpdatesHeader-${it.date}"
+                is AnimeUpdatesUiModel.Leader -> "animeUpdatesLeader-${it.item.update.groupByDateAndAnime()}"
                 is AnimeUpdatesUiModel.Item -> "animeUpdates-${it.item.update.animeId}-${it.item.update.episodeId}"
             }
         },
@@ -124,59 +129,124 @@ internal fun LazyListScope.animeUpdatesUiItems(
                         .padding(top = MaterialTheme.padding.extraSmall),
                 )
             }
+            is AnimeUpdatesUiModel.Leader -> {
+                val updatesItem = item.item
+                val isExpanded = expandedState.contains(updatesItem.update.groupByDateAndAnime())
+                val allItems = item.allItems
+                val isLeaderSelected = item.isAllSelected || updatesItem.selected
+
+                val leaderDownloadStateProvider: () -> AnimeDownload.State = {
+                    if (allItems.all { it.downloadStateProvider() == AnimeDownload.State.DOWNLOADED }) {
+                        AnimeDownload.State.DOWNLOADED
+                    } else if (allItems.any {
+                        val s = it.downloadStateProvider()
+                        s == AnimeDownload.State.DOWNLOADING || s == AnimeDownload.State.QUEUE
+                    }) {
+                        AnimeDownload.State.DOWNLOADING
+                    } else {
+                        AnimeDownload.State.NOT_DOWNLOADED
+                    }
+                }
+                val leaderDownloadProgressProvider: () -> Int = {
+                    val downloading = allItems.filter { it.downloadStateProvider() == AnimeDownload.State.DOWNLOADING }
+                    if (downloading.isEmpty()) 0 else downloading.sumOf { it.downloadProgressProvider() } / downloading.size
+                }
+
+                AnimeUpdatesUiItem(
+                    modifier = Modifier.animateItemFastScroll(),
+                    update = item.latestItem.update,
+                    selected = isLeaderSelected,
+                    watchProgress = null,
+                    onLongClick = {
+                        onUpdateSelected(updatesItem, !isLeaderSelected, true, true, true)
+                    },
+                    onClick = {
+                        when {
+                            selectionMode -> onUpdateSelected(
+                                updatesItem,
+                                !isLeaderSelected,
+                                true,
+                                false,
+                                true,
+                            )
+                            else -> onClickUpdate(item.earliestUnseenItem, false)
+                        }
+                    },
+                    onClickCover = { onClickCover(updatesItem) }.takeIf { !selectionMode },
+                    onDownloadEpisode = { action: EpisodeDownloadAction ->
+                        onDownloadEpisode(allItems, action)
+                    }.takeIf { !selectionMode },
+                    downloadStateProvider = leaderDownloadStateProvider,
+                    downloadProgressProvider = leaderDownloadProgressProvider,
+                    updateSwipeStartAction = updateSwipeStartAction,
+                    updateSwipeEndAction = updateSwipeEndAction,
+                    onUpdateSwipe = { action ->
+                        onUpdateSwipe(allItems, action)
+                    },
+                    isLeader = true,
+                    isExpandable = item.isExpandable,
+                    expanded = isExpanded,
+                    collapseToggle = collapseToggle,
+                    usePanoramaCover = usePanoramaCover,
+                    extraCount = item.extraCount,
+                    latestDateFetch = item.latestDateFetch,
+                    hasUnseen = item.hasUnseen,
+                    hasBookmark = item.hasBookmark,
+                    hasFillermark = item.hasFillermark,
+                )
+            }
             is AnimeUpdatesUiModel.Item -> {
                 val updatesItem = item.item
-                val isLeader = item is AnimeUpdatesUiModel.Leader
-                val isExpanded = expandedState.contains(updatesItem.update.groupByDateAndAnime())
-
-                AnimatedVisibility(
-                    visible = isLeader || isExpanded,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    AnimeUpdatesUiItem(
-                        modifier = Modifier.animateItemFastScroll(),
-                        update = updatesItem.update,
-                        selected = updatesItem.selected,
-                        watchProgress = updatesItem.update.lastSecondSeen
-                            .takeIf { !updatesItem.update.seen && it > 0L }
-                            ?.let {
-                                stringResource(
-                                    MR.strings.episode_progress,
-                                    formatProgress(it),
-                                    formatProgress(updatesItem.update.totalSeconds),
-                                )
-                            },
-                        onLongClick = {
-                            onUpdateSelected(updatesItem, !updatesItem.selected, true, true)
+                AnimeUpdatesUiItem(
+                    modifier = Modifier.animateItemFastScroll(),
+                    update = updatesItem.update,
+                    selected = updatesItem.selected,
+                    watchProgress = updatesItem.update.lastSecondSeen
+                        .takeIf { !updatesItem.update.seen && it > 0L }
+                        ?.let {
+                            stringResource(
+                                MR.strings.episode_progress,
+                                formatProgress(it),
+                                formatProgress(updatesItem.update.totalSeconds),
+                            )
                         },
-                        onClick = {
-                            when {
-                                selectionMode -> onUpdateSelected(
-                                    updatesItem,
-                                    !updatesItem.selected,
-                                    true,
-                                    false,
-                                )
-                                else -> onClickUpdate(updatesItem, false)
-                            }
-                        },
-                        onClickCover = { onClickCover(updatesItem) }.takeIf { !selectionMode },
-                        onDownloadEpisode = { action: EpisodeDownloadAction ->
-                            onDownloadEpisode(listOf(updatesItem), action)
-                        }.takeIf { !selectionMode },
-                        downloadStateProvider = updatesItem.downloadStateProvider,
-                        downloadProgressProvider = updatesItem.downloadProgressProvider,
-                        updateSwipeStartAction = updateSwipeStartAction,
-                        updateSwipeEndAction = updateSwipeEndAction,
-                        onUpdateSwipe = { onUpdateSwipe(updatesItem, it) },
-                        isLeader = isLeader,
-                        isExpandable = item.isExpandable,
-                        expanded = isExpanded,
-                        collapseToggle = collapseToggle,
-                        usePanoramaCover = usePanoramaCover,
-                    )
-                }
+                    onLongClick = {
+                        onUpdateSelected(updatesItem, !updatesItem.selected, true, true, false)
+                    },
+                    onClick = {
+                        when {
+                            selectionMode -> onUpdateSelected(
+                                updatesItem,
+                                !updatesItem.selected,
+                                true,
+                                false,
+                                false,
+                            )
+                            else -> onClickUpdate(updatesItem, false)
+                        }
+                    },
+                    onClickCover = { onClickCover(updatesItem) }.takeIf { !selectionMode },
+                    onDownloadEpisode = { action: EpisodeDownloadAction ->
+                        onDownloadEpisode(listOf(updatesItem), action)
+                    }.takeIf { !selectionMode },
+                    downloadStateProvider = updatesItem.downloadStateProvider,
+                    downloadProgressProvider = updatesItem.downloadProgressProvider,
+                    updateSwipeStartAction = updateSwipeStartAction,
+                    updateSwipeEndAction = updateSwipeEndAction,
+                    onUpdateSwipe = { action ->
+                        onUpdateSwipe(listOf(updatesItem), action)
+                    },
+                    isLeader = false,
+                    isExpandable = item.isExpandable,
+                    expanded = false,
+                    collapseToggle = collapseToggle,
+                    usePanoramaCover = usePanoramaCover,
+                    extraCount = 0,
+                    latestDateFetch = null,
+                    hasUnseen = !updatesItem.update.seen,
+                    hasBookmark = updatesItem.update.bookmark,
+                    hasFillermark = updatesItem.update.fillermark,
+                )
             }
         }
     }
@@ -206,23 +276,28 @@ private fun AnimeUpdatesUiItem(
     usePanoramaCover: Boolean,
     modifier: Modifier = Modifier,
     coverRatio: MutableFloatState = remember { mutableFloatStateOf(1f) },
+    extraCount: Int = 0,
+    latestDateFetch: Long? = null,
+    hasUnseen: Boolean = !update.seen,
+    hasBookmark: Boolean = update.bookmark,
+    hasFillermark: Boolean = update.fillermark,
 ) {
     val haptic = LocalHapticFeedback.current
-    val textAlpha = if (update.seen) DISABLED_ALPHA else 1f
+    val textAlpha = if (!hasUnseen) DISABLED_ALPHA else 1f
 
     val swipeBackground = MaterialTheme.colorScheme.primaryContainer
     val swipeStart = remember(
         updateSwipeStartAction,
-        update.seen,
-        update.bookmark,
-        update.fillermark,
+        hasUnseen,
+        hasBookmark,
+        hasFillermark,
         downloadStateProvider(),
     ) {
         getSwipeAction(
             action = updateSwipeStartAction,
-            seen = update.seen,
-            bookmark = update.bookmark,
-            fillermark = update.fillermark,
+            seen = !hasUnseen,
+            bookmark = hasBookmark,
+            fillermark = hasFillermark,
             downloadState = downloadStateProvider(),
             background = swipeBackground,
             onSwipe = { onUpdateSwipe(updateSwipeStartAction) },
@@ -230,16 +305,16 @@ private fun AnimeUpdatesUiItem(
     }
     val swipeEnd = remember(
         updateSwipeEndAction,
-        update.seen,
-        update.bookmark,
-        update.fillermark,
+        hasUnseen,
+        hasBookmark,
+        hasFillermark,
         downloadStateProvider(),
     ) {
         getSwipeAction(
             action = updateSwipeEndAction,
-            seen = update.seen,
-            bookmark = update.bookmark,
-            fillermark = update.fillermark,
+            seen = !hasUnseen,
+            bookmark = hasBookmark,
+            fillermark = hasFillermark,
             downloadState = downloadStateProvider(),
             background = swipeBackground,
             onSwipe = { onUpdateSwipe(updateSwipeEndAction) },
@@ -333,7 +408,7 @@ private fun AnimeUpdatesUiItem(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     var textHeight by remember { mutableIntStateOf(0) }
-                    if (!update.seen) {
+                    if (hasUnseen) {
                         Icon(
                             imageVector = Icons.Filled.Circle,
                             contentDescription = stringResource(MR.strings.unread),
@@ -343,7 +418,7 @@ private fun AnimeUpdatesUiItem(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
-                    if (update.bookmark) {
+                    if (hasBookmark) {
                         Icon(
                             imageVector = Icons.Filled.Bookmark,
                             contentDescription = stringResource(MR.strings.action_filter_bookmarked),
@@ -355,7 +430,7 @@ private fun AnimeUpdatesUiItem(
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                     }
-                    if (update.fillermark) {
+                    if (hasFillermark) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Label,
                             contentDescription = stringResource(AMR.strings.action_filter_fillermarked),
@@ -377,7 +452,31 @@ private fun AnimeUpdatesUiItem(
                         modifier = Modifier
                             .weight(weight = 1f, fill = false),
                     )
-                    if (watchProgress != null) {
+                    if (extraCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                        ) {
+                            Text(
+                                text = "+$extraCount",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                    if (latestDateFetch != null) {
+                        DotSeparatorText()
+                        Text(
+                            text = relativeTimeSpanString(latestDateFetch),
+                            maxLines = 1,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LocalContentColor.current.copy(alpha = DISABLED_ALPHA),
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else if (watchProgress != null) {
                         DotSeparatorText()
                         Text(
                             text = watchProgress,

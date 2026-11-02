@@ -3,27 +3,38 @@ package eu.kanade.tachiyomi.ui.updates.novel
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.domain.updates.novel.model.NovelUpdatesWithRelations
 import tachiyomi.domain.updates.novel.repository.NovelUpdatesRepository
+import tachiyomi.domain.updates.service.UpdatesPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.ZonedDateTime
 
 class NovelUpdatesScreenModel(
     private val novelUpdatesRepository: NovelUpdatesRepository = Injekt.get(),
+    private val updatesPreferences: UpdatesPreferences = Injekt.get(),
 ) : StateScreenModel<NovelUpdatesScreenModel.State>(State()) {
 
     init {
         load()
+        updatesPreferences.consolidateUpdates().changes()
+            .distinctUntilChanged()
+            .onEach { consolidate ->
+                mutableState.update { it.copy(consolidateUpdates = consolidate) }
+            }
+            .launchIn(screenModelScope)
     }
 
     fun load() {
         screenModelScope.launch {
             val after = ZonedDateTime.now().minusMonths(3).toInstant().toEpochMilli()
             runCatching {
-                novelUpdatesRepository.awaitUpdates(after = after, limit = 500)
+                novelUpdatesRepository.awaitUpdates(after = after, limit = 1500L)
             }.onSuccess { updates ->
                 mutableState.update {
                     it.copy(isLoading = false, items = updates)
@@ -32,9 +43,23 @@ class NovelUpdatesScreenModel(
         }
     }
 
+    fun toggleExpandedState(key: String) {
+        mutableState.update {
+            it.copy(
+                expandedState = it.expandedState.toMutableSet().apply {
+                    if (it.expandedState.contains(key)) remove(key) else add(key)
+                },
+            )
+        }
+    }
+
     @Immutable
     data class State(
         val isLoading: Boolean = true,
         val items: List<NovelUpdatesWithRelations> = emptyList(),
+        val expandedState: Set<String> = emptySet(),
+        val consolidateUpdates: Boolean = true,
     )
 }
+
+fun NovelUpdatesWithRelations.groupByDateAndNovel() = "${dateFetch / 86_400_000L}-$novelId"

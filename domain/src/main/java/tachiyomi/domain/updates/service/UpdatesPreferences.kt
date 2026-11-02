@@ -38,6 +38,11 @@ class UpdatesPreferences(
         USE_PANORAMA_COVER_PREF,
         false,
     )
+
+    fun consolidateUpdates() = preferenceStore.getBoolean(
+        "pref_consolidate_updates",
+        true,
+    )
     // KMK <--
 
     // AY -->

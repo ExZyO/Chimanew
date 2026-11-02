@@ -466,6 +466,7 @@ object SettingsNuvioScreen : SearchableSettings {
                         "hero" to stringResource(MR.strings.pref_chimanew_diag_cat_hero),
                         "details" to stringResource(MR.strings.pref_chimanew_diag_cat_details),
                         "shelves" to stringResource(MR.strings.pref_chimanew_diag_cat_shelves),
+                        "updates" to stringResource(MR.strings.pref_chimanew_diag_cat_updates),
                     ),
                     title = stringResource(MR.strings.pref_chimanew_diagnostic_categories),
                     subtitle = stringResource(MR.strings.pref_chimanew_diagnostic_categories_summary),

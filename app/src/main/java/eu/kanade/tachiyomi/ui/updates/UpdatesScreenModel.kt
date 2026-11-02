@@ -174,6 +174,13 @@ class UpdatesScreenModel(
                 }
             }
             .launchIn(screenModelScope)
+
+        updatesPreferences.consolidateUpdates().changes()
+            .distinctUntilChanged()
+            .onEach { consolidate ->
+                mutableState.update { it.copy(consolidateUpdates = consolidate) }
+            }
+            .launchIn(screenModelScope)
     }
 
     private fun List<UpdatesItem>.applyFilters(
@@ -404,7 +411,7 @@ class UpdatesScreenModel(
                 selectedChapterIds.addOrRemove(item.update.chapterId, selected)
 
                 // KMK -->
-                if (isGroup && !isExpanded) {
+                if (isGroup) {
                     val selectedItemDate = selectedItem.update.dateFetch.toLocalDate()
                     val zone = java.time.ZoneId.systemDefault()
                     val dayStartMillis = selectedItemDate.atStartOfDay(zone).toInstant().toEpochMilli()
@@ -522,8 +529,15 @@ class UpdatesScreenModel(
      * @throws IllegalStateException if the swipe action is [LibraryPreferences.ChapterSwipeAction.Disabled]
      */
     fun updateSwipe(updateItem: UpdatesItem, swipeAction: LibraryPreferences.ChapterSwipeAction) {
+        updateSwipe(listOf(updateItem), swipeAction)
+    }
+
+    /**
+     * @throws IllegalStateException if the swipe action is [LibraryPreferences.ChapterSwipeAction.Disabled]
+     */
+    fun updateSwipe(items: List<UpdatesItem>, swipeAction: LibraryPreferences.ChapterSwipeAction) {
         screenModelScope.launch {
-            executeUpdateSwipeAction(updateItem, swipeAction)
+            executeUpdateSwipeAction(items, swipeAction)
         }
     }
 
@@ -531,29 +545,32 @@ class UpdatesScreenModel(
      * @throws IllegalStateException if the swipe action is [LibraryPreferences.ChapterSwipeAction.Disabled]
      */
     private fun executeUpdateSwipeAction(
-        updateItem: UpdatesItem,
+        items: List<UpdatesItem>,
         swipeAction: LibraryPreferences.ChapterSwipeAction,
     ) {
-        val update = updateItem.update
+        if (items.isEmpty()) return
         when (swipeAction) {
             LibraryPreferences.ChapterSwipeAction.ToggleRead -> {
-                markUpdatesRead(listOf(updateItem), !update.read)
+                val anyUnread = items.any { !it.update.read }
+                markUpdatesRead(items, anyUnread)
             }
             LibraryPreferences.ChapterSwipeAction.ToggleBookmark -> {
-                bookmarkUpdates(listOf(updateItem), !update.bookmark)
+                val anyUnbookmarked = items.any { !it.update.bookmark }
+                bookmarkUpdates(items, anyUnbookmarked)
             }
             LibraryPreferences.ChapterSwipeAction.Download -> {
-                val downloadAction = when (updateItem.downloadStateProvider()) {
-                    Download.State.ERROR,
-                    Download.State.NOT_DOWNLOADED,
-                    -> ChapterDownloadAction.START_NOW
-                    Download.State.QUEUE,
-                    Download.State.DOWNLOADING,
-                    -> ChapterDownloadAction.CANCEL
-                    Download.State.DOWNLOADED -> ChapterDownloadAction.DELETE
+                val allDownloaded = items.all { it.downloadStateProvider() == Download.State.DOWNLOADED }
+                val anyDownloading = items.any {
+                    val s = it.downloadStateProvider()
+                    s == Download.State.QUEUE || s == Download.State.DOWNLOADING
+                }
+                val downloadAction = when {
+                    allDownloaded -> ChapterDownloadAction.DELETE
+                    anyDownloading -> ChapterDownloadAction.CANCEL
+                    else -> ChapterDownloadAction.START_NOW
                 }
                 downloadChapters(
-                    items = listOf(updateItem),
+                    items = items,
                     action = downloadAction,
                 )
             }
@@ -600,6 +617,7 @@ class UpdatesScreenModel(
         val items: PersistentList<UpdatesItem> = persistentListOf(),
         // KMK -->
         val expandedState: Set<String> = persistentSetOf(),
+        val consolidateUpdates: Boolean = true,
         // KMK <--
         val dialog: Dialog? = null,
     ) {
@@ -611,28 +629,42 @@ class UpdatesScreenModel(
             return items
                 .groupBy { it.update.dateFetch.toLocalDate() }
                 .flatMap { (date, mangas) ->
-                    val header = UpdatesUiModel.Header(date, mangas.size)
-                    val mangaItems = mangas
-                        .groupBy { it.update.mangaId }
-                        .values
-                        .flatMap { mangaChapters ->
-                            val isExpandable = mangaChapters.size > 1
-                            var lastMangaId = -1L
-                            mangaChapters.map { chapter ->
-                                if (chapter.update.mangaId != lastMangaId) {
-                                    lastMangaId = chapter.update.mangaId
-                                    UpdatesUiModel.Leader(chapter, isExpandable)
+                    val mangaGroups = mangas.groupBy { it.update.mangaId }
+                    val header = UpdatesUiModel.Header(date, mangaGroups.size)
+                    val mangaItems = if (consolidateUpdates) {
+                        mangaGroups.values
+                            .sortedByDescending { chapters -> chapters.maxOf { it.update.dateFetch } }
+                            .flatMap { mangaChapters ->
+                                val isExpandable = mangaChapters.size > 1
+                                val isExpanded = expandedState.contains(mangaChapters.first().update.groupByDateAndManga())
+                                val (unread, read) = mangaChapters.partition { !it.update.read }
+                                val sortedChapters = unread.sortedBy { it.update.dateFetch } +
+                                    read.sortedByDescending { it.update.dateFetch }
+                                val leader = UpdatesUiModel.Leader(
+                                    item = sortedChapters.first(),
+                                    isExpandable = isExpandable,
+                                    allItems = sortedChapters,
+                                )
+                                if (!isExpandable || !isExpanded) {
+                                    listOf(leader)
                                 } else {
-                                    UpdatesUiModel.Item(chapter, isExpandable)
+                                    listOf(leader) + sortedChapters.drop(1).map {
+                                        UpdatesUiModel.Item(it, isExpandable = true)
+                                    }
                                 }
                             }
+                    } else {
+                        mangaGroups.values.flatMap { mangaChapters ->
+                            mangaChapters.map { UpdatesUiModel.Item(it, isExpandable = false) }
                         }
+                    }
                     listOf(header) + mangaItems
                 }
                 .distinctBy {
                     when (it) {
-                        is UpdatesUiModel.Header -> it.hashCode()
-                        is UpdatesUiModel.Item -> "${it.item.update.mangaId}-${it.item.update.chapterId}"
+                        is UpdatesUiModel.Header -> "header-${it.date}"
+                        is UpdatesUiModel.Leader -> "leader-${it.item.update.groupByDateAndManga()}"
+                        is UpdatesUiModel.Item -> "item-${it.item.update.mangaId}-${it.item.update.chapterId}"
                     }
                 }
             // KMK <--

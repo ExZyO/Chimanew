@@ -58,6 +58,8 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.NavigatorDisposeBehavior
 import cafe.adriel.voyager.navigator.currentOrThrow
 import chimahon.novel.plugin.NovelPluginManager
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.connections.service.ConnectionsPreferences
 import eu.kanade.domain.source.interactor.GetIncognitoState
@@ -211,6 +213,11 @@ class MainActivity : BaseActivity() {
     // SY <--
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Prevent restoring orphaned FragmentManager dialog fragments (like EditTextPreferenceDialogFragmentCompat)
+        // across process death, which crash on recreate if the target preference is null.
+        savedInstanceState?.remove("android:support:fragments")
+        savedInstanceState?.remove("android:fragments")
+
         val isLaunch = savedInstanceState == null
 
         // Prevent splash screen showing up on configuration changes
@@ -524,11 +531,13 @@ class MainActivity : BaseActivity() {
             val lastCheck = libraryPreferences.lastUpdatedTimestamp().get()
             val now = System.currentTimeMillis()
             val elapsedMinutes = (now - lastCheck) / (60 * 1000L)
-            logcat(LogPriority.INFO) {
-                "[LaunchUpdate] Cold launch. autoCheck=$autoCheck, lastCheck=${elapsedMinutes}m ago, cooldown15mMet=${elapsedMinutes >= 15}"
+            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "LaunchUpdate") {
+                "Cold launch. autoCheck=$autoCheck, lastCheck=${elapsedMinutes}m ago, cooldown15mMet=${elapsedMinutes >= 15}"
             }
             if (autoCheck && (now - lastCheck > 15 * 60 * 1000L)) {
-                logcat(LogPriority.INFO) { "[LaunchUpdate] Triggering LibraryUpdateJob.startNow() on launch" }
+                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "LaunchUpdate") {
+                    "Triggering LibraryUpdateJob.startNow() on launch"
+                }
                 LibraryUpdateJob.startNow(this)
             }
         }
@@ -641,7 +650,7 @@ class MainActivity : BaseActivity() {
                     // KMK -->
                     AppUpdateJob.setupTask(context)
                     // KMK <--
-                    val result = AppUpdateChecker().checkForUpdate(context)
+                    val result = AppUpdateChecker().checkForUpdate(context, forceCheck = true)
                     if (result is GetApplicationRelease.Result.NewUpdate) {
                         val updateScreen = NewUpdateScreen(
                             versionName = result.release.version,

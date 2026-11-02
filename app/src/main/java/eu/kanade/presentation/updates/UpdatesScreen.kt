@@ -51,7 +51,7 @@ fun UpdateScreen(
     // KMK -->
     updateSwipeStartAction: LibraryPreferences.ChapterSwipeAction,
     updateSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
-    onUpdateSwipe: (UpdatesItem, LibraryPreferences.ChapterSwipeAction) -> Unit,
+    onUpdateSwipe: (List<UpdatesItem>, LibraryPreferences.ChapterSwipeAction) -> Unit,
     // KMK <--
     onUpdateSelected: (UpdatesItem, /* KMK --> */ UpdatesScreenModel.UpdateSelectionOptions /* KMK <-- */) -> Unit,
     onOpenChapter: (UpdatesItem) -> Unit,
@@ -91,7 +91,7 @@ fun UpdateScreen(
                 val scope = rememberCoroutineScope()
                 var isRefreshing by remember { mutableStateOf(false) }
                 // KMK -->
-                val uiModels = remember(state.items) { state.getUiModel() }
+                val uiModels = remember(state.items, state.expandedState, state.consolidateUpdates) { state.getUiModel() }
                 // KMK <--
 
                 PullRefresh(
@@ -182,6 +182,18 @@ sealed interface UpdatesUiModel {
 
     // KMK -->
     /** The first [Item] in a group of chapters from same manga */
-    data class Leader(override val item: UpdatesItem, override val isExpandable: Boolean) : Item(item)
+    data class Leader(
+        override val item: UpdatesItem,
+        override val isExpandable: Boolean,
+        val allItems: List<UpdatesItem> = listOf(item),
+    ) : Item(item, isExpandable) {
+        val extraCount: Int get() = (allItems.size - 1).coerceAtLeast(0)
+        val latestDateFetch: Long get() = allItems.maxOfOrNull { it.update.dateFetch } ?: item.update.dateFetch
+        val earliestUnreadItem: UpdatesItem get() = allItems.firstOrNull { !it.update.read } ?: item
+        val latestItem: UpdatesItem get() = allItems.maxByOrNull { it.update.dateFetch } ?: item
+        val hasUnread: Boolean get() = allItems.any { !it.update.read }
+        val hasBookmark: Boolean get() = allItems.any { it.update.bookmark }
+        val isAllSelected: Boolean get() = allItems.isNotEmpty() && allItems.all { it.selected }
+    }
     // KMK <--
 }

@@ -236,6 +236,19 @@ class SourcePreferencesFragment : PreferenceFragmentCompat() {
         preferenceScreen = populateScreen()
     }
 
+    override fun onDisplayPreferenceDialog(preference: Preference) {
+        if (parentFragmentManager.findFragmentByTag("androidx.preference.PreferenceFragment.DIALOG") != null) {
+            return
+        }
+        if (preference is EditTextPreference) {
+            val dialog = androidx.preference.SafeEditTextPreferenceDialogFragment.newInstance(preference.key)
+            dialog.setTargetFragment(this, 0)
+            dialog.show(parentFragmentManager, "androidx.preference.PreferenceFragment.DIALOG")
+        } else {
+            super.onDisplayPreferenceDialog(preference)
+        }
+    }
+
     private fun populateScreen(): PreferenceScreen {
         val sourceId = requireArguments().getLong(SOURCE_ID)
         // SY -->

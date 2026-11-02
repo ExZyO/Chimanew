@@ -265,25 +265,31 @@ data object UpdatesTab : Tab {
                             collapseToggle = animeScreenModel::toggleExpandedState,
                             updateSwipeStartAction = animeScreenModel.episodeSwipeStartAction,
                             updateSwipeEndAction = animeScreenModel.episodeSwipeEndAction,
-                            onUpdateSwipe = animeScreenModel::updateSwipe,
+                            onUpdateSwipe = { items, action -> animeScreenModel.updateSwipe(items, action) },
                             // <-- AY
                         )
-                        TAB_NOVEL -> NovelUpdatesScreen(
-                            isLoading = novelScreenModel.state.collectAsState().value.isLoading,
-                            items = novelScreenModel.state.collectAsState().value.items,
-                            onClickItem = { update ->
-                                navigator.push(
-                                    chimahon.novel.ui.detail.NovelDetailScreen(
-                                        novel = eu.kanade.tachiyomi.sourcenovel.model.SNNovel(
-                                            url = update.novelUrl,
-                                            title = update.novelTitle,
-                                            source = update.sourceId,
+                        TAB_NOVEL -> {
+                            val novelState by novelScreenModel.state.collectAsState()
+                            NovelUpdatesScreen(
+                                isLoading = novelState.isLoading,
+                                items = novelState.items,
+                                expandedState = novelState.expandedState,
+                                consolidateUpdates = novelState.consolidateUpdates,
+                                collapseToggle = novelScreenModel::toggleExpandedState,
+                                onClickItem = { update ->
+                                    navigator.push(
+                                        chimahon.novel.ui.detail.NovelDetailScreen(
+                                            novel = eu.kanade.tachiyomi.sourcenovel.model.SNNovel(
+                                                url = update.novelUrl,
+                                                title = update.novelTitle,
+                                                source = update.sourceId,
+                                            ),
+                                            sourceId = update.sourceId,
                                         ),
-                                        sourceId = update.sourceId,
-                                    ),
-                                )
-                            },
-                        )
+                                    )
+                                },
+                            )
+                        }
                         else -> UpdateScreen(
                             state = state,
                             snackbarHostState = screenModel.snackbarHostState,
@@ -301,7 +307,7 @@ data object UpdatesTab : Tab {
                             // KMK -->
                             updateSwipeStartAction = screenModel.chapterSwipeStartAction,
                             updateSwipeEndAction = screenModel.chapterSwipeEndAction,
-                            onUpdateSwipe = screenModel::updateSwipe,
+                            onUpdateSwipe = { items, action -> screenModel.updateSwipe(items, action) },
                             // KMK <--
                             onUpdateSelected = screenModel::toggleSelection,
                             onOpenChapter = {

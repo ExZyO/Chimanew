@@ -140,7 +140,7 @@ class ChimanewPreferences(
     fun enableDiagnostics() = preferenceStore.getBoolean("pref_chimanew_enable_diagnostics", false)
     fun diagnosticCategories() = preferenceStore.getStringSet(
         "pref_chimanew_diagnostic_categories",
-        setOf("network", "artwork", "hero", "details", "shelves"),
+        setOf("network", "artwork", "hero", "details", "shelves", "updates"),
     )
 
     // Category Artwork Rules // EaZy Nuvio+ / Chimanew

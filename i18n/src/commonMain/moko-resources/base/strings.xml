@@ -218,6 +218,9 @@
     <string name="pref_chimanew_diag_cat_hero">Hero Carousel &amp; Strict Mode</string>
     <string name="pref_chimanew_diag_cat_details">Details Page &amp; Backdrops</string>
     <string name="pref_chimanew_diag_cat_shelves">Home Shelves &amp; Trackers</string>
+    <string name="pref_chimanew_diag_cat_updates">Library Updates &amp; Tracker Engine</string>
+    <string name="pref_consolidate_updates">Consolidate updates by series</string>
+    <string name="pref_consolidate_updates_summary">Group chapters under each series and move updated series to the top of the feed</string>
     <string name="pref_chimanew_view_diagnostics">Open Diagnostic Log Viewer</string>
     <string name="pref_chimanew_view_diagnostics_summary">Inspect, filter, and export recent log events in real time</string>
     <string name="pref_chimanew_copy_diagnostics">Copy Diagnostic Logs</string>

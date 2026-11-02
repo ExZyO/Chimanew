@@ -19,6 +19,7 @@ enum class DiagnosticCategory(val code: String, val label: String) {
     HERO("hero", "Hero Carousel & Strict Mode"),
     DETAILS("details", "Details Page & Backdrops"),
     SHELVES("shelves", "Home Shelves & Trackers"),
+    UPDATES("updates", "Library Updates & Tracker Engine"),
 }
 
 data class DiagnosticEntry(

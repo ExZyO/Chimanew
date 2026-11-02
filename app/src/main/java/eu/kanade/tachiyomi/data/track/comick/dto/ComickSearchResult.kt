@@ -28,11 +28,17 @@ data class ComickSearchItem(
     val coverUrl: String? = null,
     val country: String? = null,
     val url: String = "",
+    @SerialName("last_chapter")
+    val lastChapter: String? = null,
+    @SerialName("chapter_count")
+    val chapterCount: Long? = null,
 ) {
     fun toTrackSearch(trackerId: Long): TrackSearch {
+        val total = lastChapter?.toDoubleOrNull()?.toLong() ?: chapterCount ?: 0L
         return TrackSearch.create(trackerId).apply {
             remote_id = hid.asHidToLong()
             title = this@ComickSearchItem.title
+            total_chapters = total
             tracking_url = url
             summary = description.orEmpty()
             start_date = year?.toString().orEmpty()

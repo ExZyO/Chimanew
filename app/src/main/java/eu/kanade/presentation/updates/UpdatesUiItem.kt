@@ -8,7 +8,10 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -106,7 +109,7 @@ internal fun LazyListScope.updatesUiItems(
     // KMK -->
     updateSwipeStartAction: LibraryPreferences.ChapterSwipeAction,
     updateSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
-    onUpdateSwipe: (UpdatesItem, LibraryPreferences.ChapterSwipeAction) -> Unit,
+    onUpdateSwipe: (List<UpdatesItem>, LibraryPreferences.ChapterSwipeAction) -> Unit,
     // KMK <--
 ) {
     items(
@@ -114,12 +117,14 @@ internal fun LazyListScope.updatesUiItems(
         contentType = {
             when (it) {
                 is UpdatesUiModel.Header -> "header"
+                is UpdatesUiModel.Leader -> "leader"
                 is UpdatesUiModel.Item -> "item"
             }
         },
         key = {
             when (it) {
-                is UpdatesUiModel.Header -> "updatesHeader-${it.hashCode()}"
+                is UpdatesUiModel.Header -> "updatesHeader-${it.date}"
+                is UpdatesUiModel.Leader -> "updatesLeader-${it.item.update.groupByDateAndManga()}"
                 is UpdatesUiModel.Item -> "updates-${it.item.update.mangaId}-${it.item.update.chapterId}"
             }
         },
@@ -135,85 +140,144 @@ internal fun LazyListScope.updatesUiItems(
                 )
                 // KMK <--
             }
-            is UpdatesUiModel.Item -> {
+            is UpdatesUiModel.Leader -> {
                 val updatesItem = item.item
-                // KMK -->
-                val isLeader = item is UpdatesUiModel.Leader
                 val isExpanded = expandedState.contains(updatesItem.update.groupByDateAndManga())
+                val allItems = item.allItems
+                val isLeaderSelected = item.isAllSelected || updatesItem.selected
 
-                AnimatedVisibility(
-                    visible = isLeader || isExpanded,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    // KMK <--
-                    UpdatesUiItem(
-                        modifier = Modifier.animateItemFastScroll(),
-                        update = updatesItem.update,
-                        selected = updatesItem.selected,
-                        readProgress = updatesItem.update.lastPageRead
-                            .takeIf {
-                                /* SY --> */(
-                                    !updatesItem.update.read ||
-                                        (preserveReadingPosition && updatesItem.isEhBasedUpdate())
-                                    )/* SY <-- */ &&
-                                    it > 0L
-                            }
-                            ?.let {
-                                stringResource(
-                                    MR.strings.chapter_progress,
-                                    it + 1,
-                                )
-                            },
-                        onLongClick = {
-                            onUpdateSelected(
+                val leaderDownloadStateProvider: () -> Download.State = {
+                    if (allItems.all { it.downloadStateProvider() == Download.State.DOWNLOADED }) {
+                        Download.State.DOWNLOADED
+                    } else if (allItems.any {
+                        val s = it.downloadStateProvider()
+                        s == Download.State.DOWNLOADING || s == Download.State.QUEUE
+                    }) {
+                        Download.State.DOWNLOADING
+                    } else {
+                        Download.State.NOT_DOWNLOADED
+                    }
+                }
+                val leaderDownloadProgressProvider: () -> Int = {
+                    val downloading = allItems.filter { it.downloadStateProvider() == Download.State.DOWNLOADING }
+                    if (downloading.isEmpty()) 0 else downloading.sumOf { it.downloadProgressProvider() } / downloading.size
+                }
+
+                UpdatesUiItem(
+                    modifier = Modifier.animateItemFastScroll(),
+                    update = item.latestItem.update,
+                    selected = isLeaderSelected,
+                    readProgress = null,
+                    onLongClick = {
+                        onUpdateSelected(
+                            updatesItem,
+                            UpdateSelectionOptions(
+                                selected = !isLeaderSelected,
+                                fromLongPress = true,
+                                isGroup = item.isExpandable,
+                                isExpanded = isExpanded,
+                            ),
+                        )
+                    },
+                    onClick = {
+                        when {
+                            selectionMode -> onUpdateSelected(
                                 updatesItem,
-                                // KMK -->
                                 UpdateSelectionOptions(
-                                    selected = !updatesItem.selected,
-                                    fromLongPress = true,
-                                    isGroup = isLeader && item.isExpandable,
+                                    selected = !isLeaderSelected,
+                                    fromLongPress = false,
+                                    isGroup = item.isExpandable,
                                     isExpanded = isExpanded,
                                 ),
-                                // KMK <--
+                            )
+                            else -> onClickUpdate(item.earliestUnreadItem)
+                        }
+                    },
+                    onClickCover = { onClickCover(updatesItem) }.takeIf { !selectionMode },
+                    onDownloadChapter = { action: ChapterDownloadAction ->
+                        onDownloadChapter(allItems, action)
+                    }.takeIf { !selectionMode },
+                    downloadStateProvider = leaderDownloadStateProvider,
+                    downloadProgressProvider = leaderDownloadProgressProvider,
+                    updateSwipeStartAction = updateSwipeStartAction,
+                    updateSwipeEndAction = updateSwipeEndAction,
+                    onUpdateSwipe = { action ->
+                        onUpdateSwipe(allItems, action)
+                    },
+                    isLeader = true,
+                    isExpandable = item.isExpandable,
+                    expanded = isExpanded,
+                    collapseToggle = collapseToggle,
+                    usePanoramaCover = usePanoramaCover,
+                    extraCount = item.extraCount,
+                    latestDateFetch = item.latestDateFetch,
+                    hasUnread = item.hasUnread,
+                    hasBookmark = item.hasBookmark,
+                )
+            }
+            is UpdatesUiModel.Item -> {
+                val updatesItem = item.item
+                UpdatesUiItem(
+                    modifier = Modifier.animateItemFastScroll(),
+                    update = updatesItem.update,
+                    selected = updatesItem.selected,
+                    readProgress = updatesItem.update.lastPageRead
+                        .takeIf {
+                            (!updatesItem.update.read || (preserveReadingPosition && updatesItem.isEhBasedUpdate())) &&
+                                it > 0L
+                        }
+                        ?.let {
+                            stringResource(
+                                MR.strings.chapter_progress,
+                                it + 1,
                             )
                         },
-                        onClick = {
-                            when {
-                                selectionMode -> onUpdateSelected(
-                                    updatesItem,
-                                    // KMK -->
-                                    UpdateSelectionOptions(
-                                        selected = !updatesItem.selected,
-                                        fromLongPress = false,
-                                        isGroup = isLeader && item.isExpandable,
-                                        isExpanded = isExpanded,
-                                    ),
-                                    // KMK <--
-                                )
-                                else -> onClickUpdate(updatesItem)
-                            }
-                        },
-                        onClickCover = { onClickCover(updatesItem) }.takeIf { !selectionMode },
-                        onDownloadChapter = { action: ChapterDownloadAction ->
-                            onDownloadChapter(listOf(updatesItem), action)
-                        }.takeIf { !selectionMode },
-                        downloadStateProvider = updatesItem.downloadStateProvider,
-                        downloadProgressProvider = updatesItem.downloadProgressProvider,
-                        // KMK -->
-                        updateSwipeStartAction = updateSwipeStartAction,
-                        updateSwipeEndAction = updateSwipeEndAction,
-                        onUpdateSwipe = {
-                            onUpdateSwipe(updatesItem, it)
-                        },
-                        isLeader = isLeader,
-                        isExpandable = item.isExpandable,
-                        expanded = isExpanded,
-                        collapseToggle = collapseToggle,
-                        usePanoramaCover = usePanoramaCover,
-                        // KMK <--
-                    )
-                }
+                    onLongClick = {
+                        onUpdateSelected(
+                            updatesItem,
+                            UpdateSelectionOptions(
+                                selected = !updatesItem.selected,
+                                fromLongPress = true,
+                                isGroup = false,
+                                isExpanded = true,
+                            ),
+                        )
+                    },
+                    onClick = {
+                        when {
+                            selectionMode -> onUpdateSelected(
+                                updatesItem,
+                                UpdateSelectionOptions(
+                                    selected = !updatesItem.selected,
+                                    fromLongPress = false,
+                                    isGroup = false,
+                                    isExpanded = true,
+                                ),
+                            )
+                            else -> onClickUpdate(updatesItem)
+                        }
+                    },
+                    onClickCover = { onClickCover(updatesItem) }.takeIf { !selectionMode },
+                    onDownloadChapter = { action: ChapterDownloadAction ->
+                        onDownloadChapter(listOf(updatesItem), action)
+                    }.takeIf { !selectionMode },
+                    downloadStateProvider = updatesItem.downloadStateProvider,
+                    downloadProgressProvider = updatesItem.downloadProgressProvider,
+                    updateSwipeStartAction = updateSwipeStartAction,
+                    updateSwipeEndAction = updateSwipeEndAction,
+                    onUpdateSwipe = { action ->
+                        onUpdateSwipe(listOf(updatesItem), action)
+                    },
+                    isLeader = false,
+                    isExpandable = item.isExpandable,
+                    expanded = false,
+                    collapseToggle = collapseToggle,
+                    usePanoramaCover = usePanoramaCover,
+                    extraCount = 0,
+                    latestDateFetch = null,
+                    hasUnread = !updatesItem.update.read,
+                    hasBookmark = updatesItem.update.bookmark,
+                )
             }
         }
     }
@@ -244,28 +308,32 @@ private fun UpdatesUiItem(
     modifier: Modifier = Modifier,
     // KMK -->
     coverRatio: MutableFloatState = remember { mutableFloatStateOf(1f) },
+    extraCount: Int = 0,
+    latestDateFetch: Long? = null,
+    hasUnread: Boolean = !update.read,
+    hasBookmark: Boolean = update.bookmark,
     // KMK <--
 ) {
     val haptic = LocalHapticFeedback.current
-    val textAlpha = if (update.read) DISABLED_ALPHA else 1f
+    val textAlpha = if (!hasUnread) DISABLED_ALPHA else 1f
 
     // KMK -->
     val swipeBackground = MaterialTheme.colorScheme.primaryContainer
-    val swipeStart = remember(updateSwipeStartAction, update.read, update.bookmark, downloadStateProvider()) {
+    val swipeStart = remember(updateSwipeStartAction, hasUnread, hasBookmark, downloadStateProvider()) {
         getSwipeAction(
             action = updateSwipeStartAction,
-            read = update.read,
-            bookmark = update.bookmark,
+            read = !hasUnread,
+            bookmark = hasBookmark,
             downloadState = downloadStateProvider(),
             background = swipeBackground,
             onSwipe = { onUpdateSwipe(updateSwipeStartAction) },
         )
     }
-    val swipeEnd = remember(updateSwipeEndAction, update.read, update.bookmark, downloadStateProvider()) {
+    val swipeEnd = remember(updateSwipeEndAction, hasUnread, hasBookmark, downloadStateProvider()) {
         getSwipeAction(
             action = updateSwipeEndAction,
-            read = update.read,
-            bookmark = update.bookmark,
+            read = !hasUnread,
+            bookmark = hasBookmark,
             downloadState = downloadStateProvider(),
             background = swipeBackground,
             onSwipe = { onUpdateSwipe(updateSwipeEndAction) },
@@ -377,7 +445,7 @@ private fun UpdatesUiItem(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     var textHeight by remember { mutableIntStateOf(0) }
-                    if (!update.read) {
+                    if (hasUnread) {
                         Icon(
                             imageVector = Icons.Filled.Circle,
                             contentDescription = stringResource(MR.strings.unread),
@@ -387,7 +455,7 @@ private fun UpdatesUiItem(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
-                    if (update.bookmark) {
+                    if (hasBookmark) {
                         Icon(
                             imageVector = Icons.Filled.Bookmark,
                             contentDescription = stringResource(MR.strings.action_filter_bookmarked),
@@ -407,7 +475,31 @@ private fun UpdatesUiItem(
                         modifier = Modifier
                             .weight(weight = 1f, fill = false),
                     )
-                    if (readProgress != null) {
+                    if (extraCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                        ) {
+                            Text(
+                                text = "+$extraCount",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                    if (latestDateFetch != null) {
+                        DotSeparatorText()
+                        Text(
+                            text = relativeTimeSpanString(latestDateFetch),
+                            maxLines = 1,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LocalContentColor.current.copy(alpha = DISABLED_ALPHA),
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else if (readProgress != null) {
                         DotSeparatorText()
                         Text(
                             text = readProgress,

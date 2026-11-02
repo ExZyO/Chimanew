@@ -121,6 +121,12 @@ class Comick(id: Long) : BaseTracker(id, "Comick"), DeletableTracker {
     override suspend fun refresh(track: Track): Track {
         val remoteTrack = api.findLibManga(track) ?: throw Exception("Could not find manga")
         track.copyPersonalFrom(remoteTrack)
+        try {
+            val details = api.getMangaDetails(track.remote_id.toHid())
+            if (details != null && details.total_chapters > 0) {
+                track.total_chapters = details.total_chapters
+            }
+        } catch (_: Exception) {}
         return track
     }
 

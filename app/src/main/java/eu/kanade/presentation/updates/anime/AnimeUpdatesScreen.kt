@@ -49,13 +49,13 @@ fun AnimeUpdateScreen(
     onMultiFillermarkClicked: (List<AnimeUpdatesItem>, fillermark: Boolean) -> Unit,
     onMultiMarkAsSeenClicked: (List<AnimeUpdatesItem>, seen: Boolean) -> Unit,
     onMultiDeleteClicked: (List<AnimeUpdatesItem>) -> Unit,
-    onUpdateSelected: (AnimeUpdatesItem, Boolean, Boolean, Boolean) -> Unit,
+    onUpdateSelected: (AnimeUpdatesItem, Boolean, Boolean, Boolean, Boolean) -> Unit,
     onOpenEpisode: (AnimeUpdatesItem, altPlayer: Boolean) -> Unit,
     usePanoramaCover: Boolean,
     collapseToggle: (key: String) -> Unit,
     updateSwipeStartAction: LibraryPreferences.EpisodeSwipeAction,
     updateSwipeEndAction: LibraryPreferences.EpisodeSwipeAction,
-    onUpdateSwipe: (AnimeUpdatesItem, LibraryPreferences.EpisodeSwipeAction) -> Unit,
+    onUpdateSwipe: (List<AnimeUpdatesItem>, LibraryPreferences.EpisodeSwipeAction) -> Unit,
 ) {
     BackHandler(enabled = state.selectionMode, onBack = { onSelectAll(false) })
 
@@ -90,6 +90,8 @@ fun AnimeUpdateScreen(
                 val scope = rememberCoroutineScope()
                 var isRefreshing by remember { mutableStateOf(false) }
 
+                val uiModels = remember(state.items, state.expandedState, state.consolidateUpdates) { state.getUiModel() }
+
                 PullRefresh(
                     refreshing = isRefreshing,
                     onRefresh = {
@@ -111,7 +113,7 @@ fun AnimeUpdateScreen(
                         animeUpdatesLastUpdatedItem(lastUpdated)
 
                         animeUpdatesUiItems(
-                            uiModels = state.getUiModel(),
+                            uiModels = uiModels,
                             expandedState = state.expandedState,
                             collapseToggle = collapseToggle,
                             usePanoramaCover = usePanoramaCover,
@@ -186,5 +188,18 @@ sealed interface AnimeUpdatesUiModel {
     open class Item(open val item: AnimeUpdatesItem, open val isExpandable: Boolean = false) : AnimeUpdatesUiModel
 
     /** The first [Item] in a group of episodes from the same anime */
-    data class Leader(override val item: AnimeUpdatesItem, override val isExpandable: Boolean) : Item(item, isExpandable)
+    data class Leader(
+        override val item: AnimeUpdatesItem,
+        override val isExpandable: Boolean,
+        val allItems: List<AnimeUpdatesItem> = listOf(item),
+    ) : Item(item, isExpandable) {
+        val extraCount: Int get() = (allItems.size - 1).coerceAtLeast(0)
+        val latestDateFetch: Long get() = allItems.maxOfOrNull { it.update.dateFetch } ?: item.update.dateFetch
+        val earliestUnseenItem: AnimeUpdatesItem get() = allItems.firstOrNull { !it.update.seen } ?: item
+        val latestItem: AnimeUpdatesItem get() = allItems.maxByOrNull { it.update.dateFetch } ?: item
+        val hasUnseen: Boolean get() = allItems.any { !it.update.seen }
+        val hasBookmark: Boolean get() = allItems.any { it.update.bookmark }
+        val hasFillermark: Boolean get() = allItems.any { it.update.fillermark }
+        val isAllSelected: Boolean get() = allItems.isNotEmpty() && allItems.all { it.selected }
+    }
 }

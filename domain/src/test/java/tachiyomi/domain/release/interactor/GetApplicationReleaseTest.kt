@@ -121,7 +121,7 @@ class GetApplicationReleaseTest {
     }
 
     @Test
-    fun `When now is before two days expect no new update`() = runTest {
+    fun `When now is before two days expect new update since cooldown is removed`() = runTest {
         every { preference.get() } returns Instant.now().toEpochMilli()
         every { preference.set(any()) }.answers { }
 
@@ -146,8 +146,7 @@ class GetApplicationReleaseTest {
             ),
         )
 
-        coVerify(exactly = 0) { releaseService.latest(any()) }
-        coVerify(exactly = 0) { releaseService.releaseNotes(any()) }
-        result shouldBe GetApplicationRelease.Result.NoNewUpdate
+        coVerify(exactly = 1) { releaseService.releaseNotes(any()) }
+        result shouldBe GetApplicationRelease.Result.NewUpdate(releases.getLatest()!!)
     }
 }

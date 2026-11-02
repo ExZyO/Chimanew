@@ -154,6 +154,13 @@ class AnimeUpdatesScreenModel(
                 mutableState.update { it.copy(hasActiveFilters = active) }
             }
             .launchIn(screenModelScope)
+
+        updatesPreferences.consolidateUpdates().changes()
+            .distinctUntilChanged()
+            .onEach { consolidate ->
+                mutableState.update { it.copy(consolidateUpdates = consolidate) }
+            }
+            .launchIn(screenModelScope)
     }
 
     private fun getUpdatesItemPreferenceFlow(): Flow<ItemPreferences> {
@@ -399,6 +406,7 @@ class AnimeUpdatesScreenModel(
         selected: Boolean,
         userSelected: Boolean = false,
         fromLongPress: Boolean = false,
+        isGroup: Boolean = false,
     ) {
         mutableState.update { state ->
             val newItems = state.items.toMutableList().apply {
@@ -411,6 +419,23 @@ class AnimeUpdatesScreenModel(
                 val firstSelection = none { it.selected }
                 set(selectedIndex, selectedItem.copy(selected = selected))
                 selectedEpisodeIds.addOrRemove(item.update.episodeId, selected)
+
+                if (isGroup) {
+                    val selectedItemDate = selectedItem.update.dateFetch.toLocalDate()
+                    val zone = java.time.ZoneId.systemDefault()
+                    val dayStartMillis = selectedItemDate.atStartOfDay(zone).toInstant().toEpochMilli()
+                    val dayEndMillis = selectedItemDate.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+
+                    state.items.mapIndexed { index, it -> index to it }
+                        .filter {
+                            it.second.update.animeId == selectedItem.update.animeId &&
+                                it.second.update.dateFetch in dayStartMillis..<dayEndMillis
+                        }
+                        .forEach { (index, it) ->
+                            set(index, it.copy(selected = selected))
+                            selectedEpisodeIds.addOrRemove(it.update.episodeId, selected)
+                        }
+                }
 
                 if (selected && userSelected && fromLongPress) {
                     if (firstSelection) {
@@ -504,8 +529,15 @@ class AnimeUpdatesScreenModel(
      * @throws IllegalStateException if the swipe action is [LibraryPreferences.EpisodeSwipeAction.Disabled]
      */
     fun updateSwipe(updateItem: AnimeUpdatesItem, swipeAction: LibraryPreferences.EpisodeSwipeAction) {
+        updateSwipe(listOf(updateItem), swipeAction)
+    }
+
+    /**
+     * @throws IllegalStateException if the swipe action is [LibraryPreferences.EpisodeSwipeAction.Disabled]
+     */
+    fun updateSwipe(items: List<AnimeUpdatesItem>, swipeAction: LibraryPreferences.EpisodeSwipeAction) {
         screenModelScope.launch {
-            executeUpdateSwipeAction(updateItem, swipeAction)
+            executeUpdateSwipeAction(items, swipeAction)
         }
     }
 
@@ -513,32 +545,36 @@ class AnimeUpdatesScreenModel(
      * @throws IllegalStateException if the swipe action is [LibraryPreferences.EpisodeSwipeAction.Disabled]
      */
     private fun executeUpdateSwipeAction(
-        updateItem: AnimeUpdatesItem,
+        items: List<AnimeUpdatesItem>,
         swipeAction: LibraryPreferences.EpisodeSwipeAction,
     ) {
-        val update = updateItem.update
+        if (items.isEmpty()) return
         when (swipeAction) {
             LibraryPreferences.EpisodeSwipeAction.ToggleSeen -> {
-                markUpdatesSeen(listOf(updateItem), !update.seen)
+                val anyUnseen = items.any { !it.update.seen }
+                markUpdatesSeen(items, anyUnseen)
             }
             LibraryPreferences.EpisodeSwipeAction.ToggleBookmark -> {
-                bookmarkUpdates(listOf(updateItem), !update.bookmark)
+                val anyUnbookmarked = items.any { !it.update.bookmark }
+                bookmarkUpdates(items, anyUnbookmarked)
             }
             LibraryPreferences.EpisodeSwipeAction.ToggleFillermark -> {
-                fillermarkUpdates(listOf(updateItem), !update.fillermark)
+                val anyUnfillermarked = items.any { !it.update.fillermark }
+                fillermarkUpdates(items, anyUnfillermarked)
             }
             LibraryPreferences.EpisodeSwipeAction.Download -> {
-                val downloadAction = when (updateItem.downloadStateProvider()) {
-                    AnimeDownload.State.ERROR,
-                    AnimeDownload.State.NOT_DOWNLOADED,
-                    -> EpisodeDownloadAction.START_NOW
-                    AnimeDownload.State.QUEUE,
-                    AnimeDownload.State.DOWNLOADING,
-                    -> EpisodeDownloadAction.CANCEL
-                    AnimeDownload.State.DOWNLOADED -> EpisodeDownloadAction.DELETE
+                val allDownloaded = items.all { it.downloadStateProvider() == AnimeDownload.State.DOWNLOADED }
+                val anyDownloading = items.any {
+                    val s = it.downloadStateProvider()
+                    s == AnimeDownload.State.QUEUE || s == AnimeDownload.State.DOWNLOADING
+                }
+                val downloadAction = when {
+                    allDownloaded -> EpisodeDownloadAction.DELETE
+                    anyDownloading -> EpisodeDownloadAction.CANCEL
+                    else -> EpisodeDownloadAction.START_NOW
                 }
                 downloadEpisodes(
-                    items = listOf(updateItem),
+                    items = items,
                     action = downloadAction,
                 )
             }
@@ -556,6 +592,7 @@ class AnimeUpdatesScreenModel(
         val hasActiveFilters: Boolean = false,
         val items: PersistentList<AnimeUpdatesItem> = persistentListOf(),
         val expandedState: Set<String> = persistentSetOf(),
+        val consolidateUpdates: Boolean = true,
         val dialog: Dialog? = null,
     ) {
         val selected = items.filter { it.selected }
@@ -565,28 +602,42 @@ class AnimeUpdatesScreenModel(
             return items
                 .groupBy { it.update.dateFetch.toLocalDate() }
                 .flatMap { (date, animes) ->
-                    val header = AnimeUpdatesUiModel.Header(date, animes.size)
-                    val animeItems = animes
-                        .groupBy { it.update.animeId }
-                        .values
-                        .flatMap { animeEpisodes ->
-                            val isExpandable = animeEpisodes.size > 1
-                            var lastAnimeId = -1L
-                            animeEpisodes.map { episode ->
-                                if (episode.update.animeId != lastAnimeId) {
-                                    lastAnimeId = episode.update.animeId
-                                    AnimeUpdatesUiModel.Leader(episode, isExpandable)
+                    val animeGroups = animes.groupBy { it.update.animeId }
+                    val header = AnimeUpdatesUiModel.Header(date, animeGroups.size)
+                    val animeItems = if (consolidateUpdates) {
+                        animeGroups.values
+                            .sortedByDescending { episodes -> episodes.maxOf { it.update.dateFetch } }
+                            .flatMap { animeEpisodes ->
+                                val isExpandable = animeEpisodes.size > 1
+                                val isExpanded = expandedState.contains(animeEpisodes.first().update.groupByDateAndAnime())
+                                val (unseen, seen) = animeEpisodes.partition { !it.update.seen }
+                                val sortedEpisodes = unseen.sortedBy { it.update.dateFetch } +
+                                    seen.sortedByDescending { it.update.dateFetch }
+                                val leader = AnimeUpdatesUiModel.Leader(
+                                    item = sortedEpisodes.first(),
+                                    isExpandable = isExpandable,
+                                    allItems = sortedEpisodes,
+                                )
+                                if (!isExpandable || !isExpanded) {
+                                    listOf(leader)
                                 } else {
-                                    AnimeUpdatesUiModel.Item(episode, isExpandable)
+                                    listOf(leader) + sortedEpisodes.drop(1).map {
+                                        AnimeUpdatesUiModel.Item(it, isExpandable = true)
+                                    }
                                 }
                             }
+                    } else {
+                        animeGroups.values.flatMap { animeEpisodes ->
+                            animeEpisodes.map { AnimeUpdatesUiModel.Item(it, isExpandable = false) }
                         }
+                    }
                     listOf(header) + animeItems
                 }
                 .distinctBy {
                     when (it) {
-                        is AnimeUpdatesUiModel.Header -> it.hashCode()
-                        is AnimeUpdatesUiModel.Item -> "${it.item.update.animeId}-${it.item.update.episodeId}"
+                        is AnimeUpdatesUiModel.Header -> "header-${it.date}"
+                        is AnimeUpdatesUiModel.Leader -> "leader-${it.item.update.groupByDateAndAnime()}"
+                        is AnimeUpdatesUiModel.Item -> "item-${it.item.update.animeId}-${it.item.update.episodeId}"
                     }
                 }
         }

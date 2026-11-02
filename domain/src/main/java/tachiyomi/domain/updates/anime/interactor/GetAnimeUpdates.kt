@@ -22,7 +22,7 @@ class GetAnimeUpdates(
     ): Flow<List<AnimeUpdatesWithRelations>> {
         return repository.subscribeAllAnimeUpdates(
             after = instant.toEpochMilli(),
-            limit = 500,
+            limit = 1500,
             seen = seen,
             started = started,
             bookmarked = bookmarked,
@@ -31,6 +31,6 @@ class GetAnimeUpdates(
     }
 
     fun subscribe(seen: Boolean, after: Long): Flow<List<AnimeUpdatesWithRelations>> {
-        return repository.subscribeWithSeen(seen, after, limit = 500)
+        return repository.subscribeWithSeen(seen, after, limit = 1500)
     }
 }

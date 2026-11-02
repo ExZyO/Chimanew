@@ -112,6 +112,28 @@ private fun ColumnScope.FilterSheet(
     }
 
     // KMK -->
+    val consolidateUpdates by screenModel.updatesPreferences.consolidateUpdates().collectAsState()
+
+    Row(
+        modifier = Modifier
+            .clickable { screenModel.toggleSwitch(UpdatesPreferences::consolidateUpdates) }
+            .fillMaxWidth()
+            .padding(horizontal = SettingsItemsPaddings.Horizontal),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = stringResource(MR.strings.pref_consolidate_updates),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        Switch(
+            checked = consolidateUpdates,
+            onCheckedChange = { screenModel.toggleSwitch(UpdatesPreferences::consolidateUpdates) },
+        )
+    }
+
     HorizontalDivider(modifier = Modifier.padding(MaterialTheme.padding.small))
 
     val panoramaCover by screenModel.updatesPreferences.usePanoramaCover().collectAsState()

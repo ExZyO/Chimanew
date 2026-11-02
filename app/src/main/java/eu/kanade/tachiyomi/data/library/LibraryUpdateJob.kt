@@ -62,7 +62,10 @@ import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.chapter.interactor.GetChapterSummaryByMangaId
 import tachiyomi.domain.chapter.model.Chapter
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.library.model.GroupLibraryMode
 import tachiyomi.domain.library.model.LibraryGroup
@@ -127,6 +130,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     private val insertTrack: InsertTrack = Injekt.get()
     private val trackerManager: TrackerManager = Injekt.get()
     private val mdList = trackerManager.mdList
+    private val getChapterSummaryByMangaId: GetChapterSummaryByMangaId = Injekt.get()
     // SY <--
 
     private val notifier = LibraryUpdateNotifier(context)
@@ -310,8 +314,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val (_, fetchWindowUpperBound) = fetchInterval.getWindow(ZonedDateTime.now())
         val isTrackerAssisted = libraryPreferences.trackerAssistedUpdates().get()
 
-        logcat(LogPriority.INFO) {
-            "[TrackerUpdateEngine] Starting queue evaluation for ${listToUpdate.size} manga. " +
+        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+            "Starting queue evaluation for ${listToUpdate.size} manga. " +
                 "trackerAssisted=$isTrackerAssisted, restrictions=$restrictions, windowUpperBound=$fetchWindowUpperBound"
         }
 
@@ -326,11 +330,18 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         if (isTrackerAssisted) {
             for (item in listToUpdate) {
                 val tracks = allTracks[item.manga.id].orEmpty()
-                val higherTrack = tracks.firstOrNull { it.totalChapters > item.totalChapters && it.totalChapters > 0L }
+                val summary = getChapterSummaryByMangaId.await(item.manga.id)
+                val latestNum = summary?.latestChapterNumber
+                val higherTrack = tracks.firstOrNull { track ->
+                    track.totalChapters > 0L && (
+                        track.totalChapters > item.totalChapters ||
+                        (latestNum != null && track.totalChapters > latestNum)
+                    )
+                }
                 if (higherTrack != null) {
                     trackerSignaledMangaIds.add(item.manga.id)
-                    logcat(LogPriority.INFO) {
-                        "[TrackerUpdateEngine] Cached tracker signal: '${item.manga.title}' has ${higherTrack.totalChapters} chapters on tracker (ID ${higherTrack.trackerId}) vs ${item.totalChapters} local chapters."
+                    ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                        "Cached tracker signal: '${item.manga.title}' has ${higherTrack.totalChapters} chapters on tracker (ID ${higherTrack.trackerId}) vs ${item.totalChapters} local (latestNum=$latestNum)."
                     }
                 }
             }
@@ -347,8 +358,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             }
 
             if (candidateManga.isNotEmpty()) {
-                logcat(LogPriority.INFO) {
-                    "[TrackerUpdateEngine] Running pre-flight probe for ${candidateManga.size} tracked candidates..."
+                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                    "Running pre-flight probe for ${candidateManga.size} tracked candidates..."
                 }
                 coroutineScope {
                     val checkSemaphore = Semaphore(6)
@@ -356,31 +367,37 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         async {
                             checkSemaphore.withPermit {
                                 val tracks = allTracks[item.manga.id].orEmpty()
+                                val summary = getChapterSummaryByMangaId.await(item.manga.id)
+                                val latestNum = summary?.latestChapterNumber
                                 for (track in tracks) {
                                     val service = trackerManager.get(track.trackerId)
                                     if (service?.isLoggedIn == true) {
                                         try {
-                                            logcat(LogPriority.INFO) {
-                                                "[TrackerUpdateEngine] Probing ${service.name} for '${item.manga.title}' (remoteId=${track.remoteId})..."
+                                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                                "Probing ${service.name} for '${item.manga.title}' (remoteId=${track.remoteId})..."
                                             }
                                             val refreshed = service.refresh(track.toDbTrack()).toDomainTrack()
                                             if (refreshed != null) {
                                                 insertTrack.await(refreshed)
-                                                logcat(LogPriority.INFO) {
-                                                    "[TrackerUpdateEngine] ${service.name} returned totalChapters=${refreshed.totalChapters} (local=${item.totalChapters}) for '${item.manga.title}'"
+                                                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                                    "${service.name} returned totalChapters=${refreshed.totalChapters} (local=${item.totalChapters}, latestNum=$latestNum) for '${item.manga.title}'"
                                                 }
-                                                if (refreshed.totalChapters > item.totalChapters && refreshed.totalChapters > 0L) {
+                                                val isAhead = refreshed.totalChapters > 0L && (
+                                                    refreshed.totalChapters > item.totalChapters ||
+                                                    (latestNum != null && refreshed.totalChapters > latestNum)
+                                                )
+                                                if (isAhead) {
                                                     trackerSignaledMangaIds.add(item.manga.id)
-                                                    logcat(LogPriority.INFO) {
-                                                        "[TrackerUpdateEngine] ⭐ Tracker signal DETECTED for '${item.manga.title}' via ${service.name}! Bypassing restrictions and prioritizing."
+                                                    ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                                        "⭐ Tracker signal DETECTED for '${item.manga.title}' via ${service.name}! Bypassing restrictions and prioritizing."
                                                     }
                                                     break
                                                 }
                                             }
                                         } catch (e: Exception) {
                                             if (e is CancellationException) throw e
-                                            logcat(LogPriority.WARN) {
-                                                "[TrackerUpdateEngine] Probe failed for '${item.manga.title}' on ${service.name}: ${e.message}"
+                                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                                "Probe failed for '${item.manga.title}' on ${service.name}: ${e.message}"
                                             }
                                         }
                                     }
@@ -408,8 +425,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
                     MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED -> {
                         if (it.manga.id in trackerSignaledMangaIds) {
-                            logcat(LogPriority.INFO) {
-                                "[TrackerUpdateEngine] Bypassing MANGA_NON_COMPLETED for '${it.manga.title}' because tracker signaled new chapters!"
+                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                "Bypassing MANGA_NON_COMPLETED for '${it.manga.title}' because tracker signaled new chapters!"
                             }
                             true
                         } else {
@@ -431,8 +448,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     MANGA_OUTSIDE_RELEASE_PERIOD in restrictions &&
                         it.manga.nextUpdate > fetchWindowUpperBound -> {
                         if (it.manga.id in trackerSignaledMangaIds) {
-                            logcat(LogPriority.INFO) {
-                                "[TrackerUpdateEngine] Bypassing MANGA_OUTSIDE_RELEASE_PERIOD for '${it.manga.title}' because tracker signaled new chapters!"
+                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                "Bypassing MANGA_OUTSIDE_RELEASE_PERIOD for '${it.manga.title}' because tracker signaled new chapters!"
                             }
                             true
                         } else {
@@ -468,8 +485,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
         notifier.showQueueSizeWarningNotificationIfNeeded(mangaToUpdate)
 
-        logcat(LogPriority.INFO) {
-            "[TrackerUpdateEngine] Final update queue built: ${mangaToUpdate.size} manga (${trackerSignaledMangaIds.size} tracker-assisted at front). Total skipped: ${skippedUpdates.size}."
+        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+            "Final update queue built: ${mangaToUpdate.size} manga (${trackerSignaledMangaIds.size} tracker-assisted at front). Total skipped: ${skippedUpdates.size}."
         }
 
         if (skippedUpdates.isNotEmpty()) {
@@ -480,7 +497,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     "$reason (${entries.size}): [$sample${if (entries.size > 3) ", ..." else ""}]"
                 }
                 .joinToString("; ")
-            logcat(LogPriority.INFO) { "[TrackerUpdateEngine] Skipped breakdown: $breakdown" }
+            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") { "Skipped breakdown: $breakdown" }
         }
     }
 

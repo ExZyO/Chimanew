@@ -84,4 +84,28 @@ private fun ColumnScope.AnimeFilterSheet(
         state = filterFillermarked,
         onClick = { screenModel.toggleFilter(UpdatesPreferences::filterFillermarked) },
     )
+
+    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(MaterialTheme.padding.small))
+
+    val consolidateUpdates by screenModel.updatesPreferences.consolidateUpdates().collectAsState()
+
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier
+            .androidx.compose.foundation.clickable { screenModel.toggleSwitch(UpdatesPreferences::consolidateUpdates) }
+            .androidx.compose.foundation.layout.fillMaxWidth()
+            .padding(horizontal = eu.kanade.presentation.more.settings.widget.SettingsItemsPaddings.Horizontal),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        androidx.compose.material3.Text(
+            text = stringResource(MR.strings.pref_consolidate_updates),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        androidx.compose.material3.Switch(
+            checked = consolidateUpdates,
+            onCheckedChange = { screenModel.toggleSwitch(UpdatesPreferences::consolidateUpdates) },
+        )
+    }
 }
