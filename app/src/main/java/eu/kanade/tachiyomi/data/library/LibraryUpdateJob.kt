@@ -163,6 +163,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         // KMK -->
         libraryUpdateStatus.start()
 
+        cloudflareBlockedSources.clear()
+        notifiedCloudflareSources.clear()
+
         deleteLibraryUpdateErrors.cleanUnrelevantMangaErrors()
         // KMK <--
 
@@ -358,7 +361,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     allTracks[it.manga.id]?.any { track ->
                         track.totalChapters == 0L && trackerManager.get(track.trackerId)?.isLoggedIn == true
                     } == true
-            }.take(5)
+            }.sortedByDescending { it.lastRead }
+            .take(20)
 
             if (candidateManga.isNotEmpty()) {
                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
@@ -369,7 +373,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     candidateManga.map { item ->
                         async {
                             checkSemaphore.withPermit {
-                                delay(1200L)
+                                delay(400L)
                                 val tracks = allTracks[item.manga.id].orEmpty()
                                 val summary = getChapterSummaryByMangaId.await(item.manga.id)
                                 val latestNum = summary?.latestChapterNumber
@@ -451,12 +455,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_HAS_UNREAD in restrictions && it.unreadCount != 0L -> {
-                        if (isManual) {
-                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                                "Bypassing MANGA_HAS_UNREAD for '${it.manga.title}' (manual library update initiated by user)."
-                            }
-                            true
-                        } else if (it.manga.id in trackerSignaledMangaIds) {
+                        if (it.manga.id in trackerSignaledMangaIds) {
                             ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
                                 "Bypassing MANGA_HAS_UNREAD for '${it.manga.title}' because tracker signaled new chapters!"
                             }
@@ -468,7 +467,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_NON_READ in restrictions && it.totalChapters > 0L && !it.hasStarted -> {
-                        if (isManual || it.manga.id in trackerSignaledMangaIds) {
+                        if (it.manga.id in trackerSignaledMangaIds) {
                             true
                         } else {
                             skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_started))
@@ -597,6 +596,17 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                     return@forEachIndexed
                                 }
 
+                                if (manga.source in cloudflareBlockedSources) {
+                                    val currentIdx = progressCount.load() + 1
+                                    ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
+                                        "[$currentIdx/${mangaToUpdate.size}] Skipping '${manga.title}' (source blocked by Cloudflare verification)."
+                                    }
+                                    val errorMsg = context.stringResource(MR.strings.information_cloudflare_bypass_failure)
+                                    writeErrorToDB(manga to errorMsg)
+                                    failedUpdates.add(manga to errorMsg)
+                                    return@forEachIndexed
+                                }
+
                                 val currentIdx = progressCount.load() + 1
                                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
                                     "[$currentIdx/${mangaToUpdate.size}] Checking '${manga.title}'..."
@@ -649,6 +659,16 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                         clearErrorFromDB(mangaId = manga.id)
                                         lastCheckedMangaTimestamps[manga.id] = System.currentTimeMillis()
                                     } catch (e: Throwable) {
+                                        val isCloudflare = e.message?.contains("cloudflare", ignoreCase = true) == true
+                                        if (isCloudflare) {
+                                            cloudflareBlockedSources.add(manga.source)
+                                            if (notifiedCloudflareSources.add(manga.source)) {
+                                                val source = sourceManager.get(manga.source)
+                                                val sourceName = source?.name ?: "Source"
+                                                val httpUrl = (source as? eu.kanade.tachiyomi.source.online.HttpSource)?.baseUrl ?: manga.url
+                                                notifier.showCloudflareNotification(sourceName, manga.source, httpUrl)
+                                            }
+                                        }
                                         val errorMessage = when (e) {
                                             is NoChaptersException ->
                                                 context.stringResource(MR.strings.no_chapters_error)
@@ -904,6 +924,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
     companion object {
         val lastCheckedMangaTimestamps = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+        val cloudflareBlockedSources = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+        val notifiedCloudflareSources = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
 
         private const val TAG = "LibraryUpdate"
         private const val WORK_NAME_AUTO = "LibraryUpdate-auto"

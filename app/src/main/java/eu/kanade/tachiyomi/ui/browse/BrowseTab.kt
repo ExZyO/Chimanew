@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -171,16 +172,42 @@ data object BrowseTab : Tab {
             list
         }
 
+        val activeGlobalMedia by chimanewPreferences.homeActiveMedia().collectPrefAsState()
+
         var browseMode by remember {
             val savedMode = BrowseViewMode.entries.getOrElse(uiPreferences.lastUsedBrowseMode().get()) { BrowseViewMode.Sources }
             mutableStateOf(if (savedMode in availableModes) savedMode else BrowseViewMode.Sources)
         }
         var showModeDropdown by remember { mutableStateOf(false) }
 
+        fun setGlobalBrowseMode(mode: BrowseViewMode) {
+            browseMode = mode
+            uiPreferences.lastUsedBrowseMode().set(mode.ordinal)
+            val mediaIdx = when (mode) {
+                BrowseViewMode.Sources -> 0
+                BrowseViewMode.Anime -> 1
+                BrowseViewMode.Novels -> 2
+            }
+            if (chimanewPreferences.homeActiveMedia().get() != mediaIdx) {
+                chimanewPreferences.homeActiveMedia().set(mediaIdx)
+            }
+        }
+
+        LaunchedEffect(activeGlobalMedia) {
+            val target = when (activeGlobalMedia) {
+                1 -> BrowseViewMode.Anime
+                2 -> BrowseViewMode.Novels
+                else -> BrowseViewMode.Sources
+            }
+            if (target in availableModes && browseMode != target) {
+                browseMode = target
+                uiPreferences.lastUsedBrowseMode().set(target.ordinal)
+            }
+        }
+
         LaunchedEffect(availableModes) {
             if (browseMode !in availableModes) {
-                browseMode = BrowseViewMode.Sources
-                uiPreferences.lastUsedBrowseMode().set(BrowseViewMode.Sources.ordinal)
+                setGlobalBrowseMode(BrowseViewMode.Sources)
             }
         }
 
@@ -322,8 +349,7 @@ data object BrowseTab : Tab {
                                                 },
                                                 onClick = {
                                                     showModeDropdown = false
-                                                    browseMode = mode
-                                                    uiPreferences.lastUsedBrowseMode().set(mode.ordinal)
+                                                    setGlobalBrowseMode(mode)
                                                 },
                                             )
                                         }
@@ -393,8 +419,7 @@ data object BrowseTab : Tab {
 
         LaunchedEffect(Unit) {
             modeSelectionEvent.receiveAsFlow().collectLatest { mode ->
-                browseMode = mode
-                uiPreferences.lastUsedBrowseMode().set(mode.ordinal)
+                setGlobalBrowseMode(mode)
             }
         }
 

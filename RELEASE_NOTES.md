@@ -1,14 +1,13 @@
-# What's New in Chimanew v2.6.70
+# What's New in Chimanew v2.6.71
 
-### Tracker Engine & Library Sync Precision
-* **Tracker False Positive Elimination**: Enforced strict validation requiring tracker total chapters to exceed local total chapters before signaling an update. Titles whose tracker chapters equal or trail local counts (such as web novel chapters or equal counts like 1450 vs 1450) are no longer falsely flagged as having new releases, cutting library update runtimes from 10 minutes down to seconds.
-* **Active Check Timestamp Tracking**: Introduced in-memory tracking of the exact moment an entry is checked across both background updates and manual detail page pull-to-refresh. The 15-minute cooldown now properly identifies recently checked titles even when no new chapters were found.
-* **Manual Refresh Priority**: Manual pull-to-refresh on manga and anime detail screens always contacts the remote source immediately and registers the timestamp, allowing subsequent background sync passes to skip the entry safely.
+### Unified Global Media Mode
+* **Universal Tab Synchronization**: Switching the media category (Manga, Anime, or Novels) in any tab now synchronizes all tabs across the application in real time, including Home, Library, Updates, History, and Browse.
+* **Seamless Bidirectional Switching**: Changing modes via the top dropdown in Library or Browse, swiping pages in Updates or History, or toggling shelves in Home immediately aligns every other screen to the same active media type.
 
-### Updates Search Performance
-* **Instant Filtering on Large Feeds**: Fixed search query reactivity by including search state in Compose remember keys across Manga, Anime, and Novel updates screens.
-* **Series-Level Fast Search**: Re-architected search processing across the 46,000+ chapter update database to group entries by series ID before filtering. Titles match instantly at the series level, dropping search computation time from over a minute to under 10 milliseconds.
+### Cloudflare Protection & Fast-Skip
+* **Per-Source Fast-Skip**: When a source encounters an interactive Cloudflare challenge during a library update run, the engine registers the blocked source and instantly skips all subsequent titles from that source without waiting for the 30-second latch timeout each time.
+* **Direct WebView Action Notification**: Posts an immediate actionable notification ("Cloudflare verification required: [Source Name] - Tap to open WebView") whenever a source is blocked. Tapping opens the source directly in WebView so verification can be completed with a single tap. Notifications are strictly deduplicated to appear once per source per update pass.
 
-### Batch Anime Migration Stability
-* **Global Migration Pacing**: Replaced per-anime local locks with a shared global semaphore enforcing 600ms spacing across all concurrent source requests during batch migrations.
-* **HTTP 429 Rate Limit Recovery**: Added automatic 429 rate limit detection and 2-second backoff retries when querying AIOStreams and catalogue sources, preventing transient rate-limit spikes from falsely reporting titles as Not Found.
+### Library Update Restriction Integrity
+* **Honored Unread Manga Restriction**: Fixed an issue where manual launch updates bypassed the user's "Entries with unread chapters" restriction. Titles with unread chapters are now properly skipped unless an active tracker signal reliably indicates a new release, reducing general update passes from hundreds of unnecessary requests down to caught-up titles in seconds.
+* **Expanded Tracker Live Probe**: Increased the uncached candidate tracker probe quota from 5 to 20 titles, ordered by most recently read, with optimized 400ms pacing that stays comfortably within external API rate limits.

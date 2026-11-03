@@ -186,6 +186,39 @@ class LibraryUpdateNotifier(
         }
     }
 
+    fun showCloudflareNotification(sourceName: String, sourceId: Long, mangaUrl: String?) {
+        val notificationId = Notifications.ID_LIBRARY_ERROR + (sourceId % 1000).toInt()
+        val intent = if (!mangaUrl.isNullOrEmpty()) {
+            eu.kanade.tachiyomi.ui.webview.WebViewActivity.newIntent(
+                context,
+                mangaUrl,
+                sourceId,
+                sourceName,
+            ).let {
+                PendingIntent.getActivity(
+                    context,
+                    notificationId,
+                    it,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
+        } else {
+            NotificationReceiver.openErrorLogPendingActivity(context)
+        }
+
+        context.notify(
+            notificationId,
+            Notifications.CHANNEL_LIBRARY_ERROR,
+        ) {
+            setContentTitle("Cloudflare verification required: $sourceName")
+            setContentText("Tap to open WebView and complete verification")
+            setSmallIcon(R.drawable.ic_chimahon)
+            setColor(ContextCompat.getColor(context, R.color.ic_launcher))
+            setContentIntent(intent)
+            setAutoCancel(true)
+        }
+    }
+
     /**
      * Shows the notification containing the result of the update done by the service.
      *

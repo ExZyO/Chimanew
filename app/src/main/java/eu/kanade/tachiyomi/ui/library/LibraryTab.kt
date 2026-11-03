@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import tachiyomi.presentation.core.util.collectAsState as collectPrefAsState
 
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -178,6 +179,9 @@ data object LibraryTab : Tab {
         }
 
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
+        val chimanewPreferences = remember { Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences>() }
+        val activeGlobalMedia by chimanewPreferences.homeActiveMedia().collectPrefAsState()
+
         var libraryMode by remember {
             mutableStateOf(LibraryViewMode.entries.getOrElse(libraryPreferences.lastUsedLibraryMode().get()) { LibraryViewMode.Manga })
         }
@@ -189,6 +193,16 @@ data object LibraryTab : Tab {
             entryTarget = target
             libraryMode = mode
             libraryPreferences.lastUsedLibraryMode().set(mode.ordinal)
+            if (chimanewPreferences.homeActiveMedia().get() != mode.ordinal) {
+                chimanewPreferences.homeActiveMedia().set(mode.ordinal)
+            }
+        }
+
+        LaunchedEffect(activeGlobalMedia) {
+            val target = LibraryViewMode.entries.getOrElse(activeGlobalMedia) { LibraryViewMode.Manga }
+            if (libraryMode != target) {
+                selectMode(target)
+            }
         }
 
         val onBoundarySwipe: (LibraryPagerBoundary) -> Unit = { boundary ->

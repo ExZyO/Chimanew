@@ -125,8 +125,22 @@ data object HistoryTab : Tab {
         val novelScreenModel = rememberScreenModel { eu.kanade.tachiyomi.ui.history.novel.NovelHistoryScreenModel() }
         val novelState by novelScreenModel.state.collectAsState()
         val scope = rememberCoroutineScope()
-        val pagerState = rememberPagerState(initialPage = TAB_MANGA) { TAB_COUNT }
+        val chimanewPreferences = remember { Injekt.get<eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences>() }
+        val activeGlobalMedia by chimanewPreferences.homeActiveMedia().collectAsState()
+        val pagerState = rememberPagerState(initialPage = chimanewPreferences.homeActiveMedia().get().coerceIn(0, TAB_COUNT - 1)) { TAB_COUNT }
         val selectedTab = pagerState.currentPage
+
+        LaunchedEffect(activeGlobalMedia) {
+            if (activeGlobalMedia in 0 until TAB_COUNT && pagerState.currentPage != activeGlobalMedia) {
+                pagerState.animateScrollToPage(activeGlobalMedia)
+            }
+        }
+
+        LaunchedEffect(pagerState.currentPage) {
+            if (chimanewPreferences.homeActiveMedia().get() != pagerState.currentPage) {
+                chimanewPreferences.homeActiveMedia().set(pagerState.currentPage)
+            }
+        }
         // KMK -->
         val settingsScreenModel = rememberScreenModel { HistorySettingsScreenModel() }
         val usePanoramaCover by settingsScreenModel.historyPreferences.usePanoramaCover().collectAsState()
