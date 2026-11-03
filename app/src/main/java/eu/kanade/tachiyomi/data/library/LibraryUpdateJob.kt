@@ -419,6 +419,10 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             .distinctBy { it.manga.id }
             // SY <--
             .filter {
+                val lastChecked = lastCheckedMangaTimestamps[it.manga.id] ?: 0L
+                val lastTime = maxOf(lastChecked, it.manga.lastUpdate)
+                val isRecentlyChecked = lastTime > 0L && (now - lastTime) < 15 * 60 * 1000L
+
                 when {
                     it.manga.updateStrategy == UpdateStrategy.ONLY_FETCH_ONCE && it.totalChapters > 0L -> {
                         skippedUpdates.add(
@@ -427,10 +431,6 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         )
                         false
                     }
-
-                    val lastChecked = lastCheckedMangaTimestamps[it.manga.id] ?: 0L
-                    val lastTime = maxOf(lastChecked, it.manga.lastUpdate)
-                    val isRecentlyChecked = lastTime > 0L && (now - lastTime) < 15 * 60 * 1000L
 
                     targetMangaIds == null &&
                         it.manga.id !in trackerSignaledMangaIds &&
