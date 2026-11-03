@@ -69,16 +69,25 @@ fun NovelUpdatesScreen(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
     ) {
-        items.groupBy { it.dateFetch / 86_400_000L }.forEach { (day, dayUpdates) ->
+        val novelGroups = items.groupBy { it.novelId }
+        val novelsByLatestDay = novelGroups.values
+            .map { chapters ->
+                val latestFetch = chapters.maxOf { it.dateFetch }
+                (latestFetch / 86_400_000L) to chapters
+            }
+            .groupBy { (day, _) -> day }
+            .toSortedMap(compareByDescending { it })
+
+        novelsByLatestDay.forEach { (day, dayNovelList) ->
             item(key = "novelUpdatesHeader-$day") {
-                ListGroupHeader(text = relativeDateText(dayUpdates.first().dateFetch))
+                ListGroupHeader(text = relativeDateText(dayNovelList.first().second.maxOf { it.dateFetch }))
             }
             if (consolidateUpdates) {
-                val novelGroups = dayUpdates.groupBy { it.novelId }
-                    .values
+                val sortedNovels = dayNovelList
+                    .map { it.second }
                     .sortedByDescending { it.maxOf { ch -> ch.dateFetch } }
 
-                novelGroups.forEach { chapters ->
+                sortedNovels.forEach { chapters ->
                     val isExpandable = chapters.size > 1
                     val key = chapters.first().groupByDateAndNovel()
                     val isExpanded = expandedState.contains(key)
@@ -126,7 +135,7 @@ fun NovelUpdatesScreen(
                 }
             } else {
                 items(
-                    items = dayUpdates,
+                    items = dayNovelList.flatMap { it.second },
                     key = { "novelUpdates-${it.novelId}-${it.chapterId}" },
                 ) { update ->
                     NovelUpdatesUiItem(

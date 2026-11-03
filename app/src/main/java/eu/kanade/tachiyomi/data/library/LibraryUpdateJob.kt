@@ -415,6 +415,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         }
 
         val isManual = tags.contains(WORK_NAME_MANUAL)
+        val now = System.currentTimeMillis()
         mangaToUpdate = listToUpdate
             // SY -->
             .distinctBy { it.manga.id }
@@ -426,6 +427,17 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                             it.manga to
                                 context.stringResource(MR.strings.skipped_reason_not_always_update),
                         )
+                        false
+                    }
+
+                    targetMangaIds == null &&
+                        it.manga.id !in trackerSignaledMangaIds &&
+                        it.manga.lastUpdate > 0L &&
+                        (now - it.manga.lastUpdate) < 15 * 60 * 1000L -> {
+                        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                            "Skipping '${it.manga.title}' (recently updated ${((now - it.manga.lastUpdate) / 60000)}m ago)."
+                        }
+                        skippedUpdates.add(it.manga to "Updated recently (< 15m ago)")
                         false
                     }
 
@@ -528,7 +540,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
      * @return an observable delivering the progress of each update.
      */
     private suspend fun updateChapterList() {
-        val semaphore = Semaphore(5)
+        val semaphore = Semaphore(3)
         val progressCount = AtomicInt(0)
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
         val newUpdates = CopyOnWriteArrayList<Pair<Manga, Array<Chapter>>>()
@@ -584,6 +596,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                     return@forEachIndexed
                                 }
 
+                                val currentIdx = progressCount.get() + 1
+                                ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
+                                    "[$currentIdx/${mangaToUpdate.size}] Checking '${manga.title}'..."
+                                }
+
                                 withUpdateNotification(
                                     currentlyUpdatingManga,
                                     progressCount,
@@ -594,6 +611,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                             .sortedByDescending { it.sourceOrder }
 
                                         if (newChapters.isNotEmpty()) {
+                                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
+                                                "[$currentIdx/${mangaToUpdate.size}] '${manga.title}' -> +${newChapters.size} new chapters!"
+                                            }
                                             val chaptersToDownload = filterChaptersForDownload.await(manga, newChapters)
 
                                             if (chaptersToDownload.isNotEmpty()) {
@@ -620,6 +640,10 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                     if (e is CancellationException) throw e
                                                 }
                                             }
+                                        } else {
+                                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
+                                                "[$currentIdx/${mangaToUpdate.size}] '${manga.title}' -> Up to date."
+                                            }
                                         }
                                         clearErrorFromDB(mangaId = manga.id)
                                     } catch (e: Throwable) {
@@ -634,10 +658,14 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
                                             else -> e.message
                                         }
+                                        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
+                                            "[$currentIdx/${mangaToUpdate.size}] '${manga.title}' -> Error: $errorMessage"
+                                        }
                                         writeErrorToDB(manga to errorMessage)
                                         failedUpdates.add(manga to errorMessage)
                                     }
                                 }
+                                kotlinx.coroutines.yield()
                             }
                         }
                     }

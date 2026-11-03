@@ -59,13 +59,31 @@ class NovelUpdatesScreenModel(
         }
     }
 
+    fun setSearchQuery(query: String?) {
+        mutableState.update { it.copy(searchQuery = query) }
+    }
+
     @Immutable
     data class State(
         val isLoading: Boolean = true,
         val items: List<NovelUpdatesWithRelations> = emptyList(),
+        val searchQuery: String? = null,
         val expandedState: Set<String> = emptySet(),
         val consolidateUpdates: Boolean = true,
-    )
+    ) {
+        val filteredItems: List<NovelUpdatesWithRelations>
+            get() {
+                val q = searchQuery?.trim()?.lowercase()
+                return if (q.isNullOrEmpty()) {
+                    items
+                } else {
+                    items.filter {
+                        it.novelTitle.lowercase().contains(q) ||
+                            it.chapterName.lowercase().contains(q)
+                    }
+                }
+            }
+    }
 }
 
 fun NovelUpdatesWithRelations.groupByDateAndNovel() = "${dateFetch / 86_400_000L}-$novelId"

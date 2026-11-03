@@ -163,6 +163,7 @@ fun AnimeMigrationListScreenContent(
                             .fillMaxHeight(),
                         result = result,
                         onItemClick = onItemClick,
+                        onSelectSeasons = { onSearchSeasons(item.anime, it) },
                     )
 
                     AnimeMigrationListItemAction(
@@ -252,11 +253,15 @@ fun AnimeMigrationMismatchListItem(
                     imageVector = Icons.Filled.Warning,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = if (anime.fetchType == FetchType.Seasons) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                 )
 
                 Text(
-                    text = stringResource(MR.strings.migrationListScreen_mismatchedFetchType),
+                    text = if (anime.fetchType == FetchType.Seasons) {
+                        "Multi-season: Tap for seasons"
+                    } else {
+                        stringResource(MR.strings.migrationListScreen_mismatchedFetchType)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -349,6 +354,7 @@ fun AnimeMigrationListItemResult(
     modifier: Modifier,
     result: MigratingAnime.SearchResult,
     onItemClick: (Anime) -> Unit,
+    onSelectSeasons: ((Anime) -> Unit)? = null,
 ) {
     Box(modifier.height(IntrinsicSize.Min)) {
         when (result) {
@@ -392,7 +398,13 @@ fun AnimeMigrationListItemResult(
                     anime = result.anime,
                     source = result.source,
                     episodeCount = result.episodeCount,
-                    onClick = { onItemClick(result.anime) },
+                    onClick = {
+                        if (result.anime.fetchType == FetchType.Seasons && onSelectSeasons != null) {
+                            onSelectSeasons(result.anime)
+                        } else {
+                            onItemClick(result.anime)
+                        }
+                    },
                 )
             }
             is MigratingAnime.SearchResult.Success -> {

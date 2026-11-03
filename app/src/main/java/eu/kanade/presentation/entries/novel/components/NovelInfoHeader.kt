@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.FilledTonalButton
@@ -56,8 +58,14 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -113,79 +121,199 @@ fun NovelInfoBox(
     onSourceClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
+    val detailsPageLayout by chimanewPreferences.detailsPageLayout().collectAsState()
+    val detailsBackdropArtwork by chimanewPreferences.detailsBackdropArtwork().collectAsState()
+    val detailsAllowCoverFallback by chimanewPreferences.detailsAllowCoverFallback().collectAsState()
+    val customBannerUrl by chimanewPreferences.novelCustomBannerUrl(novel.id).collectAsState()
+
+    val isBannerDisabled = detailsBackdropArtwork == 3 || customBannerUrl.equals("NONE", ignoreCase = true)
+    val chosenArtworkModel: Any? = when {
+        isBannerDisabled -> null
+        customBannerUrl.equals("COVER", ignoreCase = true) -> novel.thumbnail_url
+        !customBannerUrl.isNullOrBlank() -> customBannerUrl
+        detailsBackdropArtwork == 2 -> novel.thumbnail_url
+        detailsAllowCoverFallback -> novel.thumbnail_url
+        else -> null
+    }
+
+    val backgroundColor = MaterialTheme.colorScheme.background
+
     Box(modifier = modifier) {
-        // Backdrop
-        val thumbnailUrl = novel.thumbnail_url
-        val backdropGradientColors = listOf(
-            Color.Transparent,
-            MaterialTheme.colorScheme.background,
-        )
-        if (!thumbnailUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(thumbnailUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = backdropGradientColors,
-                                startY = size.height / 2,
+        if (detailsPageLayout == 0) {
+            // Mode 0: Nuvio Hero Edge-to-Edge with 7-Stop Silk Bottom Dissolve
+            if (chosenArtworkModel != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(chosenArtworkModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.Center,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .alpha(0.88f),
+                )
+
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.70f),
+                                Color.Black.copy(alpha = 0.20f),
+                                Color.Transparent,
                             ),
-                        )
-                    }
-                    .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.4f))
-                    .blur(7.dp)
-                    .alpha(0.24f),
-            )
+                            endY = (appBarPadding.toPx() + 20.dp.toPx()).coerceAtLeast(140f),
+                        ),
+                    )
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.00f to Color.Transparent,
+                                0.16f to backgroundColor.copy(alpha = 0.04f),
+                                0.32f to backgroundColor.copy(alpha = 0.14f),
+                                0.50f to backgroundColor.copy(alpha = 0.34f),
+                                0.68f to backgroundColor.copy(alpha = 0.62f),
+                                0.84f to backgroundColor.copy(alpha = 0.84f),
+                                1.00f to backgroundColor,
+                            ),
+                            startY = size.height * 0.25f,
+                            endY = size.height,
+                        ),
+                    )
+                }
+            }
         } else {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            )
+            // Traditional blurred backdrop
+            val thumbnailUrl = novel.thumbnail_url
+            if (!thumbnailUrl.isNullOrBlank() && chosenArtworkModel != null) {
+                val backdropGradientColors = listOf(
+                    Color.Transparent,
+                    backgroundColor,
+                )
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(chosenArtworkModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = backdropGradientColors,
+                                    startY = size.height / 2,
+                                ),
+                            )
+                        }
+                        .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.4f))
+                        .blur(7.dp)
+                        .alpha(0.24f),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                )
+            }
         }
 
         // Novel & source info
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, top = appBarPadding + 16.dp, end = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MangaCover.Book(
-                    data = ImageRequest.Builder(LocalContext.current)
-                        .data(thumbnailUrl)
-                        .crossfade(true)
-                        .build(),
-                    modifier = Modifier
-                        .sizeIn(maxWidth = 100.dp)
-                        .aspectRatio(2f / 3f),
-                    contentDescription = novel.title,
-                    onClick = onCoverClick,
+            if (detailsPageLayout == 0) {
+                NovelAndSourceTitlesNuvioHero(
+                    appBarPadding = appBarPadding,
+                    novel = novel,
+                    sourceName = sourceName,
+                    isStubSource = isStubSource,
+                    onCoverClick = onCoverClick,
+                    onSourceClick = onSourceClick,
                 )
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = appBarPadding + 16.dp, end = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    NovelContentInfo(
-                        title = novel.title,
-                        author = novel.author,
-                        artist = novel.artist,
-                        status = novel.status,
-                        sourceName = sourceName,
-                        isStubSource = isStubSource,
-                        onSourceClick = onSourceClick,
+                    MangaCover.Book(
+                        data = ImageRequest.Builder(LocalContext.current)
+                            .data(novel.thumbnail_url)
+                            .crossfade(true)
+                            .build(),
+                        modifier = Modifier
+                            .sizeIn(maxWidth = 100.dp)
+                            .aspectRatio(2f / 3f),
+                        contentDescription = novel.title,
+                        onClick = onCoverClick,
                     )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        NovelContentInfo(
+                            title = novel.title,
+                            author = novel.author,
+                            artist = novel.artist,
+                            status = novel.status,
+                            sourceName = sourceName,
+                            isStubSource = isStubSource,
+                            onSourceClick = onSourceClick,
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NovelAndSourceTitlesNuvioHero(
+    appBarPadding: Dp,
+    novel: SNNovel,
+    sourceName: String,
+    isStubSource: Boolean,
+    onCoverClick: () -> Unit,
+    onSourceClick: (() -> Unit)?,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, top = appBarPadding + 20.dp, end = 20.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        MangaCover.Book(
+            modifier = Modifier
+                .width(112.dp)
+                .aspectRatio(2f / 3f)
+                .shadow(16.dp, RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp)),
+            data = ImageRequest.Builder(LocalContext.current)
+                .data(novel.thumbnail_url)
+                .crossfade(true)
+                .build(),
+            contentDescription = novel.title,
+            onClick = onCoverClick,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        NovelContentInfo(
+            title = novel.title,
+            author = novel.author,
+            artist = novel.artist,
+            status = novel.status,
+            sourceName = sourceName,
+            isStubSource = isStubSource,
+            onSourceClick = onSourceClick,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

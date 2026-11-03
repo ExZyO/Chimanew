@@ -113,6 +113,13 @@ data object UpdatesTab : Tab {
         val scope = rememberCoroutineScope()
         val pagerState = rememberPagerState(initialPage = TAB_MANGA) { TAB_COUNT }
         val selectedTab = pagerState.currentPage
+        var searchQuery by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+
+        LaunchedEffect(searchQuery) {
+            screenModel.setSearchQuery(searchQuery)
+            animeScreenModel.setSearchQuery(searchQuery)
+            novelScreenModel.setSearchQuery(searchQuery)
+        }
 
         // KMK -->
         val usePanoramaCover by settingsScreenModel.updatesPreferences.usePanoramaCover().collectAsState()
@@ -137,8 +144,9 @@ data object UpdatesTab : Tab {
                 } else {
                     SearchToolbar(
                         titleContent = { AppBarTitle(stringResource(MR.strings.label_recent_updates)) },
-                        searchQuery = null,
-                        onChangeSearchQuery = {},
+                        searchQuery = searchQuery,
+                        onChangeSearchQuery = { searchQuery = it },
+                        onClickCloseSearch = { searchQuery = null },
                         actions = {
                             if (selectedTab == TAB_ANIME) {
                                 AppBarActions(
@@ -283,7 +291,7 @@ data object UpdatesTab : Tab {
                             val novelState by novelScreenModel.state.collectAsState()
                             NovelUpdatesScreen(
                                 isLoading = novelState.isLoading,
-                                items = novelState.items,
+                                items = novelState.filteredItems,
                                 expandedState = novelState.expandedState,
                                 consolidateUpdates = novelState.consolidateUpdates,
                                 collapseToggle = novelScreenModel::toggleExpandedState,

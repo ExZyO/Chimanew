@@ -617,6 +617,10 @@ class UpdatesScreenModel(
         mutableState.update { it.copy(dialog = Dialog.FilterSheet) }
     }
 
+    fun setSearchQuery(query: String?) {
+        mutableState.update { it.copy(searchQuery = query) }
+    }
+
     @Immutable
     private data class ItemPreferences(
         val filterDownloaded: TriState,
@@ -631,6 +635,7 @@ class UpdatesScreenModel(
         val isLoading: Boolean = true,
         val hasActiveFilters: Boolean = false,
         val items: PersistentList<UpdatesItem> = persistentListOf(),
+        val searchQuery: String? = null,
         // KMK -->
         val expandedState: Set<String> = persistentSetOf(),
         val consolidateUpdates: Boolean = true,
@@ -641,16 +646,34 @@ class UpdatesScreenModel(
         val selectionMode = selected.isNotEmpty()
 
         fun getUiModel(): List<UpdatesUiModel> {
-            // KMK -->
-            return items
-                .groupBy { it.update.dateFetch.toLocalDate() }
-                .flatMap { (date, mangas) ->
-                    val mangaGroups = mangas.groupBy { it.update.mangaId }
-                    val header = UpdatesUiModel.Header(date, mangaGroups.size)
+            val query = searchQuery?.trim()?.lowercase()
+            val filteredItems = if (query.isNullOrEmpty()) {
+                items
+            } else {
+                items.filter {
+                    it.update.mangaTitle.lowercase().contains(query) ||
+                        it.update.chapterName.lowercase().contains(query)
+                }
+            }
+
+            // Deduplicate across dates by grouping by mangaId first:
+            // Every manga appears ONCE, anchored to its newest chapter date (maxOf dateFetch).
+            val mangaGroups = filteredItems.groupBy { it.update.mangaId }
+            val mangasByLatestDate = mangaGroups.values
+                .map { chapters ->
+                    val maxDate = chapters.maxOf { it.update.dateFetch }
+                    maxDate to chapters
+                }
+                .groupBy { (maxDate, _) -> maxDate.toLocalDate() }
+                .toSortedMap(compareByDescending { it })
+
+            return mangasByLatestDate
+                .flatMap { (date, mangaList) ->
+                    val header = UpdatesUiModel.Header(date, mangaList.size)
                     val mangaItems = if (consolidateUpdates) {
-                        mangaGroups.values
-                            .sortedByDescending { chapters -> chapters.maxOf { it.update.dateFetch } }
-                            .flatMap { mangaChapters ->
+                        mangaList
+                            .sortedByDescending { it.first }
+                            .flatMap { (_, mangaChapters) ->
                                 val isExpandable = mangaChapters.size > 1
                                 val isExpanded = expandedState.contains(mangaChapters.first().update.groupByDateAndManga())
                                 val (unread, read) = mangaChapters.partition { !it.update.read }
@@ -670,7 +693,7 @@ class UpdatesScreenModel(
                                 }
                             }
                     } else {
-                        mangaGroups.values.flatMap { mangaChapters ->
+                        mangaList.flatMap { (_, mangaChapters) ->
                             mangaChapters.map { UpdatesUiModel.Item(it, isExpandable = false) }
                         }
                     }
@@ -683,7 +706,6 @@ class UpdatesScreenModel(
                         is UpdatesUiModel.Item -> "item-${it.item.update.mangaId}-${it.item.update.chapterId}"
                     }
                 }
-            // KMK <--
         }
     }
 

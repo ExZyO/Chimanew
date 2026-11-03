@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,11 +17,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -127,55 +134,134 @@ fun AnimeInfoBox(
     val topAlignCover by Injekt.get<UiPreferences>().topAlignCover().collectAsState()
     val coverRatio = remember { mutableFloatStateOf(1f) }
 
+    val chimanewPreferences = remember { Injekt.get<ChimanewPreferences>() }
+    val detailsPageLayout by chimanewPreferences.detailsPageLayout().collectAsState()
+    val detailsBackdropArtwork by chimanewPreferences.detailsBackdropArtwork().collectAsState()
+    val detailsAllowCoverFallback by chimanewPreferences.detailsAllowCoverFallback().collectAsState()
+    val customBannerUrl by chimanewPreferences.animeCustomBannerUrl(anime.id).collectAsState()
+
+    val isBannerDisabled = detailsBackdropArtwork == 3 || customBannerUrl.equals("NONE", ignoreCase = true)
+    val chosenArtworkModel: Any? = when {
+        isBannerDisabled -> null
+        customBannerUrl.equals("COVER", ignoreCase = true) -> anime
+        !customBannerUrl.isNullOrBlank() -> customBannerUrl
+        detailsBackdropArtwork == 2 -> anime
+        detailsAllowCoverFallback -> anime
+        else -> null
+    }
+
+    val backgroundColor = MaterialTheme.colorScheme.background
+
     Box(modifier = modifier) {
-        // Backdrop
-        val backdropGradientColors = listOf(
-            Color.Transparent,
-            MaterialTheme.colorScheme.background,
-        )
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(anime)
-                .useBackground(true)
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            onSuccess = { result ->
-                val image = result.result.image
-                coverRatio.floatValue = image.height.toFloat() / image.width
-            },
-            modifier = Modifier
-                .matchParentSize()
-                .drawWithContent {
-                    drawContent()
+        if (detailsPageLayout == 0) {
+            // Mode 0: Nuvio Hero Edge-to-Edge with 7-Stop Silk Bottom Dissolve
+            if (chosenArtworkModel != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(chosenArtworkModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.Center,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .alpha(0.88f),
+                )
+
+                Canvas(modifier = Modifier.matchParentSize()) {
                     drawRect(
                         brush = Brush.verticalGradient(
-                            colors = backdropGradientColors,
-                            startY = size.height / 2,
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.70f),
+                                Color.Black.copy(alpha = 0.20f),
+                                Color.Transparent,
+                            ),
+                            endY = (appBarPadding.toPx() + 20.dp.toPx()).coerceAtLeast(140f),
+                        ),
+                    )
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.00f to Color.Transparent,
+                                0.16f to backgroundColor.copy(alpha = 0.04f),
+                                0.32f to backgroundColor.copy(alpha = 0.14f),
+                                0.50f to backgroundColor.copy(alpha = 0.34f),
+                                0.68f to backgroundColor.copy(alpha = 0.62f),
+                                0.84f to backgroundColor.copy(alpha = 0.84f),
+                                1.00f to backgroundColor,
+                            ),
+                            startY = size.height * 0.25f,
+                            endY = size.height,
                         ),
                     )
                 }
-                .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.4f))
-                .blur(7.dp)
-                .alpha(0.24f),
-        )
+            }
+        } else {
+            // Traditional blurred backdrop
+            if (chosenArtworkModel != null) {
+                val backdropGradientColors = listOf(
+                    Color.Transparent,
+                    backgroundColor,
+                )
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(chosenArtworkModel)
+                        .useBackground(true)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    onSuccess = { result ->
+                        val image = result.result.image
+                        coverRatio.floatValue = image.height.toFloat() / image.width
+                    },
+                    modifier = Modifier
+                        .matchParentSize()
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = backdropGradientColors,
+                                    startY = size.height / 2,
+                                ),
+                            )
+                        }
+                        .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.4f))
+                        .blur(7.dp)
+                        .alpha(0.24f),
+                )
+            }
+        }
 
         // Anime & source info
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             if (!isTabletUi) {
-                AnimeAndSourceTitlesSmall(
-                    appBarPadding = appBarPadding,
-                    anime = anime,
-                    sourceName = sourceName,
-                    isStubSource = isStubSource,
-                    onCoverClick = onCoverClick,
-                    doSearch = doSearch,
-                    coverRatio = coverRatio,
-                    usePanoramaCover = usePanoramaCover,
-                    topAlignCover = topAlignCover,
-                    onCoverLoaded = onCoverLoaded,
-                )
+                if (detailsPageLayout == 0) {
+                    AnimeAndSourceTitlesNuvioHero(
+                        appBarPadding = appBarPadding,
+                        anime = anime,
+                        sourceName = sourceName,
+                        isStubSource = isStubSource,
+                        onCoverClick = onCoverClick,
+                        doSearch = doSearch,
+                        coverRatio = coverRatio,
+                        onCoverLoaded = onCoverLoaded,
+                    )
+                } else {
+                    AnimeAndSourceTitlesSmall(
+                        appBarPadding = appBarPadding,
+                        anime = anime,
+                        sourceName = sourceName,
+                        isStubSource = isStubSource,
+                        onCoverClick = onCoverClick,
+                        doSearch = doSearch,
+                        coverRatio = coverRatio,
+                        usePanoramaCover = usePanoramaCover,
+                        topAlignCover = topAlignCover,
+                        onCoverLoaded = onCoverLoaded,
+                    )
+                }
             } else {
                 AnimeAndSourceTitlesLarge(
                     appBarPadding = appBarPadding,
@@ -442,6 +528,58 @@ private fun AnimeAndSourceTitlesLarge(
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
+        AnimeContentInfo(
+            title = anime.title,
+            author = anime.author,
+            artist = anime.artist,
+            status = anime.status,
+            sourceName = sourceName,
+            isStubSource = isStubSource,
+            doSearch = doSearch,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun AnimeAndSourceTitlesNuvioHero(
+    appBarPadding: Dp,
+    anime: Anime,
+    sourceName: String,
+    isStubSource: Boolean,
+    onCoverClick: () -> Unit,
+    doSearch: (query: String, global: Boolean) -> Unit,
+    coverRatio: MutableFloatState,
+    onCoverLoaded: (DomainAnimeCover) -> Unit = {},
+) {
+    val coverData = anime.asAnimeCover()
+    val onCoverLoadedInternal = { _: DomainAnimeCover, result: AsyncImagePainter.State.Success ->
+        val image = result.result.image
+        coverRatio.floatValue = image.height.toFloat() / image.width
+        onCoverLoaded(coverData)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, top = appBarPadding + 20.dp, end = 20.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        AnimeCover.Book(
+            modifier = Modifier
+                .width(112.dp)
+                .aspectRatio(2f / 3f)
+                .shadow(16.dp, RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp)),
+            data = coverData,
+            contentDescription = stringResource(MR.strings.manga_cover),
+            onClick = onCoverClick,
+            onCoverLoaded = onCoverLoadedInternal,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
         AnimeContentInfo(
             title = anime.title,
             author = anime.author,

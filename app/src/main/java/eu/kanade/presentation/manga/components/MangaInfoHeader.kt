@@ -248,13 +248,28 @@ fun MangaInfoBox(
         customBannerUrl.equals("COVER", ignoreCase = true) -> manga
         !customBannerUrl.isNullOrBlank() -> customBannerUrl
         !useAnilistArtwork -> if (detailsAllowCoverFallback) manga else null
-        detailsBackdropArtwork == 0 && !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
-        detailsBackdropArtwork == 1 && hasCustomCover -> manga
-        detailsBackdropArtwork == 1 && !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
+        detailsBackdropArtwork == 0 -> {
+            if (!unifiedArtwork?.bannerUrl.isNullOrBlank()) {
+                unifiedArtwork!!.bannerUrl!!
+            } else if (detailsAllowCoverFallback) {
+                manga
+            } else {
+                null
+            }
+        }
+        detailsBackdropArtwork == 1 -> {
+            if (hasCustomCover) {
+                manga
+            } else if (!unifiedArtwork?.posterUrl.isNullOrBlank()) {
+                unifiedArtwork!!.posterUrl!!
+            } else if (detailsAllowCoverFallback) {
+                manga
+            } else {
+                null
+            }
+        }
         detailsBackdropArtwork == 2 -> manga
         !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
-        detailsAllowCoverFallback && hasCustomCover -> manga
-        !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
         detailsAllowCoverFallback -> manga
         else -> null
     }

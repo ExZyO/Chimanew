@@ -592,11 +592,16 @@ class AnimeUpdatesScreenModel(
         libraryPreferences.newAnimeUpdatesCount().set(0)
     }
 
+    fun setSearchQuery(query: String?) {
+        mutableState.update { it.copy(searchQuery = query) }
+    }
+
     @Immutable
     data class State(
         val isLoading: Boolean = true,
         val hasActiveFilters: Boolean = false,
         val items: PersistentList<AnimeUpdatesItem> = persistentListOf(),
+        val searchQuery: String? = null,
         val expandedState: Set<String> = persistentSetOf(),
         val consolidateUpdates: Boolean = true,
         val dialog: Dialog? = null,
@@ -605,15 +610,34 @@ class AnimeUpdatesScreenModel(
         val selectionMode = selected.isNotEmpty()
 
         fun getUiModel(): List<AnimeUpdatesUiModel> {
-            return items
-                .groupBy { it.update.dateFetch.toLocalDate() }
-                .flatMap { (date, animes) ->
-                    val animeGroups = animes.groupBy { it.update.animeId }
-                    val header = AnimeUpdatesUiModel.Header(date, animeGroups.size)
+            val query = searchQuery?.trim()?.lowercase()
+            val filteredItems = if (query.isNullOrEmpty()) {
+                items
+            } else {
+                items.filter {
+                    it.update.animeTitle.lowercase().contains(query) ||
+                        it.update.episodeName.lowercase().contains(query)
+                }
+            }
+
+            // Deduplicate across dates by grouping by animeId first:
+            // Every anime appears ONCE, anchored to its newest episode date (maxOf dateFetch).
+            val animeGroups = filteredItems.groupBy { it.update.animeId }
+            val animesByLatestDate = animeGroups.values
+                .map { episodes ->
+                    val maxDate = episodes.maxOf { it.update.dateFetch }
+                    maxDate to episodes
+                }
+                .groupBy { (maxDate, _) -> maxDate.toLocalDate() }
+                .toSortedMap(compareByDescending { it })
+
+            return animesByLatestDate
+                .flatMap { (date, animeList) ->
+                    val header = AnimeUpdatesUiModel.Header(date, animeList.size)
                     val animeItems = if (consolidateUpdates) {
-                        animeGroups.values
-                            .sortedByDescending { episodes -> episodes.maxOf { it.update.dateFetch } }
-                            .flatMap { animeEpisodes ->
+                        animeList
+                            .sortedByDescending { it.first }
+                            .flatMap { (_, animeEpisodes) ->
                                 val isExpandable = animeEpisodes.size > 1
                                 val isExpanded = expandedState.contains(animeEpisodes.first().update.groupByDateAndAnime())
                                 val (unseen, seen) = animeEpisodes.partition { !it.update.seen }
@@ -633,7 +657,7 @@ class AnimeUpdatesScreenModel(
                                 }
                             }
                     } else {
-                        animeGroups.values.flatMap { animeEpisodes ->
+                        animeList.flatMap { (_, animeEpisodes) ->
                             animeEpisodes.map { AnimeUpdatesUiModel.Item(it, isExpandable = false) }
                         }
                     }

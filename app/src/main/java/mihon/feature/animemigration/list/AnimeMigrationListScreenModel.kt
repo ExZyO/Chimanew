@@ -168,10 +168,11 @@ class AnimeMigrationListScreenModel(
             val result = try {
                 anime.searchingJob = anime.migrationScope.async {
                     if (prioritizeByChapters) {
-                        val sourceSemaphore = Semaphore(5)
+                        val sourceSemaphore = Semaphore(2)
                         sources.map { source ->
                             async innerAsync@{
                                 sourceSemaphore.withPermit {
+                                    kotlinx.coroutines.delay(200L)
                                     val result = searchSource(anime.anime, source, deepSearchMode)
                                     if (result == null || result.second.episodeCount == 0) return@innerAsync null
                                     result
