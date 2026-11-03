@@ -156,6 +156,7 @@ fun ArtworkPickerBottomSheet(
             }
             isLoading = false
             if (force) {
+                context.imageLoader.memoryCache?.clear()
                 context.toast("Artwork refreshed")
             }
         }
@@ -351,8 +352,13 @@ fun ArtworkPickerBottomSheet(
                                     isApplying = true
                                     try {
                                         withContext(Dispatchers.IO) {
+                                            val fullResUrl = if (coverUrl.contains("uploads.mangadex.org") && coverUrl.endsWith(".512.jpg")) {
+                                                coverUrl.removeSuffix(".512.jpg")
+                                            } else {
+                                                coverUrl
+                                            }
                                             val diskCache = context.imageLoader.diskCache
-                                            val snapshot = diskCache?.openSnapshot(coverUrl)
+                                            val snapshot = diskCache?.openSnapshot(fullResUrl) ?: diskCache?.openSnapshot(coverUrl)
                                             if (snapshot != null) {
                                                 try {
                                                     diskCache.fileSystem.source(snapshot.data).buffer().inputStream().use { stream ->
@@ -368,7 +374,11 @@ fun ArtworkPickerBottomSheet(
                                                 }
                                             } else {
                                                 val client = Injekt.get<NetworkHelper>().client
-                                                val response = client.newCall(GET(coverUrl)).awaitSuccess()
+                                                val response = try {
+                                                    client.newCall(GET(fullResUrl)).awaitSuccess()
+                                                } catch (_: Exception) {
+                                                    client.newCall(GET(coverUrl)).awaitSuccess()
+                                                }
                                                 response.body.byteStream().use { stream ->
                                                     manga.editCover(
                                                         coverManager = Injekt.get<LocalCoverManager>(),
@@ -382,8 +392,8 @@ fun ArtworkPickerBottomSheet(
                                             val setCustomMangaInfo = Injekt.get<SetCustomMangaInfo>()
                                             val currentInfo = getCustomMangaInfo.get(manga.id)
                                             setCustomMangaInfo.set(
-                                                currentInfo?.copy(thumbnailUrl = coverUrl)
-                                                    ?: CustomMangaInfo(id = manga.id, title = null, thumbnailUrl = coverUrl),
+                                                currentInfo?.copy(thumbnailUrl = fullResUrl)
+                                                    ?: CustomMangaInfo(id = manga.id, title = null, thumbnailUrl = fullResUrl),
                                             )
                                         }
                                         context.imageLoader.memoryCache?.clear()

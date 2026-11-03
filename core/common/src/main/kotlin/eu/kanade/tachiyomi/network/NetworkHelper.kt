@@ -92,9 +92,26 @@ import kotlin.random.Random
                                 .build()
                         } else request
                     }
+                    // EaZy Nuvio+ / Chimanew: MangaDex CDN & API require non-browser User-Agent to avoid POWBlock challenge
+                    host.endsWith("mangadex.org") -> {
+                        val builder = request.newBuilder()
+                            .header("User-Agent", MANGADEX_USER_AGENT)
+                        if (host == "uploads.mangadex.org") {
+                            builder.header("Referer", "https://mangadex.org/")
+                        }
+                        builder.build()
+                    }
                     else -> request
                 }
-                chain.proceed(newRequest)
+                val response = chain.proceed(newRequest)
+                if (host == "uploads.mangadex.org" && response.isSuccessful) {
+                    val contentType = response.header("Content-Type")
+                    if (contentType != null && contentType.contains("text/html", ignoreCase = true)) {
+                        response.close()
+                        throw IOException("MangaDex anti-bot verification returned HTML instead of image")
+                    }
+                }
+                response
             }
             // Ensure the User-Agent that solved Cloudflare is also sent with cf_clearance at the wire level
             .addNetworkInterceptor { chain ->
@@ -144,30 +161,6 @@ import kotlin.random.Random
             .addInterceptor(
                 CloudflareInterceptor(context, cookieJar, ::defaultUserAgentProvider),
             )
-            // KMK -->
-            // FIXME (KMK): Dirty hack to fetch MangaDex covers
-            .addInterceptor { chain ->
-                val originalRequest = chain.request()
-                val url = originalRequest.url
-
-                if (!delegatedSourcesEnabled ||
-                    url.host != "uploads.mangadex.org" ||
-                    !url.encodedPath.startsWith("/covers/")
-                ) {
-                    return@addInterceptor chain.proceed(originalRequest)
-                }
-
-                val newRequest = originalRequest
-                    .newBuilder()
-                    .header("Referer", "https://mangadex.org/")
-                    .header("Origin", "https://mangadex.org")
-                    .header("sec-fetch-dest", "image")
-                    .header("sec-fetch-mode", "no-cors")
-                    .build()
-
-                chain.proceed(newRequest)
-            }
-            // KMK <--
             .build()
     }
 
@@ -288,6 +281,8 @@ import kotlin.random.Random
     fun defaultUserAgentProvider() = preferences.defaultUserAgent().get().trim()
 
     companion object {
+        const val MANGADEX_USER_AGENT = "Chimanew (https://github.com/ExZyO/Chimanew)"
+
         // KMK -->
         private const val MAX_RETRY = 5
         // KMK <--

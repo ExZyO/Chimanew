@@ -555,8 +555,9 @@ class ArtworkWaterfallRepository(
             }
         } catch (_: Exception) {}
         anilistRepo.clearCache()
+        mangadexRepo.clearCache()
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Cache") {
-            "Cleared entire persistent artwork waterfall cache and AniList disk cache"
+            "Cleared entire persistent artwork waterfall cache, AniList cache, and MangaDex cache"
         }
     }
 
@@ -1090,7 +1091,9 @@ class ArtworkWaterfallRepository(
 
             mdArt?.covers?.let { mdCovers ->
                 mdCovers.forEach { c ->
-                    val sub = listOfNotNull(c.volume?.let { "Vol. $it" }, c.locale).joinToString(" ").ifBlank { null }
+                    val volPart = c.volume?.takeIf { it.isNotBlank() && !it.equals("none", ignoreCase = true) }?.let { "Vol. $it" }
+                    val locPart = c.locale?.takeIf { it.isNotBlank() }?.uppercase()
+                    val sub = listOfNotNull(volPart, locPart).joinToString(" ").ifBlank { null }
                     covers.add(ArtworkCoverOption(url = c.url, source = "MangaDex", subtitle = sub))
                 }
             }
