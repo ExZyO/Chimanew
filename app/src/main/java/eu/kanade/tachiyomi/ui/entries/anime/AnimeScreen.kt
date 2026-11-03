@@ -44,6 +44,9 @@ import eu.kanade.presentation.entries.anime.SeasonSettingsDialog
 import eu.kanade.presentation.entries.anime.components.AnimeArtworkPickerBottomSheet
 import eu.kanade.presentation.entries.anime.components.AnimeImagesDialog
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import coil3.imageLoader
 import eu.kanade.presentation.entries.anime.components.AnimeScanlatorFilterDialog
 import eu.kanade.presentation.entries.components.DeleteItemsDialog

@@ -445,7 +445,7 @@ class ArtworkWaterfallRepository(
         var effectiveBanner: String? = when {
             customBanner == null -> null
             customBanner.equals("NONE", ignoreCase = true) -> null
-            customBanner.equals("COVER", ignoreCase = true) -> effectiveCover ?: defaultCoverUrl
+            customBanner.equals("COVER", ignoreCase = true) -> defaultCoverUrl
             else -> customBanner
         }
         if (effectiveBanner.isNullOrBlank() && !isBannerDisabled) {

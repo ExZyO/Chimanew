@@ -9,6 +9,9 @@ import eu.kanade.presentation.entries.novel.components.NovelArtworkPickerBottomS
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_NOVEL
+import eu.kanade.tachiyomi.util.system.toast
+import logcat.LogPriority
+import logcat.logcat
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle

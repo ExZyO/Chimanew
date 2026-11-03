@@ -1,7 +1,8 @@
-# What's New in Chimanew v2.6.66
+# What's New in Chimanew v2.6.67
 
 ### CI Build & Compiler Fixes
-* **Resolved DiskCache Nullability Compilation Error**: Fixed nullable receiver access on `context.imageLoader.diskCache` in artwork pickers when saving cover stream snapshots.
+* **Resolved Screen and Sheet Symbol Imports**: Added missing graphics, utility, and dependency-injection imports across AnimeScreen, NovelDetailScreen, AnimeArtworkPickerBottomSheet, and NovelArtworkPickerBottomSheet.
+* **Artwork Repository Fallback Resolution**: Corrected cover fallback reference to defaultCoverUrl when resolving custom banner values in ArtworkWaterfallRepository.
 
 ### Hero & Detail Banner System
 * **Instant In-Place Hero Banner Updates**: Updating, picking, or clearing a banner now reflects instantly in the Home Hero carousel without re-shuffling or re-rolling active hero entries.
