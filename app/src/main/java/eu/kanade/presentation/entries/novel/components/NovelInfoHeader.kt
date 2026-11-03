@@ -62,7 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import tachiyomi.presentation.core.util.collectAsState
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -126,12 +126,13 @@ fun NovelInfoBox(
     val detailsBackdropArtwork by chimanewPreferences.detailsBackdropArtwork().collectAsState()
     val detailsAllowCoverFallback by chimanewPreferences.detailsAllowCoverFallback().collectAsState()
     val customBannerUrl by chimanewPreferences.novelCustomBannerUrl(novel.id).collectAsState()
+    val banner = customBannerUrl
 
-    val isBannerDisabled = detailsBackdropArtwork == 3 || customBannerUrl.equals("NONE", ignoreCase = true)
+    val isBannerDisabled = detailsBackdropArtwork == 3 || banner.equals("NONE", ignoreCase = true)
     val chosenArtworkModel: Any? = when {
         isBannerDisabled -> null
-        customBannerUrl.equals("COVER", ignoreCase = true) -> novel.thumbnail_url
-        !customBannerUrl.isNullOrBlank() -> customBannerUrl
+        banner.equals("COVER", ignoreCase = true) -> novel.thumbnail_url
+        !banner.isNullOrBlank() -> banner
         detailsBackdropArtwork == 2 -> novel.thumbnail_url
         detailsAllowCoverFallback -> novel.thumbnail_url
         else -> null

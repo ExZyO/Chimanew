@@ -1,7 +1,9 @@
-# What's New in Chimanew v2.6.68
+# What's New in Chimanew v2.6.69
 
-### CI & Build Fixes
-* **Compiler Error Resolution**: Fixed logcat method signature in NovelDetailScreen by switching from logger package to core common logcat utility.
+### CI & Compiler Fixes
+* **Resolved State Property Delegates**: Added missing `setValue` import in UpdatesTab for search query state delegation and switched to `tachiyomi.presentation.core.util.collectAsState` in NovelInfoHeader.
+* **Atomic Property Access**: Updated progress counter access to use `AtomicInt.load()` in LibraryUpdateJob.
+* **Smart-Cast Safety**: Ensured delegated custom banner properties are bound locally prior to null checks in NovelInfoHeader and AnimeInfoHeader.
 
 ### Visual Parity: Anime & Novel Nuvio Hero Mode
 * **Modern Centered Layout**: Brought the official Nuvio Hero Mode 0 design to both Anime and Novel detail pages, featuring centered portrait cover styling, elevated drop shadow, rounded corners, and clean typography.

@@ -596,7 +596,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                     return@forEachIndexed
                                 }
 
-                                val currentIdx = progressCount.get() + 1
+                                val currentIdx = progressCount.load() + 1
                                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
                                     "[$currentIdx/${mangaToUpdate.size}] Checking '${manga.title}'..."
                                 }

@@ -139,12 +139,13 @@ fun AnimeInfoBox(
     val detailsBackdropArtwork by chimanewPreferences.detailsBackdropArtwork().collectAsState()
     val detailsAllowCoverFallback by chimanewPreferences.detailsAllowCoverFallback().collectAsState()
     val customBannerUrl by chimanewPreferences.animeCustomBannerUrl(anime.id).collectAsState()
+    val banner = customBannerUrl
 
-    val isBannerDisabled = detailsBackdropArtwork == 3 || customBannerUrl.equals("NONE", ignoreCase = true)
+    val isBannerDisabled = detailsBackdropArtwork == 3 || banner.equals("NONE", ignoreCase = true)
     val chosenArtworkModel: Any? = when {
         isBannerDisabled -> null
-        customBannerUrl.equals("COVER", ignoreCase = true) -> anime
-        !customBannerUrl.isNullOrBlank() -> customBannerUrl
+        banner.equals("COVER", ignoreCase = true) -> anime
+        !banner.isNullOrBlank() -> banner
         detailsBackdropArtwork == 2 -> anime
         detailsAllowCoverFallback -> anime
         else -> null
