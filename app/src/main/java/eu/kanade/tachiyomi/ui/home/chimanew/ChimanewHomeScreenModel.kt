@@ -31,6 +31,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -174,6 +175,13 @@ class ChimanewHomeScreenModel(
     companion object {
         private val cachedMediaStates = ConcurrentHashMap<Int, State>()
         val artworkRefreshTrigger = MutableStateFlow(0L)
+        val bannerUpdateEvent = MutableSharedFlow<BannerUpdateEvent>(extraBufferCapacity = 8)
+
+        data class BannerUpdateEvent(val id: Long, val bannerUrl: String?, val mediaType: Int)
+
+        fun notifyBannerUpdated(id: Long, bannerUrl: String?, mediaType: Int) {
+            bannerUpdateEvent.tryEmit(BannerUpdateEvent(id, bannerUrl, mediaType))
+        }
 
         fun triggerRefresh() {
             cachedMediaStates.clear()
@@ -182,18 +190,18 @@ class ChimanewHomeScreenModel(
     }
 
     private val attemptedHeroTitles = ConcurrentHashMap.newKeySet<String>()
-    private var persistentHeroIds = emptyList<Long>()
+    private val persistentHeroIdsByMedia = ConcurrentHashMap<Int, List<Long>>()
 
-    private fun selectHeroItems(candidates: List<HomeMangaItem>, maxCount: Int = 7): List<HomeMangaItem> {
+    private fun selectHeroItems(candidates: List<HomeMangaItem>, mediaType: Int = mutableState.value.activeMedia, maxCount: Int = 7): List<HomeMangaItem> {
         if (candidates.isEmpty()) return emptyList()
-        val saved = persistentHeroIds
-        if (saved.isNotEmpty()) {
+        val saved = persistentHeroIdsByMedia[mediaType]
+        if (!saved.isNullOrEmpty()) {
             val byId = candidates.associateBy { it.mangaId }
             val matched = saved.mapNotNull { byId[it] }
             if (matched.isNotEmpty()) return matched
         }
         val selected = candidates.shuffled().take(maxCount)
-        persistentHeroIds = selected.map { it.mangaId }
+        persistentHeroIdsByMedia[mediaType] = selected.map { it.mangaId }
         return selected
     }
 
@@ -216,7 +224,6 @@ class ChimanewHomeScreenModel(
         if (mutableState.value.activeMedia == mediaType) return
         logcat(LogPriority.INFO) { "[NUVIO_HOME] [MediaSwitcher] Switching active media to $mediaType" }
         preferences.homeActiveMedia().set(mediaType)
-        persistentHeroIds = emptyList()
         val cached = cachedMediaStates[mediaType]
         if (cached != null) {
             mutableState.update { cached.copy(activeMedia = mediaType, isLoading = false) }
@@ -228,7 +235,7 @@ class ChimanewHomeScreenModel(
     fun refreshHero() {
         screenModelScope.launchIO {
             mutableState.update { it.copy(isRefreshing = true) }
-            persistentHeroIds = emptyList()
+            persistentHeroIdsByMedia.remove(mutableState.value.activeMedia)
             discoveryRepository.invalidateCache()
             triggerRefresh()
             delay(800L)
@@ -236,7 +243,51 @@ class ChimanewHomeScreenModel(
         }
     }
 
+    private fun updateItemBannerInPlace(id: Long, bannerUrl: String?, mediaType: Int) {
+        val effectiveUrl = bannerUrl?.takeIf { it.isNotBlank() }
+            ?: when (mediaType) {
+                MEDIA_TYPE_ANIME -> preferences.animeCustomHeroBannerUrl(id).get().takeIf { it.isNotBlank() }
+                    ?: preferences.animeCustomBannerUrl(id).get().takeIf { it.isNotBlank() }
+                MEDIA_TYPE_NOVEL -> preferences.novelCustomHeroBannerUrl(id).get().takeIf { it.isNotBlank() }
+                    ?: preferences.novelCustomBannerUrl(id).get().takeIf { it.isNotBlank() }
+                else -> preferences.mangaCustomHeroBannerUrl(id).get().takeIf { it.isNotBlank() }
+                    ?: preferences.mangaCustomBannerUrl(id).get().takeIf { it.isNotBlank() }
+            }
+
+        mutableState.update { currentState ->
+            if (currentState.activeMedia != mediaType) return@update currentState
+
+            val updatedHeroItems = currentState.heroItems.map { item ->
+                if (item.mangaId == id) {
+                    val fallbackBanner = effectiveUrl ?: artworkWaterfallRepository.getCached(item.title, mangaId = id, mediaType = mediaType)?.bannerUrl
+                    item.copy(highResBannerUrl = fallbackBanner)
+                } else item
+            }
+
+            val updatedShelves = currentState.shelves.map { shelf ->
+                shelf.copy(
+                    items = shelf.items.map { item ->
+                        if (item.mangaId == id) {
+                            val fallbackBanner = effectiveUrl ?: artworkWaterfallRepository.getCached(item.title, mangaId = id, mediaType = mediaType)?.bannerUrl
+                            item.copy(highResBannerUrl = fallbackBanner)
+                        } else item
+                    }
+                )
+            }
+
+            currentState.copy(
+                heroItems = updatedHeroItems,
+                shelves = updatedShelves,
+            )
+        }
+    }
+
     init {
+        screenModelScope.launchIO {
+            bannerUpdateEvent.collect { event ->
+                updateItemBannerInPlace(event.id, event.bannerUrl, event.mediaType)
+            }
+        }
         screenModelScope.launchIO {
             preferences.categoryArtworkRulesUpdated().changes().collectLatest {
                 artworkRefreshTrigger.value = System.currentTimeMillis()
@@ -336,12 +387,13 @@ class ChimanewHomeScreenModel(
                 inLibrary: Boolean = false,
                 primaryTrackStatus: Long? = null,
             ): HomeMangaItem {
-                val cachedArt = artworkWaterfallRepository.getCached(title, mediaType = MEDIA_TYPE_MANGA)
+                val cachedArt = artworkWaterfallRepository.getCached(title, mangaId = mangaId, mediaType = MEDIA_TYPE_MANGA)
+                val customHeroBanner = preferences.mangaCustomHeroBannerUrl(mangaId).get().takeIf { it.isNotBlank() }
                 return HomeMangaItem(
                     mangaId = mangaId,
                     title = title,
                     coverData = coverData,
-                    highResBannerUrl = highResBannerUrl ?: cachedArt?.bannerUrl,
+                    highResBannerUrl = customHeroBanner ?: highResBannerUrl ?: cachedArt?.bannerUrl,
                     highResCoverUrl = highResCoverUrl ?: cachedArt?.posterUrl,
                     communityRatings = cachedArt?.ratings ?: emptyList(),
                     lastChapterNumber = lastChapterNumber,
@@ -457,7 +509,7 @@ class ChimanewHomeScreenModel(
                             inLibrary = true,
                         )
                     }
-                    selectHeroItems(items)
+                    selectHeroItems(items, mediaType = MEDIA_TYPE_MANGA)
                 }
                 2 -> {
                     // Trackers
@@ -467,14 +519,14 @@ class ChimanewHomeScreenModel(
                     if ("plan_to_read" in chosen) pool.addAll(planToReadList)
                     if ("on_hold" in chosen) pool.addAll(onHoldList)
                     if ("completed" in chosen) pool.addAll(completedList)
-                    selectHeroItems(pool.distinctBy { it.mangaId })
+                    selectHeroItems(pool.distinctBy { it.mangaId }, mediaType = MEDIA_TYPE_MANGA)
                 }
-                3 -> selectHeroItems(trendingMangaItems)
-                4 -> selectHeroItems(trendingManhwaItems)
+                3 -> selectHeroItems(trendingMangaItems, mediaType = MEDIA_TYPE_MANGA)
+                4 -> selectHeroItems(trendingManhwaItems, mediaType = MEDIA_TYPE_MANGA)
                 else -> {
                     // History with library fallback
                     if (continueReadingItems.isNotEmpty()) {
-                        selectHeroItems(continueReadingItems.take(15))
+                        selectHeroItems(continueReadingItems.take(15), mediaType = MEDIA_TYPE_MANGA)
                     } else {
                         val libItems = data.libraryList.map { lib ->
                             createItem(
@@ -489,7 +541,7 @@ class ChimanewHomeScreenModel(
                                 inLibrary = true,
                             )
                         }
-                        selectHeroItems(libItems)
+                        selectHeroItems(libItems, mediaType = MEDIA_TYPE_MANGA)
                     }
                 }
             }
@@ -656,12 +708,13 @@ class ChimanewHomeScreenModel(
                 description: String? = null,
                 inLibrary: Boolean = false,
             ): HomeMangaItem {
-                val cachedArt = artworkWaterfallRepository.getCached(title, mediaType = MEDIA_TYPE_ANIME)
+                val cachedArt = artworkWaterfallRepository.getCached(title, mangaId = animeId, mediaType = MEDIA_TYPE_ANIME)
+                val customHeroBanner = preferences.animeCustomHeroBannerUrl(animeId).get().takeIf { it.isNotBlank() }
                 return HomeMangaItem(
                     mangaId = animeId,
                     title = title,
                     coverData = coverData,
-                    highResBannerUrl = cachedArt?.bannerUrl,
+                    highResBannerUrl = customHeroBanner ?: cachedArt?.bannerUrl,
                     highResCoverUrl = cachedArt?.posterUrl,
                     communityRatings = cachedArt?.ratings ?: emptyList(),
                     lastChapterNumber = lastEpisodeNumber,
@@ -768,7 +821,7 @@ class ChimanewHomeScreenModel(
                             inLibrary = true,
                         )
                     }
-                    selectHeroItems(items)
+                    selectHeroItems(items, mediaType = MEDIA_TYPE_ANIME)
                 }
                 2 -> {
                     // Trackers
@@ -778,13 +831,13 @@ class ChimanewHomeScreenModel(
                     if ("plan_to_read" in chosen) pool.addAll(planToWatchList)
                     if ("on_hold" in chosen) pool.addAll(onHoldList)
                     if ("completed" in chosen) pool.addAll(completedList)
-                    selectHeroItems(pool.distinctBy { it.mangaId })
+                    selectHeroItems(pool.distinctBy { it.mangaId }, mediaType = MEDIA_TYPE_ANIME)
                 }
-                3 -> selectHeroItems(trendingAnimeItems)
+                3 -> selectHeroItems(trendingAnimeItems, mediaType = MEDIA_TYPE_ANIME)
                 else -> {
                     // History with library fallback
                     if (continueWatchingItems.isNotEmpty()) {
-                        selectHeroItems(continueWatchingItems.take(15))
+                        selectHeroItems(continueWatchingItems.take(15), mediaType = MEDIA_TYPE_ANIME)
                     } else {
                         val libItems = data.libraryList.map { lib ->
                             createAnimeItem(
@@ -799,7 +852,7 @@ class ChimanewHomeScreenModel(
                                 inLibrary = true,
                             )
                         }
-                        selectHeroItems(libItems)
+                        selectHeroItems(libItems, mediaType = MEDIA_TYPE_ANIME)
                     }
                 }
             }
@@ -957,12 +1010,13 @@ class ChimanewHomeScreenModel(
                 description: String? = null,
                 inLibrary: Boolean = false,
             ): HomeMangaItem {
-                val cachedArt = artworkWaterfallRepository.getCached(title, mediaType = MEDIA_TYPE_NOVEL)
+                val cachedArt = artworkWaterfallRepository.getCached(title, mangaId = novelId, mediaType = MEDIA_TYPE_NOVEL)
+                val customHeroBanner = preferences.novelCustomHeroBannerUrl(novelId).get().takeIf { it.isNotBlank() }
                 return HomeMangaItem(
                     mangaId = novelId,
                     title = title,
                     coverData = thumbnailUrl ?: "",
-                    highResBannerUrl = cachedArt?.bannerUrl,
+                    highResBannerUrl = customHeroBanner ?: cachedArt?.bannerUrl,
                     highResCoverUrl = cachedArt?.posterUrl ?: thumbnailUrl,
                     communityRatings = cachedArt?.ratings ?: emptyList(),
                     lastChapterNumber = lastChapterNumber,
@@ -1034,15 +1088,15 @@ class ChimanewHomeScreenModel(
                             inLibrary = true,
                         )
                     }
-                    selectHeroItems(items)
+                    selectHeroItems(items, mediaType = MEDIA_TYPE_NOVEL)
                 }
-                2 -> selectHeroItems(continueReadingItems)
-                3 -> selectHeroItems(trendingNovelsItems)
+                2 -> selectHeroItems(continueReadingItems, mediaType = MEDIA_TYPE_NOVEL)
+                3 -> selectHeroItems(trendingNovelsItems, mediaType = MEDIA_TYPE_NOVEL)
                 else -> {
                     if (continueReadingItems.isNotEmpty()) {
-                        selectHeroItems(continueReadingItems.take(15))
+                        selectHeroItems(continueReadingItems.take(15), mediaType = MEDIA_TYPE_NOVEL)
                     } else {
-                        selectHeroItems(libraryItems)
+                        selectHeroItems(libraryItems, mediaType = MEDIA_TYPE_NOVEL)
                     }
                 }
             }

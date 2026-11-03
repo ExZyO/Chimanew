@@ -94,6 +94,8 @@ class ChimanewPreferences(
 
     fun detailsBackdropArtwork() = preferenceStore.getInt("pref_chimanew_details_backdrop_artwork", 0)
 
+    fun detailsAllowCoverFallback() = preferenceStore.getBoolean("pref_chimanew_details_allow_cover_fallback", false)
+
     fun detailsPageLayout() = preferenceStore.getInt(
         "pref_chimanew_details_page_layout",
         0, // 0 = Nuvio Hero (Unblocked banner, centered title & genres), 1 = Canvas Stack (Full banner top, cover below), 2 = Feathered Vignette (Full edge-to-edge overlay)
@@ -148,10 +150,12 @@ class ChimanewPreferences(
     fun heroStyleNovel() = preferenceStore.getInt("pref_nuvio_hero_style_novel", 0)
 
     fun animeCustomBannerUrl(animeId: Long) = preferenceStore.getString("pref_chimanew_anime_banner_$animeId", "")
+    fun animeCustomHeroBannerUrl(animeId: Long) = preferenceStore.getString("pref_chimanew_anime_hero_banner_$animeId", "")
     fun animeExcludedCoverSources(animeId: Long) = preferenceStore.getStringSet("pref_chimanew_anime_excluded_cover_sources_$animeId", emptySet())
     fun animeExcludedBannerSources(animeId: Long) = preferenceStore.getStringSet("pref_chimanew_anime_excluded_banner_sources_$animeId", emptySet())
 
     fun novelCustomBannerUrl(novelId: Long) = preferenceStore.getString("pref_chimanew_novel_banner_$novelId", "")
+    fun novelCustomHeroBannerUrl(novelId: Long) = preferenceStore.getString("pref_chimanew_novel_hero_banner_$novelId", "")
     fun novelExcludedCoverSources(novelId: Long) = preferenceStore.getStringSet("pref_chimanew_novel_excluded_cover_sources_$novelId", emptySet())
     fun novelExcludedBannerSources(novelId: Long) = preferenceStore.getStringSet("pref_chimanew_novel_excluded_banner_sources_$novelId", emptySet())
 
@@ -172,6 +176,7 @@ class ChimanewPreferences(
     )
 
     fun mangaCustomBannerUrl(mangaId: Long) = preferenceStore.getString("pref_chimanew_manga_banner_$mangaId", "")
+    fun mangaCustomHeroBannerUrl(mangaId: Long) = preferenceStore.getString("pref_chimanew_manga_hero_banner_$mangaId", "")
 
     // Per-entry artwork source exclusion (covers and banners separated) // EaZy Nuvio+ / Chimanew
     fun mangaExcludedCoverSources(mangaId: Long) = preferenceStore.getStringSet(

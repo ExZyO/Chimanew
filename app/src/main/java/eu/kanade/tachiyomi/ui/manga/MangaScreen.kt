@@ -647,16 +647,38 @@ class MangaScreen(
             }
             MangaScreenModel.Dialog.ArtworkPickerSheet -> {
                 val sm = rememberScreenModel { MangaCoverScreenModel(successState.manga.id) }
+                val chimanewPrefs = remember { Injekt.get<ChimanewPreferences>() }
                 val getContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                     if (uri == null) return@rememberLauncherForActivityResult
                     sm.editCover(context, uri)
                     context.imageLoader.memoryCache?.clear()
                     ChimanewHomeScreenModel.triggerRefresh()
                 }
+                val getBannerContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                    if (uri == null) return@rememberLauncherForActivityResult
+                    try {
+                        val bannerDir = context.filesDir.resolve("custom_banners").apply { mkdirs() }
+                        val destFile = bannerDir.resolve("manga_${successState.manga.id}.jpg")
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        val fileUri = destFile.toURI().toString()
+                        chimanewPrefs.mangaCustomBannerUrl(successState.manga.id).set(fileUri)
+                        context.imageLoader.memoryCache?.clear()
+                        ChimanewHomeScreenModel.notifyBannerUpdated(successState.manga.id, fileUri, eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_MANGA)
+                        context.toast("Custom banner updated")
+                    } catch (e: Exception) {
+                        logcat(LogPriority.ERROR, e) { "Failed to set custom banner" }
+                        context.toast("Failed to set custom banner")
+                    }
+                }
                 ArtworkPickerBottomSheet(
                     manga = successState.manga,
                     onDismissRequest = onDismissRequest,
                     onCustomCoverFilePick = { getContent.launch("image/*") },
+                    onCustomBannerFilePick = { getBannerContent.launch("image/*") },
                     onCoverUpdated = {
                         context.imageLoader.memoryCache?.clear()
                         ChimanewHomeScreenModel.triggerRefresh()

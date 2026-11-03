@@ -1,8 +1,15 @@
-# What's New in Chimanew v2.6.65
+# What's New in Chimanew v2.6.66
 
-### MangaDex Cover and Volume Art Fixes
-* **POWBlock Verification Bypass**: Added dedicated network interceptor for MangaDex CDN and API endpoints (`*.mangadex.org`), replacing generic browser User-Agent with application identity and attaching appropriate referers. This permanently resolves the issue where MangaDex served HTML browser verification challenges instead of JPEG image data, leaving volume cover cards blank.
-* **MangaDex Content-Type Guard**: Intercepts `uploads.mangadex.org` responses to ensure HTML challenge payloads are never misidentified as successful images or cached in image loader disk storage.
-* **Volume Label Formatting**: Cleaned up MangaDex cover subtitle labels in the manual artwork picker, converting language codes to uppercase (for example, Vol. 1 JA, Vol. 2 JA) and hiding empty volume identifiers.
-* **Full-Resolution MangaDex Cover Application**: When applying a selected MangaDex cover from the artwork picker, the app automatically fetches the original full-resolution image instead of the 512px preview thumbnail, with automatic fallback if necessary.
-* **Comprehensive Cache Invalidation**: Extended the Reset Artwork Cache function to fully clear MangaDex memory and identifier caches alongside AniList and image loader caches.
+### CI Build & Compiler Fixes
+* **Resolved DiskCache Nullability Compilation Error**: Fixed nullable receiver access on `context.imageLoader.diskCache` in artwork pickers when saving cover stream snapshots.
+
+### Hero & Detail Banner System
+* **Instant In-Place Hero Banner Updates**: Updating, picking, or clearing a banner now reflects instantly in the Home Hero carousel without re-shuffling or re-rolling active hero entries.
+* **Independent Hero and Detail Banners**: Added dedicated preferences and quick actions ("Apply to Details", "Apply to Hero") allowing Hero carousel banners and entry detail page backdrops to be customized separately.
+* **Custom Banner File Picker**: Added ability to pick and apply custom banner image files directly from local device storage across Manga, Anime, and Light Novels.
+* **Disable Details Banner**: Added option to completely disable top backdrop banners on entry detail pages, cleanly collapsing background imagery without falling back to stretched or blurred covers.
+* **Use Cover as Banner**: Added quick action in the Artwork Picker banners tab to set the entry's cover as the landscape backdrop.
+* **Restored Hub Settings**: Restored missing "Backdrop Artwork Source", "Allow Cover Fallback for Details Banner", "Allow Cropped Fallback in Hero", and "Strict Artwork Requirements" options under the Nuvio Settings Hub.
+
+### MangaDex Cover and Volume Art
+* **Bypass Anti-Bot Verification**: Intercepts `*.mangadex.org` traffic with native application User-Agent to prevent HTML challenges from breaking volume cover loading.

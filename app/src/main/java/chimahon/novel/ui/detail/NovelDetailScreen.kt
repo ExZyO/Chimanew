@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import coil3.imageLoader
 import eu.kanade.presentation.entries.novel.components.NovelArtworkPickerBottomSheet
 import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewHomeScreenModel
+import eu.kanade.tachiyomi.ui.home.chimanew.ChimanewPreferences
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_NOVEL
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -484,10 +486,32 @@ data class NovelDetailScreen(
                     status = state.novel.status.toLong(),
                     favorite = state.novel.favorite,
                 )
+                val preferences = remember { Injekt.get<ChimanewPreferences>() }
+                val getBannerContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                    if (uri == null) return@rememberLauncherForActivityResult
+                    try {
+                        val bannerDir = context.filesDir.resolve("custom_banners").apply { mkdirs() }
+                        val destFile = bannerDir.resolve("novel_${novelObj.id}.jpg")
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        val fileUri = destFile.toURI().toString()
+                        preferences.novelCustomBannerUrl(novelObj.id).set(fileUri)
+                        context.imageLoader.memoryCache?.clear()
+                        ChimanewHomeScreenModel.notifyBannerUpdated(novelObj.id, fileUri, MEDIA_TYPE_NOVEL)
+                        context.toast("Custom banner updated")
+                    } catch (e: Exception) {
+                        logcat(LogPriority.ERROR, e) { "Failed to set custom novel banner" }
+                        context.toast("Failed to set custom banner")
+                    }
+                }
                 NovelArtworkPickerBottomSheet(
                     novel = novelObj,
                     onDismissRequest = { showArtworkPickerSheet = false },
                     onCustomCoverFilePick = { getContent.launch("image/*") },
+                    onCustomBannerFilePick = { getBannerContent.launch("image/*") },
                     onCoverUpdated = {
                         context.imageLoader.memoryCache?.clear()
                         screenModel.refresh()

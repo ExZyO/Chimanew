@@ -238,17 +238,25 @@ fun MangaInfoBox(
         }
     }
 
-    val chosenArtworkModel: Any = when {
+    val detailsAllowCoverFallback by chimanewPreferences.detailsAllowCoverFallback().collectAsState()
+    val isBannerDisabled = detailsBackdropArtwork == 3 ||
+        excludedBanners.contains("ALL") ||
+        customBannerUrl.equals("NONE", ignoreCase = true)
+
+    val chosenArtworkModel: Any? = when {
+        isBannerDisabled -> null
+        customBannerUrl.equals("COVER", ignoreCase = true) -> manga
         !customBannerUrl.isNullOrBlank() -> customBannerUrl
-        !useAnilistArtwork -> manga
+        !useAnilistArtwork -> if (detailsAllowCoverFallback) manga else null
         detailsBackdropArtwork == 0 && !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
         detailsBackdropArtwork == 1 && hasCustomCover -> manga
         detailsBackdropArtwork == 1 && !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
         detailsBackdropArtwork == 2 -> manga
         !unifiedArtwork?.bannerUrl.isNullOrBlank() -> unifiedArtwork!!.bannerUrl!!
-        hasCustomCover -> manga
+        detailsAllowCoverFallback && hasCustomCover -> manga
         !unifiedArtwork?.posterUrl.isNullOrBlank() -> unifiedArtwork!!.posterUrl!!
-        else -> manga
+        detailsAllowCoverFallback -> manga
+        else -> null
     }
 
     androidx.compose.runtime.LaunchedEffect(chosenArtworkModel, manga.id) {
@@ -257,6 +265,7 @@ fun MangaInfoBox(
             "Backdrop",
         ) {
             val type = when {
+                chosenArtworkModel == null -> "Disabled / None"
                 chosenArtworkModel == manga -> "Default Library Cover (manga.thumbnailUrl)"
                 chosenArtworkModel == customBannerUrl -> "Custom User Banner ($customBannerUrl)"
                 chosenArtworkModel == unifiedArtwork?.bannerUrl -> "Authentic HD Banner (${unifiedArtwork?.bannerUrl})"
@@ -276,7 +285,7 @@ fun MangaInfoBox(
     }
 
     // Determine if rendering an official wide landscape banner or falling back to ambient canvas
-    val isWideBanner = (chosenArtworkModel != manga) && (chosenArtworkModel is String) && (
+    val isWideBanner = (chosenArtworkModel != null) && (chosenArtworkModel != manga) && (chosenArtworkModel is String) && (
         chosenArtworkModel == customBannerUrl ||
         (unifiedArtwork != null && chosenArtworkModel == unifiedArtwork?.bannerUrl)
     )
@@ -309,8 +318,8 @@ fun MangaInfoBox(
         )
         // EaZy Nuvio+ / Chimanew: resilient fallback to local manga cover if remote banner/artwork fails to load
         var artworkLoadFailed by remember(chosenArtworkModel) { mutableStateOf(false) }
-        val effectiveArtworkModel = if (artworkLoadFailed) {
-            manga
+        val effectiveArtworkModel = if (artworkLoadFailed && chosenArtworkModel != manga) {
+            if (detailsAllowCoverFallback && !isBannerDisabled) manga else null
         } else {
             chosenArtworkModel
         }
@@ -320,62 +329,64 @@ fun MangaInfoBox(
             when (detailsPageLayout) {
                 0 -> {
                     // MODE 0: Nuvio Hero Edge-to-Edge with 7-Stop Silk Bottom Dissolve
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(effectiveArtworkModel)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.Center,
-                        onError = {
-                            if (chosenArtworkModel != manga) artworkLoadFailed = true
-                        },
-                        onSuccess = { result ->
-                            val image = result.result.image
-                            if (image.width > 0 && image.height > 0) {
-                                bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
-                            }
-                            if (effectiveArtworkModel == manga) {
-                                coverRatio.floatValue = image.height.toFloat() / image.width
-                            }
-                        },
-                        modifier = Modifier
-                            .matchParentSize()
-                            .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
-                            .alpha(backdropAlpha),
-                    )
+                    if (effectiveArtworkModel != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(effectiveArtworkModel)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center,
+                            onError = {
+                                if (chosenArtworkModel != manga) artworkLoadFailed = true
+                            },
+                            onSuccess = { result ->
+                                val image = result.result.image
+                                if (image.width > 0 && image.height > 0) {
+                                    bannerAspectRatio = image.width.toFloat() / image.height.toFloat()
+                                }
+                                if (effectiveArtworkModel == manga) {
+                                    coverRatio.floatValue = image.height.toFloat() / image.width
+                                }
+                            },
+                            modifier = Modifier
+                                .matchParentSize()
+                                .let { if (backdropBlur > 0.dp) it.blur(backdropBlur) else it }
+                                .alpha(backdropAlpha),
+                        )
 
-                    // Scrims drawn ON TOP OF the banner:
-                    // 1. Top status bar scrim for text readability
-                    // 2. Official Nuvio 7-Stop Silk Bottom Dissolve
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.70f),
-                                    Color.Black.copy(alpha = 0.20f),
-                                    Color.Transparent,
+                        // Scrims drawn ON TOP OF the banner:
+                        // 1. Top status bar scrim for text readability
+                        // 2. Official Nuvio 7-Stop Silk Bottom Dissolve
+                        Canvas(modifier = Modifier.matchParentSize()) {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.70f),
+                                        Color.Black.copy(alpha = 0.20f),
+                                        Color.Transparent,
+                                    ),
+                                    endY = (appBarPadding.toPx() + 20.dp.toPx()).coerceAtLeast(140f),
                                 ),
-                                endY = (appBarPadding.toPx() + 20.dp.toPx()).coerceAtLeast(140f),
-                            ),
-                        )
-                        // Official Nuvio 7-stop silk gradient dissolve into background
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colorStops = arrayOf(
-                                    0.00f to Color.Transparent,
-                                    0.16f to backgroundColor.copy(alpha = 0.04f),
-                                    0.32f to backgroundColor.copy(alpha = 0.14f),
-                                    0.50f to backgroundColor.copy(alpha = 0.34f),
-                                    0.68f to backgroundColor.copy(alpha = 0.62f),
-                                    0.84f to backgroundColor.copy(alpha = 0.84f),
-                                    1.00f to backgroundColor,
+                            )
+                            // Official Nuvio 7-stop silk gradient dissolve into background
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.00f to Color.Transparent,
+                                        0.16f to backgroundColor.copy(alpha = 0.04f),
+                                        0.32f to backgroundColor.copy(alpha = 0.14f),
+                                        0.50f to backgroundColor.copy(alpha = 0.34f),
+                                        0.68f to backgroundColor.copy(alpha = 0.62f),
+                                        0.84f to backgroundColor.copy(alpha = 0.84f),
+                                        1.00f to backgroundColor,
+                                    ),
+                                    startY = size.height * 0.25f,
+                                    endY = size.height,
                                 ),
-                                startY = size.height * 0.25f,
-                                endY = size.height,
-                            ),
-                        )
+                            )
+                        }
                     }
                 }
 
@@ -692,7 +703,7 @@ fun MangaInfoBox(
                 }
             }
 
-            if (!isWideBanner && activeStyle != 1) {
+            if (!isWideBanner && activeStyle != 1 && !isBannerDisabled) {
                 when (ambientCanvasStyle) {
                     1 -> {
                         // Style 1: Dynamic Palette Mesh (Vibrant Colorful Lights)

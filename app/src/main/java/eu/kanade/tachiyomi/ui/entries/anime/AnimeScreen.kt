@@ -430,10 +430,32 @@ class AnimeScreen(
                         sm.editImage(context, it)
                     }
                 }
+                val preferences = remember { Injekt.get<ChimanewPreferences>() }
+                val getBannerContent = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                    if (uri == null) return@rememberLauncherForActivityResult
+                    try {
+                        val bannerDir = context.filesDir.resolve("custom_banners").apply { mkdirs() }
+                        val destFile = bannerDir.resolve("anime_${successState.anime.id}.jpg")
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        val fileUri = destFile.toURI().toString()
+                        preferences.animeCustomBannerUrl(successState.anime.id).set(fileUri)
+                        context.imageLoader.memoryCache?.clear()
+                        ChimanewHomeScreenModel.notifyBannerUpdated(successState.anime.id, fileUri, eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME)
+                        context.toast("Custom banner updated")
+                    } catch (e: Exception) {
+                        logcat(LogPriority.ERROR, e) { "Failed to set custom anime banner" }
+                        context.toast("Failed to set custom banner")
+                    }
+                }
                 AnimeArtworkPickerBottomSheet(
                     anime = successState.anime,
                     onDismissRequest = onDismissRequest,
                     onCustomCoverFilePick = { getContent.launch("image/*") },
+                    onCustomBannerFilePick = { getBannerContent.launch("image/*") },
                     onCoverUpdated = {
                         context.imageLoader.memoryCache?.clear()
                         ChimanewHomeScreenModel.triggerRefresh()

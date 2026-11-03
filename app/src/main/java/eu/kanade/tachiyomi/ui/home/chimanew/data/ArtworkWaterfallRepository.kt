@@ -433,8 +433,22 @@ class ArtworkWaterfallRepository(
             }
         }
 
-        var effectiveBanner: String? = null
-        if (!excludedBanners.contains("ALL")) {
+        val customBanner = if (mangaId != null) {
+            when (mediaType) {
+                MEDIA_TYPE_ANIME -> preferences.animeCustomBannerUrl(mangaId).get()
+                MEDIA_TYPE_NOVEL -> preferences.novelCustomBannerUrl(mangaId).get()
+                else -> preferences.mangaCustomBannerUrl(mangaId).get()
+            }.takeIf { it.isNotBlank() }
+        } else null
+
+        val isBannerDisabled = customBanner.equals("NONE", ignoreCase = true) || excludedBanners.contains("ALL")
+        var effectiveBanner: String? = when {
+            customBanner == null -> null
+            customBanner.equals("NONE", ignoreCase = true) -> null
+            customBanner.equals("COVER", ignoreCase = true) -> effectiveCover ?: defaultCoverUrl
+            else -> customBanner
+        }
+        if (effectiveBanner.isNullOrBlank() && !isBannerDisabled) {
             if (rule != null) {
                 val candidateBannerSources = rule.effectiveBannerSources().filterNot { it in excludedBanners }
                 for (source in candidateBannerSources) {

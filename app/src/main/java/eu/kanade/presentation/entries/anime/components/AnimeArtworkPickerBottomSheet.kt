@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,6 +49,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -105,6 +108,7 @@ fun AnimeArtworkPickerBottomSheet(
     anime: Anime,
     onDismissRequest: () -> Unit,
     onCustomCoverFilePick: () -> Unit,
+    onCustomBannerFilePick: () -> Unit = {},
     onCoverUpdated: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -113,7 +117,9 @@ fun AnimeArtworkPickerBottomSheet(
     val preferences = remember { Injekt.get<ChimanewPreferences>() }
     val waterfallRepo = remember { Injekt.get<ArtworkWaterfallRepository>() }
     val customBannerPref = remember(anime.id) { preferences.animeCustomBannerUrl(anime.id) }
+    val customHeroBannerPref = remember(anime.id) { preferences.animeCustomHeroBannerUrl(anime.id) }
     val currentCustomBanner by customBannerPref.collectPrefAsState()
+    val currentCustomHeroBanner by customHeroBannerPref.collectPrefAsState()
 
     val excludedCoversPref = remember(anime.id) { preferences.animeExcludedCoverSources(anime.id) }
     val excludedBannersPref = remember(anime.id) { preferences.animeExcludedBannerSources(anime.id) }
@@ -349,7 +355,7 @@ fun AnimeArtworkPickerBottomSheet(
                                         withContext(Dispatchers.IO) {
                                             val diskCache = context.imageLoader.diskCache
                                             val snapshot = diskCache?.openSnapshot(coverUrl)
-                                            if (snapshot != null) {
+                                            if (diskCache != null && snapshot != null) {
                                                 try {
                                                     diskCache.fileSystem.source(snapshot.data).buffer().inputStream().use { stream ->
                                                         anime.editCover(
@@ -408,6 +414,7 @@ fun AnimeArtworkPickerBottomSheet(
                         AnimeBannersTabContent(
                             banners = displayedBanners,
                             currentCustomBanner = currentCustomBanner,
+                            currentCustomHeroBanner = currentCustomHeroBanner,
                             onSelectBanner = { bannerUrl ->
                                 customBannerPref.set(bannerUrl)
                                 scope.launch {
@@ -417,12 +424,20 @@ fun AnimeArtworkPickerBottomSheet(
                                     }
                                 }
                                 context.imageLoader.memoryCache?.clear()
-                                ChimanewHomeScreenModel.triggerRefresh()
+                                ChimanewHomeScreenModel.notifyBannerUpdated(anime.id, bannerUrl, eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME)
                                 context.toast("Banner applied")
+                                onCoverUpdated()
+                            },
+                            onSelectHeroBanner = { bannerUrl ->
+                                customHeroBannerPref.set(bannerUrl)
+                                context.imageLoader.memoryCache?.clear()
+                                ChimanewHomeScreenModel.notifyBannerUpdated(anime.id, bannerUrl, eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME)
+                                context.toast("Hero banner applied")
                                 onCoverUpdated()
                             },
                             onResetBanner = {
                                 customBannerPref.delete()
+                                customHeroBannerPref.delete()
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
                                         val updateAnime = Injekt.get<UpdateAnime>()
@@ -430,10 +445,26 @@ fun AnimeArtworkPickerBottomSheet(
                                     }
                                 }
                                 context.imageLoader.memoryCache?.clear()
-                                ChimanewHomeScreenModel.triggerRefresh()
+                                ChimanewHomeScreenModel.notifyBannerUpdated(anime.id, null, eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME)
                                 context.toast("Banner reset")
                                 onCoverUpdated()
                             },
+                            onCustomBannerFilePick = onCustomBannerFilePick,
+                            onToggleDisableBanner = {
+                                if (currentCustomBanner == "NONE" || excludedBanners.contains("ALL")) {
+                                    if (currentCustomBanner == "NONE") customBannerPref.delete()
+                                    val current = excludedBanners.toMutableSet().apply { remove("ALL") }
+                                    excludedBannersPref.set(current)
+                                    context.toast("Banner enabled")
+                                } else {
+                                    customBannerPref.set("NONE")
+                                    context.toast("Banner disabled for this anime")
+                                }
+                                context.imageLoader.memoryCache?.clear()
+                                ChimanewHomeScreenModel.notifyBannerUpdated(anime.id, null, eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME)
+                                onCoverUpdated()
+                            },
+                            isBannerDisabled = currentCustomBanner == "NONE" || excludedBanners.contains("ALL"),
                         )
                     }
                     2 -> {
@@ -594,27 +625,62 @@ private fun AnimeCoverGridItem(
 private fun AnimeBannersTabContent(
     banners: List<String>,
     currentCustomBanner: String,
+    currentCustomHeroBanner: String,
     onSelectBanner: (String) -> Unit,
+    onSelectHeroBanner: (String) -> Unit,
     onResetBanner: () -> Unit,
+    onCustomBannerFilePick: () -> Unit,
+    onToggleDisableBanner: () -> Unit,
+    isBannerDisabled: Boolean,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        if (currentCustomBanner.isNotBlank()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.End,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = onCustomBannerFilePick,
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
             ) {
-                OutlinedButton(
-                    onClick = onResetBanner,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                ) {
-                    Icon(Icons.Outlined.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Reset Custom Banner")
-                }
+                Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Pick File", fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = { onSelectBanner("COVER") },
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Icon(Icons.Outlined.Photo, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(if (currentCustomBanner == "COVER") "Cover Active" else "Use Cover", fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = onToggleDisableBanner,
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(if (isBannerDisabled) "Enable Banner" else "Disable Banner", fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = onResetBanner,
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Icon(Icons.Outlined.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Reset Auto", fontSize = 12.sp)
             }
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -624,7 +690,9 @@ private fun AnimeBannersTabContent(
                 .height(340.dp),
         ) {
             items(banners, key = { it }) { bannerUrl ->
-                val isSelected = bannerUrl == currentCustomBanner
+                val isDetails = bannerUrl == currentCustomBanner
+                val isHero = bannerUrl == currentCustomHeroBanner
+                val isSelected = isDetails || isHero
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -646,22 +714,69 @@ private fun AnimeBannersTabContent(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    if (isSelected) {
+                    if (isDetails || isHero) {
                         Box(
                             modifier = Modifier
                                 .padding(8.dp)
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(999.dp),
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                                 .align(Alignment.TopEnd),
-                            contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Active Banner",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(18.dp),
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Active Banner",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = when {
+                                        isDetails && isHero -> "Details & Hero"
+                                        isDetails -> "Details"
+                                        else -> "Hero Carousel"
+                                    },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                )
+                            }
+                        }
+                    }
+
+                    // Bottom action buttons
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
+                                ),
                             )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(
+                                onClick = { onSelectBanner(bannerUrl) },
+                                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                            ) {
+                                Text("Apply to Details", fontSize = 11.sp)
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            TextButton(
+                                onClick = { onSelectHeroBanner(bannerUrl) },
+                                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                            ) {
+                                Text("Apply to Hero", fontSize = 11.sp)
+                            }
                         }
                     }
                 }

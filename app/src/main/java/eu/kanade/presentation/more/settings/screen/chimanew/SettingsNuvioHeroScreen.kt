@@ -57,6 +57,7 @@ object SettingsNuvioHeroScreen : SearchableSettings {
         val showHeroManga by preferences.showHeroCarousel().collectPrefAsState()
         val showHeroAnime by preferences.showHeroCarouselAnime().collectPrefAsState()
         val showHeroNovel by preferences.showHeroCarouselNovel().collectPrefAsState()
+        val heroRequireSelectedArtwork by preferences.heroRequireSelectedArtwork().collectPrefAsState()
 
         val styleEntries = persistentMapOf(
             0 to "Ambient Glow",
@@ -226,6 +227,31 @@ object SettingsNuvioHeroScreen : SearchableSettings {
                         title = "Novel Hero Categories",
                         subtitle = "Select categories to feature in Novel Hero",
                         enabled = showHeroNovel && heroSourceNovel == 1,
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
+                title = "Hero Artwork & Fallback Rules",
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = preferences.heroAllowCroppedFallback(),
+                        title = "Allow Cropped Cover Fallback in Hero",
+                        subtitle = "When an entry has no landscape banner, crop and blur its portrait cover for the Hero banner. When disabled, uses clean procedural canvas.",
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = preferences.heroRequireSelectedArtwork(),
+                        title = "Strict Artwork Requirements",
+                        subtitle = "Only display entries in the Hero carousel that have verified high-resolution artwork",
+                    ),
+                    Preference.PreferenceItem.MultiSelectListPreference(
+                        preference = preferences.heroStrictArtworkRequirements(),
+                        entries = persistentMapOf(
+                            "banner" to "Require Landscape Banner",
+                            "cover" to "Require High-Res Cover / Poster",
+                        ),
+                        title = "Required Artwork Assets",
+                        subtitle = "Select which artwork elements must be present for an item to appear in Hero",
+                        enabled = heroRequireSelectedArtwork,
                     ),
                 ),
             ),

@@ -79,6 +79,22 @@ object SettingsNuvioAppearanceScreen : SearchableSettings {
                 title = "Details Backdrop & Header",
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.ListPreference(
+                        preference = preferences.detailsBackdropArtwork(),
+                        entries = persistentMapOf(
+                            0 to "Authentic HD Banner",
+                            1 to "HD Poster",
+                            2 to "Library Cover",
+                            3 to "Disabled (No Banner)",
+                        ),
+                        title = "Backdrop Artwork Source",
+                        subtitle = "%s",
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = preferences.detailsAllowCoverFallback(),
+                        title = "Allow Cover Fallback for Details Banner",
+                        subtitle = "When no HD banner exists, blur/crop library cover behind details header. When disabled, header remains clean without banner fallback.",
+                    ),
+                    Preference.PreferenceItem.ListPreference(
                         preference = preferences.detailsPageLayout(),
                         entries = persistentMapOf(
                             0 to stringResource(MR.strings.pref_chimanew_details_page_layout_nuvio),
