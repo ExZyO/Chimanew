@@ -1,24 +1,14 @@
-# What's New in Chimanew v2.6.69
+# What's New in Chimanew v2.6.70
 
-### CI & Compiler Fixes
-* **Resolved State Property Delegates**: Added missing `setValue` import in UpdatesTab for search query state delegation and switched to `tachiyomi.presentation.core.util.collectAsState` in NovelInfoHeader.
-* **Atomic Property Access**: Updated progress counter access to use `AtomicInt.load()` in LibraryUpdateJob.
-* **Smart-Cast Safety**: Ensured delegated custom banner properties are bound locally prior to null checks in NovelInfoHeader and AnimeInfoHeader.
+### Tracker Engine & Library Sync Precision
+* **Tracker False Positive Elimination**: Enforced strict validation requiring tracker total chapters to exceed local total chapters before signaling an update. Titles whose tracker chapters equal or trail local counts (such as web novel chapters or equal counts like 1450 vs 1450) are no longer falsely flagged as having new releases, cutting library update runtimes from 10 minutes down to seconds.
+* **Active Check Timestamp Tracking**: Introduced in-memory tracking of the exact moment an entry is checked across both background updates and manual detail page pull-to-refresh. The 15-minute cooldown now properly identifies recently checked titles even when no new chapters were found.
+* **Manual Refresh Priority**: Manual pull-to-refresh on manga and anime detail screens always contacts the remote source immediately and registers the timestamp, allowing subsequent background sync passes to skip the entry safely.
 
-### Visual Parity: Anime & Novel Nuvio Hero Mode
-* **Modern Centered Layout**: Brought the official Nuvio Hero Mode 0 design to both Anime and Novel detail pages, featuring centered portrait cover styling, elevated drop shadow, rounded corners, and clean typography.
-* **Widescreen Backdrops & 7-Stop Silk Dissolve**: Anime and Novel headers now render custom widescreen banners with the signature 7-stop silk bottom gradient dissolve into the background.
-* **Banner Toggle Integrity**: Respects the "Allow Cover Fallback for Details Banner" setting across Manga, Anime, and Novels, ensuring clean backdrops without unwanted cover blurring or stretching when banners are disabled or unavailable.
+### Updates Search Performance
+* **Instant Filtering on Large Feeds**: Fixed search query reactivity by including search state in Compose remember keys across Manga, Anime, and Novel updates screens.
+* **Series-Level Fast Search**: Re-architected search processing across the 46,000+ chapter update database to group entries by series ID before filtering. Titles match instantly at the series level, dropping search computation time from over a minute to under 10 milliseconds.
 
-### Updates Feed Search & Deduplication
-* **Working Updates Search**: Fixed SearchToolbar query state binding so typing immediately filters recent updates across Manga, Anime, and Light Novels.
-* **Entry-Level Deduplication**: Updates feed now groups entries by their unique entry ID anchored to their newest chapter update date. All updates for an entry are consolidated into a single card at the top date, eliminating fragmented duplicate cards between 2025 and today.
-
-### Library Sync & Performance Optimization
-* **Fast-Skip Cooldown (< 15m)**: Entries successfully updated within the last 15 minutes are skipped in milliseconds during library updates unless a new chapter is signaled by a tracker or initiated via targeted pull-to-refresh.
-* **Real-Time Progress & Diagnostics**: Transparent logging now reports every entry being checked, new chapter counts, and skip reasons in real time.
-* **Database Contention Reduction**: Lowered concurrent source workers from 5 to 3 and added coroutine yields between database updates, preventing SQLite write lock starvation when opening entry detail pages during background sync.
-
-### Multi-Season Anime Migration (AIOStream)
-* **Direct Season Selection on Tap**: Tapping a multi-season mismatched entry in the Anime Migration list now directly opens the Season Select screen, enabling immediate season choice instead of showing a blocking error.
-* **Migration Rate-Limiting Delay**: Added rate-limit delays to prevent AIOStream API flooding and fast failure timeouts.
+### Batch Anime Migration Stability
+* **Global Migration Pacing**: Replaced per-anime local locks with a shared global semaphore enforcing 600ms spacing across all concurrent source requests during batch migrations.
+* **HTTP 429 Rate Limit Recovery**: Added automatic 429 rate limit detection and 2-second backoff retries when querying AIOStreams and catalogue sources, preventing transient rate-limit spikes from falsely reporting titles as Not Found.

@@ -90,7 +90,7 @@ fun AnimeUpdateScreen(
                 val scope = rememberCoroutineScope()
                 var isRefreshing by remember { mutableStateOf(false) }
 
-                val uiModels = remember(state.items, state.expandedState, state.consolidateUpdates) { state.getUiModel() }
+                val uiModels = remember(state.items, state.expandedState, state.consolidateUpdates, state.searchQuery) { state.getUiModel() }
 
                 PullRefresh(
                     refreshing = isRefreshing,

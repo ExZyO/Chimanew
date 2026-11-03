@@ -336,10 +336,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                 val summary = getChapterSummaryByMangaId.await(item.manga.id)
                 val latestNum = summary?.latestChapterNumber
                 val higherTrack = tracks.firstOrNull { track ->
-                    track.totalChapters > 0L && (
-                        (latestNum != null && track.totalChapters > latestNum) ||
-                        (latestNum == null && track.totalChapters > item.totalChapters)
-                    )
+                    track.totalChapters > 0L &&
+                        track.totalChapters > item.totalChapters &&
+                        (latestNum == null || track.totalChapters > latestNum)
                 }
                 if (higherTrack != null) {
                     trackerSignaledMangaIds.add(item.manga.id)
@@ -387,10 +386,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
                                                     "${service.name} returned totalChapters=${refreshed.totalChapters} (local=${item.totalChapters}, latestNum=$latestNum) for '${item.manga.title}'"
                                                 }
-                                                val isAhead = refreshed.totalChapters > 0L && (
-                                                    (latestNum != null && refreshed.totalChapters > latestNum) ||
-                                                    (latestNum == null && refreshed.totalChapters > item.totalChapters)
-                                                )
+                                                val isAhead = refreshed.totalChapters > 0L &&
+                                                    refreshed.totalChapters > item.totalChapters &&
+                                                    (latestNum == null || refreshed.totalChapters > latestNum)
                                                 if (isAhead) {
                                                     trackerSignaledMangaIds.add(item.manga.id)
                                                     ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
@@ -430,14 +428,17 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         false
                     }
 
+                    val lastChecked = lastCheckedMangaTimestamps[it.manga.id] ?: 0L
+                    val lastTime = maxOf(lastChecked, it.manga.lastUpdate)
+                    val isRecentlyChecked = lastTime > 0L && (now - lastTime) < 15 * 60 * 1000L
+
                     targetMangaIds == null &&
                         it.manga.id !in trackerSignaledMangaIds &&
-                        it.manga.lastUpdate > 0L &&
-                        (now - it.manga.lastUpdate) < 15 * 60 * 1000L -> {
+                        isRecentlyChecked -> {
                         ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                            "Skipping '${it.manga.title}' (recently updated ${((now - it.manga.lastUpdate) / 60000)}m ago)."
+                            "Skipping '${it.manga.title}' (recently checked ${((now - lastTime) / 60000)}m ago)."
                         }
-                        skippedUpdates.add(it.manga to "Updated recently (< 15m ago)")
+                        skippedUpdates.add(it.manga to "Checked recently (< 15m ago)")
                         false
                     }
 
@@ -646,6 +647,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                             }
                                         }
                                         clearErrorFromDB(mangaId = manga.id)
+                                        lastCheckedMangaTimestamps[manga.id] = System.currentTimeMillis()
                                     } catch (e: Throwable) {
                                         val errorMessage = when (e) {
                                             is NoChaptersException ->
@@ -901,6 +903,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     }
 
     companion object {
+        val lastCheckedMangaTimestamps = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
         private const val TAG = "LibraryUpdate"
         private const val WORK_NAME_AUTO = "LibraryUpdate-auto"
         private const val WORK_NAME_MANUAL = "LibraryUpdate-manual"

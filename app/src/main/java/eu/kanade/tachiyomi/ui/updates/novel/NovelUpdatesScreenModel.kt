@@ -74,12 +74,14 @@ class NovelUpdatesScreenModel(
         val filteredItems: List<NovelUpdatesWithRelations>
             get() {
                 val q = searchQuery?.trim()?.lowercase()
-                return if (q.isNullOrEmpty()) {
-                    items
-                } else {
-                    items.filter {
-                        it.novelTitle.lowercase().contains(q) ||
-                            it.chapterName.lowercase().contains(q)
+                if (q.isNullOrEmpty()) return items
+                val allGroups = items.groupBy { it.novelId }
+                return allGroups.values.flatMap { chapters ->
+                    val titleMatches = chapters.firstOrNull()?.novelTitle?.lowercase()?.contains(q) == true
+                    if (titleMatches) {
+                        chapters
+                    } else {
+                        chapters.filter { it.chapterName.lowercase().contains(q) }
                     }
                 }
             }

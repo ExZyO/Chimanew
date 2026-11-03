@@ -610,20 +610,28 @@ class AnimeUpdatesScreenModel(
         val selectionMode = selected.isNotEmpty()
 
         fun getUiModel(): List<AnimeUpdatesUiModel> {
-            val query = searchQuery?.trim()?.lowercase()
-            val filteredItems = if (query.isNullOrEmpty()) {
-                items
+            val query = searchQuery?.trim()
+            val hasQuery = !query.isNullOrBlank()
+
+            val allGroups = items.groupBy { it.update.animeId }
+            val filteredGroups = if (!hasQuery) {
+                allGroups.values
             } else {
-                items.filter {
-                    it.update.animeTitle.lowercase().contains(query) ||
-                        it.update.episodeName.lowercase().contains(query)
+                val q = query!!.lowercase()
+                allGroups.values.mapNotNull { episodes ->
+                    val titleMatches = episodes.firstOrNull()?.update?.animeTitle?.lowercase()?.contains(q) == true
+                    if (titleMatches) {
+                        episodes
+                    } else {
+                        val matchingEpisodes = episodes.filter { it.update.episodeName.lowercase().contains(q) }
+                        matchingEpisodes.takeIf { it.isNotEmpty() }
+                    }
                 }
             }
 
             // Deduplicate across dates by grouping by animeId first:
             // Every anime appears ONCE, anchored to its newest episode date (maxOf dateFetch).
-            val animeGroups = filteredItems.groupBy { it.update.animeId }
-            val animesByLatestDate = animeGroups.values
+            val animesByLatestDate = filteredGroups
                 .map { episodes ->
                     val maxDate = episodes.maxOf { it.update.dateFetch }
                     maxDate to episodes

@@ -653,6 +653,7 @@ class MangaScreenModel(
 
                 // KMK -->
                 clearErrorFromDB(state.manga.id)
+                eu.kanade.tachiyomi.data.library.LibraryUpdateJob.lastCheckedMangaTimestamps[state.manga.id] = System.currentTimeMillis()
                 // KMK <--
 
                 if (manualFetch) {

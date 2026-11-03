@@ -91,7 +91,7 @@ fun UpdateScreen(
                 val scope = rememberCoroutineScope()
                 var isRefreshing by remember { mutableStateOf(false) }
                 // KMK -->
-                val uiModels = remember(state.items, state.expandedState, state.consolidateUpdates) { state.getUiModel() }
+                val uiModels = remember(state.items, state.expandedState, state.consolidateUpdates, state.searchQuery) { state.getUiModel() }
                 // KMK <--
 
                 PullRefresh(

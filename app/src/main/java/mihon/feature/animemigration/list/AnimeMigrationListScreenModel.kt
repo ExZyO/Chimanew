@@ -97,6 +97,7 @@ class AnimeMigrationListScreenModel(
     val navigateBackEvent = navigateBackChannel.receiveAsFlow()
 
     private var migrateJob: Job? = null
+    private val globalSourceSemaphore = Semaphore(1)
 
     init {
         screenModelScope.launchIO {
@@ -168,11 +169,10 @@ class AnimeMigrationListScreenModel(
             val result = try {
                 anime.searchingJob = anime.migrationScope.async {
                     if (prioritizeByChapters) {
-                        val sourceSemaphore = Semaphore(2)
                         sources.map { source ->
                             async innerAsync@{
-                                sourceSemaphore.withPermit {
-                                    kotlinx.coroutines.delay(200L)
+                                globalSourceSemaphore.withPermit {
+                                    kotlinx.coroutines.delay(600L)
                                     val result = searchSource(anime.anime, source, deepSearchMode)
                                     if (result == null || result.second.episodeCount == 0) return@innerAsync null
                                     result
@@ -183,7 +183,10 @@ class AnimeMigrationListScreenModel(
                             .maxByOrNull { it.second.latestEpisode ?: 0.0 }
                     } else {
                         sources.forEach { source ->
-                            val result = searchSource(anime.anime, source, deepSearchMode)
+                            val result = globalSourceSemaphore.withPermit {
+                                kotlinx.coroutines.delay(600L)
+                                searchSource(anime.anime, source, deepSearchMode)
+                            }
                             if (result != null) return@async result
                         }
                         null
@@ -232,28 +235,47 @@ class AnimeMigrationListScreenModel(
         source: AnimeCatalogueSource,
         deepSearchMode: Boolean,
     ): Pair<Anime, EpisodeInfo>? {
-        return try {
-            val searchResult = if (deepSearchMode) {
-                smartSearchEngine.deepSearch(source, anime.title)
-            } else {
-                smartSearchEngine.regularSearch(source, anime.title)
-            }
-
-            if (searchResult == null || (searchResult.url == anime.url && source.id == anime.source)) return null
-
-            val localAnime = networkToLocalAnime.await(searchResult)
+        var retries = 0
+        while (retries < 2) {
             try {
-                val episodes = source.getEpisodeList(localAnime.toSAnime())
-                syncEpisodesWithSource.await(episodes, localAnime, source)
+                val searchResult = if (deepSearchMode) {
+                    smartSearchEngine.deepSearch(source, anime.title)
+                } else {
+                    smartSearchEngine.regularSearch(source, anime.title)
+                }
+
+                if (searchResult == null || (searchResult.url == anime.url && source.id == anime.source)) return null
+
+                val localAnime = networkToLocalAnime.await(searchResult)
+                try {
+                    val episodes = source.getEpisodeList(localAnime.toSAnime())
+                    syncEpisodesWithSource.await(episodes, localAnime, source)
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e)
+                }
+                return localAnime to getEpisodeInfo(localAnime.id)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                logcat(LogPriority.ERROR, e)
+                val isRateLimit = (e as? eu.kanade.tachiyomi.network.HttpException)?.code == 429 ||
+                    e.message?.contains("429") == true ||
+                    e.message?.contains("rate", ignoreCase = true) == true
+
+                if (isRateLimit && retries == 0) {
+                    logcat(LogPriority.WARN, e) {
+                        "[MIGRATION] Rate limit (429) hit while migrating '${anime.title}' on '${source.name}', backing off 2s and retrying..."
+                    }
+                    kotlinx.coroutines.delay(2000L)
+                    retries++
+                } else {
+                    logcat(LogPriority.ERROR, e) {
+                        "[MIGRATION] Search failed for '${anime.title}' on '${source.name}': ${e.message}"
+                    }
+                    return null
+                }
             }
-            localAnime to getEpisodeInfo(localAnime.id)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            null
         }
+        return null
     }
 
     private suspend fun updateMigrationProgress() {

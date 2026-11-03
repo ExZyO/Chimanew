@@ -646,20 +646,28 @@ class UpdatesScreenModel(
         val selectionMode = selected.isNotEmpty()
 
         fun getUiModel(): List<UpdatesUiModel> {
-            val query = searchQuery?.trim()?.lowercase()
-            val filteredItems = if (query.isNullOrEmpty()) {
-                items
+            val query = searchQuery?.trim()
+            val hasQuery = !query.isNullOrBlank()
+
+            val allGroups = items.groupBy { it.update.mangaId }
+            val filteredGroups = if (!hasQuery) {
+                allGroups.values
             } else {
-                items.filter {
-                    it.update.mangaTitle.lowercase().contains(query) ||
-                        it.update.chapterName.lowercase().contains(query)
+                val q = query!!.lowercase()
+                allGroups.values.mapNotNull { chapters ->
+                    val titleMatches = chapters.firstOrNull()?.update?.mangaTitle?.lowercase()?.contains(q) == true
+                    if (titleMatches) {
+                        chapters
+                    } else {
+                        val matchingChapters = chapters.filter { it.update.chapterName.lowercase().contains(q) }
+                        matchingChapters.takeIf { it.isNotEmpty() }
+                    }
                 }
             }
 
             // Deduplicate across dates by grouping by mangaId first:
             // Every manga appears ONCE, anchored to its newest chapter date (maxOf dateFetch).
-            val mangaGroups = filteredItems.groupBy { it.update.mangaId }
-            val mangasByLatestDate = mangaGroups.values
+            val mangasByLatestDate = filteredGroups
                 .map { chapters ->
                     val maxDate = chapters.maxOf { it.update.dateFetch }
                     maxDate to chapters
