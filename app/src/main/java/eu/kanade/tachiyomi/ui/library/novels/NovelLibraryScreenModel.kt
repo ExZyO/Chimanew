@@ -530,18 +530,18 @@ class NovelLibraryScreenModel(
                 LibraryGroup.BY_SOURCE -> {
                     val list = mutableListOf<NovelCategory>()
                     if (books.isNotEmpty()) {
-                        list.add(NovelCategory(id = "group_source_local", name = "Local", order = 0, isSystemCategory = true))
+                        list.add(NovelCategory(id = "group_source_local", name = "Local", order = 0))
                     }
                     val sourceManager = uy.kohesive.injekt.Injekt.get<chimahon.novel.manager.NovelSourceManager>()
                     val sources = sourceNovels.map { it.source }.distinct().filterNot { it == Novel.LOCAL_SOURCE_ID }
                     sources.forEachIndexed { idx, sId ->
                         val sName = sourceManager.getNovelSource(sId)?.name ?: "Source $sId"
-                        list.add(NovelCategory(id = "group_source_$sId", name = sName, order = (idx + 1).toLong(), isSystemCategory = true))
+                        list.add(NovelCategory(id = "group_source_$sId", name = sName, order = idx + 1))
                     }
                     list.ifEmpty { categories }
                 }
                 LibraryGroup.UNGROUPED -> {
-                    listOf(NovelCategory(id = "group_ungrouped", name = "All", order = 0, isSystemCategory = true))
+                    listOf(NovelCategory(id = "group_ungrouped", name = "All", order = 0))
                 }
                 else -> {
                     categories.filterNot {
