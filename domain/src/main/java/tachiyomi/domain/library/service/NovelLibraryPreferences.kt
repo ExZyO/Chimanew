@@ -25,6 +25,8 @@ class NovelLibraryPreferences(
 
     fun showHiddenCategories() = preferenceStore.getBoolean("hide_novel_hidden_categories", false)
 
+    fun groupLibraryBy() = preferenceStore.getInt("pref_novel_library_group_by", 0)
+
     fun defaultCategory() = preferenceStore.getInt(NOVEL_DEFAULT_CATEGORY_PREF_KEY, -1)
 
     fun downloadedBookFolder(novelId: Long) = preferenceStore.getString("novel_downloaded_book_folder_$novelId", "")

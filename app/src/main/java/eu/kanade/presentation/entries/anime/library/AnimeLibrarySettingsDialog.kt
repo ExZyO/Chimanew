@@ -17,10 +17,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.util.fastForEach
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.TabbedDialog
 import eu.kanade.presentation.components.TabbedDialogPaddings
+import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.entries.anime.library.AnimeLibrarySettingsScreenModel
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.category.model.AnimeCategory
 import tachiyomi.domain.library.model.LibraryDisplayMode
@@ -33,6 +38,7 @@ import tachiyomi.i18n.sy.SYMR
 import tachiyomi.presentation.core.components.BaseSortItem
 import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.HeadingItem
+import tachiyomi.presentation.core.components.IconItem
 import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.components.SortItem
@@ -52,6 +58,7 @@ fun AnimeLibrarySettingsDialog(
             stringResource(MR.strings.action_filter),
             stringResource(MR.strings.action_sort),
             stringResource(MR.strings.action_display),
+            stringResource(SYMR.strings.group),
         ),
     ) { page ->
         Column(
@@ -69,6 +76,10 @@ fun AnimeLibrarySettingsDialog(
                 )
                 2 -> DisplayPage(
                     screenModel = screenModel,
+                )
+                3 -> GroupPage(
+                    screenModel = screenModel,
+                    hasCategories = category != null,
                 )
             }
         }
@@ -307,4 +318,58 @@ private fun ColumnScope.DisplayPage(
         label = stringResource(MR.strings.action_display_show_number_of_items),
         pref = screenModel.libraryPreferences.categoryNumberOfItems(),
     )
+}
+
+private data class GroupMode(
+    val int: Int,
+    val nameRes: StringResource,
+    val drawableRes: Int,
+)
+
+private fun groupTypeDrawableRes(type: Int): Int {
+    return when (type) {
+        LibraryGroup.BY_STATUS -> R.drawable.ic_progress_clock_24dp
+        LibraryGroup.BY_TRACK_STATUS -> R.drawable.ic_sync_24dp
+        LibraryGroup.BY_SOURCE -> R.drawable.ic_browse_filled_24dp
+        LibraryGroup.UNGROUPED -> R.drawable.ic_ungroup_24dp
+        else -> R.drawable.ic_label_24dp
+    }
+}
+
+@Composable
+private fun ColumnScope.GroupPage(
+    screenModel: AnimeLibrarySettingsScreenModel,
+    hasCategories: Boolean,
+) {
+    val trackers by screenModel.trackersFlow.collectAsState()
+    val groups = remember(hasCategories, trackers, screenModel.grouping) {
+        buildList {
+            add(LibraryGroup.BY_DEFAULT)
+            add(LibraryGroup.BY_SOURCE)
+            add(LibraryGroup.BY_STATUS)
+            if (trackers.isNotEmpty()) {
+                add(LibraryGroup.BY_TRACK_STATUS)
+            }
+            if (hasCategories || screenModel.grouping == LibraryGroup.UNGROUPED) {
+                add(LibraryGroup.UNGROUPED)
+            }
+        }.map {
+            GroupMode(
+                it,
+                LibraryGroup.groupTypeStringRes(it),
+                groupTypeDrawableRes(it),
+            )
+        }.toImmutableList()
+    }
+
+    groups.fastForEach {
+        IconItem(
+            label = stringResource(it.nameRes),
+            icon = painterResource(it.drawableRes),
+            selected = it.int == screenModel.grouping,
+            onClick = {
+                screenModel.setGrouping(it.int)
+            },
+        )
+    }
 }

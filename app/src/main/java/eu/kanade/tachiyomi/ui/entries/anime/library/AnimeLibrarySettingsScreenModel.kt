@@ -37,6 +37,10 @@ class AnimeLibrarySettingsScreenModel(
 
     val grouping by libraryPreferences.groupLibraryBy().asState(screenModelScope)
 
+    fun setGrouping(grouping: Int) {
+        libraryPreferences.groupLibraryBy().set(grouping)
+    }
+
     fun toggleFilter(preference: (AnimeLibraryPreferences) -> Preference<TriState>) {
         preference(libraryPreferences).getAndSet { it.next() }
     }

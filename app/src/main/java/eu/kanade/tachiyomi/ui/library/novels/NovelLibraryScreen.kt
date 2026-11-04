@@ -111,6 +111,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import androidx.compose.ui.res.painterResource
+import eu.kanade.tachiyomi.R
+import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
@@ -118,6 +121,7 @@ import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.FastScrollLazyVerticalGrid
 import tachiyomi.presentation.core.components.HeadingItem
+import tachiyomi.presentation.core.components.IconItem
 import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.components.SortItem
@@ -693,6 +697,7 @@ fun Screen.NovelLibraryScreen(
                 tabTitles = persistentListOf(
                     stringResource(MR.strings.action_sort),
                     stringResource(MR.strings.action_display),
+                    stringResource(SYMR.strings.group),
                 ),
             ) { page ->
                 Column(
@@ -768,6 +773,27 @@ fun Screen.NovelLibraryScreen(
                                 label = stringResource(MR.strings.action_display_show_number_of_items),
                                 pref = screenModel.showNumberOfItems(),
                             )
+                        }
+
+                        2 -> { // Group Tab
+                            val groups = listOf(
+                                LibraryGroup.BY_DEFAULT,
+                                LibraryGroup.BY_SOURCE,
+                                LibraryGroup.UNGROUPED,
+                            )
+                            groups.forEach { type ->
+                                val iconRes = when (type) {
+                                    LibraryGroup.BY_SOURCE -> R.drawable.ic_browse_filled_24dp
+                                    LibraryGroup.UNGROUPED -> R.drawable.ic_ungroup_24dp
+                                    else -> R.drawable.ic_label_24dp
+                                }
+                                IconItem(
+                                    label = stringResource(LibraryGroup.groupTypeStringRes(type)),
+                                    icon = painterResource(iconRes),
+                                    selected = state.groupType == type,
+                                    onClick = { screenModel.setGrouping(type) },
+                                )
+                            }
                         }
                     }
                 }

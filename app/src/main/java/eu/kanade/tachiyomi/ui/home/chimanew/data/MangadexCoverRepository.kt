@@ -111,7 +111,7 @@ class MangadexCoverRepository(
                     val fileName = attrs["fileName"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
                     val volume = attrs["volume"]?.jsonPrimitive?.contentOrNull
                     val locale = attrs["locale"]?.jsonPrimitive?.contentOrNull
-                    val coverUrl = "https://uploads.mangadex.org/covers/$mangaId/$fileName.512.jpg"
+                    val coverUrl = "https://uploads.mangadex.org/covers/$mangaId/$fileName"
                     MangadexCoverArt(volume, locale, coverUrl)
                 }
 
@@ -267,7 +267,7 @@ class MangadexCoverRepository(
                     val coverArtRel = relationships?.firstOrNull { (it as? JsonObject)?.get("type")?.jsonPrimitive?.contentOrNull == "cover_art" } as? JsonObject
                     val coverFileName = (coverArtRel?.get("attributes") as? JsonObject)?.get("fileName")?.jsonPrimitive?.contentOrNull
                     val embeddedCoverUrl = if (coverFileName != null) {
-                        "https://uploads.mangadex.org/covers/$id/$coverFileName.512.jpg"
+                        "https://uploads.mangadex.org/covers/$id/$coverFileName"
                     } else null
 
                     if (score > 0 && bestTitleScore > 0) {

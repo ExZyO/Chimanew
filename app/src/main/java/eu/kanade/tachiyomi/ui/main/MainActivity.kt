@@ -534,7 +534,7 @@ class MainActivity : BaseActivity() {
             ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "LaunchUpdate") {
                 "Cold launch. autoCheck=$autoCheck, lastCheck=${elapsedMinutes}m ago, cooldown15mMet=${elapsedMinutes >= 15}"
             }
-            if (autoCheck && (now - lastCheck > 15 * 60 * 1000L)) {
+            if (autoCheck && (now - lastCheck > 10 * 1000L)) {
                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "LaunchUpdate") {
                     "Triggering LibraryUpdateJob.startNow() on launch"
                 }

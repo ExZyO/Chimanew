@@ -70,10 +70,10 @@ class KitsuCoverRepository(
                 val attributes = dataObj["attributes"] as? JsonObject ?: return@withContext null
 
                 val bannerUrl = (attributes["coverImage"] as? JsonObject)?.let {
-                    it["large"]?.jsonPrimitive?.contentOrNull ?: it["original"]?.jsonPrimitive?.contentOrNull
+                    it["original"]?.jsonPrimitive?.contentOrNull ?: it["large"]?.jsonPrimitive?.contentOrNull
                 }
                 val posterUrl = (attributes["posterImage"] as? JsonObject)?.let {
-                    it["large"]?.jsonPrimitive?.contentOrNull ?: it["original"]?.jsonPrimitive?.contentOrNull
+                    it["original"]?.jsonPrimitive?.contentOrNull ?: it["large"]?.jsonPrimitive?.contentOrNull
                 }
                 val avgRating = attributes["averageRating"]?.jsonPrimitive?.contentOrNull?.toFloatOrNull()
                 val score10 = avgRating?.let { it / 10f }
@@ -151,10 +151,10 @@ class KitsuCoverRepository(
                 }
 
                 val bannerUrl = (matchedObj["coverImage"] as? JsonObject)?.let {
-                    it["large"]?.jsonPrimitive?.contentOrNull ?: it["original"]?.jsonPrimitive?.contentOrNull
+                    it["original"]?.jsonPrimitive?.contentOrNull ?: it["large"]?.jsonPrimitive?.contentOrNull
                 }
                 val posterUrl = (matchedObj["posterImage"] as? JsonObject)?.let {
-                    it["large"]?.jsonPrimitive?.contentOrNull ?: it["original"]?.jsonPrimitive?.contentOrNull
+                    it["original"]?.jsonPrimitive?.contentOrNull ?: it["large"]?.jsonPrimitive?.contentOrNull
                 }
                 val avgRating = matchedObj["averageRating"]?.jsonPrimitive?.contentOrNull?.toFloatOrNull()
                 val score10 = avgRating?.let { it / 10f }

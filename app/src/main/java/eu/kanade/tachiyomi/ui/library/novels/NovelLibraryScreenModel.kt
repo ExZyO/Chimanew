@@ -23,6 +23,7 @@ import tachiyomi.domain.novel.repository.NovelRepository
 import chimahon.novel.interactor.MigrateNovelJsonData
 import chimahon.novel.interactor.RegisterLocalNovelHome
 import chimahon.novel.source.LocalNovelFiles
+import tachiyomi.domain.library.model.LibraryGroup
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -81,7 +82,19 @@ class NovelLibraryScreenModel(
                 mutableState.update { it.copy(showHiddenCategories = showHiddenCategories) }
             }
             .launchIn(screenModelScope)
+
+        libraryPreferences.groupLibraryBy().changes()
+            .onEach { groupType ->
+                mutableState.update { it.copy(groupType = groupType) }
+            }
+            .launchIn(screenModelScope)
     }
+
+    fun setGrouping(grouping: Int) {
+        libraryPreferences.groupLibraryBy().set(grouping)
+    }
+
+    fun getGrouping() = libraryPreferences.groupLibraryBy()
 
     /** Row id for a local folder (reader identity threading); null when unregistered. */
     suspend fun getLocalNovelId(folder: String): Long? {
@@ -505,6 +518,7 @@ class NovelLibraryScreenModel(
         val localNovelIds: Map<String, Long> = emptyMap(),
         val linkedSourceNovelIds: Map<String, Long> = emptyMap(),
         val deleteDialogDownloadFiles: Boolean = false,
+        val groupType: Int = LibraryGroup.BY_DEFAULT,
     ) {
         val hasActiveFilters: Boolean
             get() = searchQuery != null || sortMode != SortMode.DateAdded || !sortDescending
@@ -512,10 +526,30 @@ class NovelLibraryScreenModel(
         val selectionMode: Boolean = selection.isNotEmpty()
 
         val displayedCategories: List<NovelCategory>
-            get() = categories.filterNot {
-                it.isSystemCategory && getItemsForCategory(it).isEmpty()
-            }.filterNot {
-                it.hidden && !showHiddenCategories
+            get() = when (groupType) {
+                LibraryGroup.BY_SOURCE -> {
+                    val list = mutableListOf<NovelCategory>()
+                    if (books.isNotEmpty()) {
+                        list.add(NovelCategory(id = "group_source_local", name = "Local", order = 0, isSystemCategory = true))
+                    }
+                    val sourceManager = uy.kohesive.injekt.Injekt.get<chimahon.novel.manager.NovelSourceManager>()
+                    val sources = sourceNovels.map { it.source }.distinct().filterNot { it == Novel.LOCAL_SOURCE_ID }
+                    sources.forEachIndexed { idx, sId ->
+                        val sName = sourceManager.getNovelSource(sId)?.name ?: "Source $sId"
+                        list.add(NovelCategory(id = "group_source_$sId", name = sName, order = (idx + 1).toLong(), isSystemCategory = true))
+                    }
+                    list.ifEmpty { categories }
+                }
+                LibraryGroup.UNGROUPED -> {
+                    listOf(NovelCategory(id = "group_ungrouped", name = "All", order = 0, isSystemCategory = true))
+                }
+                else -> {
+                    categories.filterNot {
+                        it.isSystemCategory && getItemsForCategory(it).isEmpty()
+                    }.filterNot {
+                        it.hidden && !showHiddenCategories
+                    }
+                }
             }
 
         val coercedActiveCategoryIndex: Int
@@ -538,38 +572,50 @@ class NovelLibraryScreenModel(
                 .filter { query == null || it.title.contains(query, ignoreCase = true) }
                 .map { NovelLibraryItem.SourceNovel(it, unreadCount = unreadCounts[it.id]?.toInt() ?: 0, downloadCount = downloadCounts[it.id]?.toInt() ?: 0) }
 
-            val knownCategoryIds = categories.map { it.id }.toSet()
-            val allItems = (localItems + sourceItems).filter { item ->
-                when (item) {
-                    is NovelLibraryItem.LocalBook -> {
-                        // Row joins win; the sidecar survives only for
-                        // never-registered books.
-                        val novelId = linkedSourceNovelIds[item.metadata.id] ?: localNovelIds[item.metadata.id]
-                        if (novelId != null) {
-                            val rowIds = novelCategoryIds[novelId].orEmpty().filter { it > 0L }
-                            if (category.isSystemCategory) {
-                                rowIds.isEmpty()
-                            } else {
-                                val dbId = category.id.toLongOrNull()
-                                dbId != null && rowIds.contains(dbId)
-                            }
-                        } else {
-                            val ids = item.metadata.normalizedCategoryIds(knownCategoryIds)
-                            if (category.isSystemCategory) {
-                                ids.isEmpty() || ids.contains(NovelCategory.UNCATEGORIZED_ID)
-                            } else {
-                                ids.contains(category.id)
-                            }
-                        }
+            val allItems = when (groupType) {
+                LibraryGroup.BY_SOURCE -> {
+                    if (category.id == "group_source_local") {
+                        localItems
+                    } else {
+                        val sId = category.id.removePrefix("group_source_").toLongOrNull()
+                        sourceItems.filter { it.novel.source == sId }
                     }
-                    is NovelLibraryItem.SourceNovel -> {
-                        // Absence of join rows = Default/system category (manga convention)
-                        val ids = novelCategoryIds[item.novel.id].orEmpty().filter { it > 0L }
-                        if (category.isSystemCategory) {
-                            ids.isEmpty()
-                        } else {
-                            val dbId = category.id.toLongOrNull()
-                            dbId != null && ids.contains(dbId)
+                }
+                LibraryGroup.UNGROUPED -> {
+                    localItems + sourceItems
+                }
+                else -> {
+                    val knownCategoryIds = categories.map { it.id }.toSet()
+                    (localItems + sourceItems).filter { item ->
+                        when (item) {
+                            is NovelLibraryItem.LocalBook -> {
+                                val novelId = linkedSourceNovelIds[item.metadata.id] ?: localNovelIds[item.metadata.id]
+                                if (novelId != null) {
+                                    val rowIds = novelCategoryIds[novelId].orEmpty().filter { it > 0L }
+                                    if (category.isSystemCategory) {
+                                        rowIds.isEmpty()
+                                    } else {
+                                        val dbId = category.id.toLongOrNull()
+                                        dbId != null && rowIds.contains(dbId)
+                                    }
+                                } else {
+                                    val ids = item.metadata.normalizedCategoryIds(knownCategoryIds)
+                                    if (category.isSystemCategory) {
+                                        ids.isEmpty() || ids.contains(NovelCategory.UNCATEGORIZED_ID)
+                                    } else {
+                                        ids.contains(category.id)
+                                    }
+                                }
+                            }
+                            is NovelLibraryItem.SourceNovel -> {
+                                val ids = novelCategoryIds[item.novel.id].orEmpty().filter { it > 0L }
+                                if (category.isSystemCategory) {
+                                    ids.isEmpty()
+                                } else {
+                                    val dbId = category.id.toLongOrNull()
+                                    dbId != null && ids.contains(dbId)
+                                }
+                            }
                         }
                     }
                 }

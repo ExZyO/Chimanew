@@ -1,6 +1,15 @@
-# What's New in Chimanew v2.6.72
+# What's New in Chimanew v2.6.73
 
-### Precision Tracker Signaling
-* **Plausibility Window (1 to 25 Chapters)**: Added a plausibility check for tracker signals. Disproportionately massive chapter counts (such as AniList or MAL tracking hundreds of web novel chapters for titles like Eleceed, Spare Me Great Lord, or Chainsaw Man Colored) are no longer treated as false-positive manga chapter signals.
-* **Strict Restriction Enforcement**: Tracker signals no longer bypass user-configured restrictions for unread entries or unstarted series. When "Entries with unread chapters" is active, titles with backlogs are strictly skipped as configured, keeping the update queue lean and fast.
-* **Strict Cooldown Respect**: Automatic checks strictly enforce the 15-minute cooldown for all entries regardless of tracker signals, preventing rapid re-checks when titles have already been scraped.
+### Native Full-Resolution Artwork
+* **Lossless MangaDex Covers**: Removed .512.jpg preview downscaling from MangaDex cover URLs, loading native full-resolution original cover art across the application.
+* **Original Kitsu Covers**: Kitsu cover repository now serves original full-resolution artwork rather than downscaled large variants.
+* **Lossless Artwork Normalization**: The artwork picker automatically strips thumbnail and preview suffixes to persist full-resolution covers.
+* **Latest MangaDex Volume Action**: Added a quick action in the Artwork Picker to instantly detect, select, and apply the highest volume number cover available on MangaDex in full resolution.
+
+### Library Grouping Parity
+* **Anime Library Grouping**: Added the Group tab to the Anime Library settings dialog, allowing entries to be grouped by Categories, Sources, Status, Tracking Status, or Ungrouped.
+* **Novel Library Grouping**: Added the Group tab to the Novel Library settings dialog, enabling grouping by Categories, Sources (Local vs Online Sources), or Ungrouped.
+
+### Update Cooldown Removal
+* **Unrestricted Update Checks**: Removed the 15-minute cooldown restriction from LibraryUpdateJob, allowing library updates to execute whenever requested without artificial lockouts.
+* **Instant Launch Checks**: Reduced the launch update check debounce to 10 seconds.

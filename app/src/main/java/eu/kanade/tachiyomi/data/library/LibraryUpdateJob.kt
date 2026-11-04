@@ -460,14 +460,6 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         false
                     }
 
-                    targetMangaIds == null && isRecentlyChecked -> {
-                        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                            "Skipping '${it.manga.title}' (recently checked ${((now - lastTime) / 60000)}m ago)."
-                        }
-                        skippedUpdates.add(it.manga to "Checked recently (< 15m ago)")
-                        false
-                    }
-
                     MANGA_NON_COMPLETED in restrictions && it.manga.status.toInt() == SManga.COMPLETED -> {
                         ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
                             "Skipping completed title '${it.manga.title}' (status=COMPLETED, MANGA_NON_COMPLETED active)."

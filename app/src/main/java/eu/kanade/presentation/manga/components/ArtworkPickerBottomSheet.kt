@@ -358,10 +358,14 @@ fun ArtworkPickerBottomSheet(
                                     isApplying = true
                                     try {
                                         withContext(Dispatchers.IO) {
-                                            val fullResUrl = if (coverUrl.contains("uploads.mangadex.org") && coverUrl.endsWith(".512.jpg")) {
-                                                coverUrl.removeSuffix(".512.jpg")
-                                            } else {
-                                                coverUrl
+                                            val fullResUrl = when {
+                                                coverUrl.contains("uploads.mangadex.org") -> {
+                                                    coverUrl.removeSuffix(".512.jpg").removeSuffix(".256.jpg")
+                                                }
+                                                coverUrl.contains("media.kitsu.io") && coverUrl.contains("/large/") -> {
+                                                    coverUrl.replace("/large/", "/original/")
+                                                }
+                                                else -> coverUrl
                                             }
                                             val diskCache = context.imageLoader.diskCache
                                             val snapshot = diskCache?.openSnapshot(fullResUrl) ?: diskCache?.openSnapshot(coverUrl)
@@ -528,6 +532,17 @@ private fun CoversTabContent(
     onResetCover: () -> Unit,
     onCustomCoverFilePick: () -> Unit,
 ) {
+    val latestMdCover = remember(covers) {
+        covers.filter { it.source.equals("MangaDex", ignoreCase = true) }
+            .mapNotNull { option ->
+                val volStr = option.subtitle?.substringAfter("Vol. ")?.substringBefore(" ")?.trim()
+                val volNum = volStr?.toDoubleOrNull()
+                if (volNum != null) volNum to option else null
+            }
+            .maxByOrNull { it.first }?.second
+            ?: covers.firstOrNull { it.source.equals("MangaDex", ignoreCase = true) }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -538,6 +553,23 @@ private fun CoversTabContent(
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (latestMdCover != null) {
+                Button(
+                    onClick = { onApplyCover(latestMdCover.url) },
+                    enabled = !isApplying,
+                    modifier = Modifier.weight(1.3f),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Icon(Icons.Outlined.Photo, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = latestMdCover.subtitle?.takeIf { it.isNotBlank() } ?: "Latest MD Vol",
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             FilledTonalButton(
                 onClick = onCustomCoverFilePick,
                 modifier = Modifier.weight(1f),
