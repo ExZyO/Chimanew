@@ -339,7 +339,19 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                 val summary = getChapterSummaryByMangaId.await(item.manga.id)
                 val latestNum = summary?.latestChapterNumber
                 val higherTrack = tracks.firstOrNull { track ->
-                    track.totalChapters > 0L &&
+                    if (track.totalChapters <= 0L) return@firstOrNull false
+                    val isPlausible = when {
+                        latestNum != null && latestNum > 0.0 -> {
+                            val diff = track.totalChapters - latestNum
+                            diff in 0.5..25.0
+                        }
+                        item.totalChapters > 0L -> {
+                            val diff = track.totalChapters - item.totalChapters
+                            diff in 1..25
+                        }
+                        else -> true
+                    }
+                    isPlausible &&
                         track.totalChapters > item.totalChapters &&
                         (latestNum == null || track.totalChapters > latestNum)
                 }
@@ -390,13 +402,25 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                 ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
                                                     "${service.name} returned totalChapters=${refreshed.totalChapters} (local=${item.totalChapters}, latestNum=$latestNum) for '${item.manga.title}'"
                                                 }
+                                                val isPlausible = when {
+                                                    latestNum != null && latestNum > 0.0 -> {
+                                                        val diff = refreshed.totalChapters - latestNum
+                                                        diff in 0.5..25.0
+                                                    }
+                                                    item.totalChapters > 0L -> {
+                                                        val diff = refreshed.totalChapters - item.totalChapters
+                                                        diff in 1..25
+                                                    }
+                                                    else -> true
+                                                }
                                                 val isAhead = refreshed.totalChapters > 0L &&
+                                                    isPlausible &&
                                                     refreshed.totalChapters > item.totalChapters &&
                                                     (latestNum == null || refreshed.totalChapters > latestNum)
                                                 if (isAhead) {
                                                     trackerSignaledMangaIds.add(item.manga.id)
                                                     ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                                                        "⭐ Tracker signal DETECTED for '${item.manga.title}' via ${service.name}! Prioritizing in queue."
+                                                        "Tracker signal DETECTED for '${item.manga.title}' via ${service.name}! Prioritizing in queue."
                                                     }
                                                     break
                                                 }
@@ -436,9 +460,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                         false
                     }
 
-                    targetMangaIds == null &&
-                        it.manga.id !in trackerSignaledMangaIds &&
-                        isRecentlyChecked -> {
+                    targetMangaIds == null && isRecentlyChecked -> {
                         ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
                             "Skipping '${it.manga.title}' (recently checked ${((now - lastTime) / 60000)}m ago)."
                         }
@@ -455,24 +477,13 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_HAS_UNREAD in restrictions && it.unreadCount != 0L -> {
-                        if (it.manga.id in trackerSignaledMangaIds) {
-                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
-                                "Bypassing MANGA_HAS_UNREAD for '${it.manga.title}' because tracker signaled new chapters!"
-                            }
-                            true
-                        } else {
-                            skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_caught_up))
-                            false
-                        }
+                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_caught_up))
+                        false
                     }
 
                     MANGA_NON_READ in restrictions && it.totalChapters > 0L && !it.hasStarted -> {
-                        if (it.manga.id in trackerSignaledMangaIds) {
-                            true
-                        } else {
-                            skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_started))
-                            false
-                        }
+                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_started))
+                        false
                     }
 
                     MANGA_OUTSIDE_RELEASE_PERIOD in restrictions &&
