@@ -1,110 +1,132 @@
 <div align="center">
 
-<img width="200" height="200" src="./app/src/main/res/drawable/chimahon.png" alt="Chimahon icon" />
-<h1 align="center">Chimahon</h1>
+<img width="180" height="180" src="./app/src/main/res/drawable/chimahon.png" alt="Chimanew Icon" />
+<h1 align="center">Chimanew</h1>
 
-**Mihon-focused immersion fork with Manga, Novel, and Anime support.**
+**Unified multimedia immersion, reading, and tracking suite for Manga, Anime, Novels, and Webtoons.**
 
-[![GitHub downloads](https://img.shields.io/github/downloads/sohilsayed/chimahon/latest/total?label=Latest%20Downloads&labelColor=27303D&color=0D1111&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/sohilsayed/chimahon/releases/latest)
-[![GitHub downloads](https://img.shields.io/github/downloads/sohilsayed/chimahon/total?label=Total%20Downloads&labelColor=27303D&color=0D1111&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/sohilsayed/chimahon/releases)
-[![Discord](https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white&label=)](https://discord.gg/Ak2sW9Nvr9)
+[![GitHub Release](https://img.shields.io/github/v/release/ExZyO/Chimanew?label=Release&labelColor=27303D&color=0D1111&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/ExZyO/Chimanew/releases/latest)
+[![GitHub Downloads](https://img.shields.io/github/downloads/ExZyO/Chimanew/total?label=Downloads&labelColor=27303D&color=0D1111&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/ExZyO/Chimanew/releases)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE)
 
----
-
-Chimahon is a specialized Android reader designed for language learners and immersion enthusiasts. It extends the powerful core of **Mihon/Komikku** with integrated tools for dictionary lookup, OCR-assisted text capture, and seamless flashcard creation for vocabulary mining.
-
-## 🖼️ Screenshots
-
-<p align="center">
-  <img src="./.github/readme-images/novel.png" width="32%" />
-  <img src="./.github/readme-images/popup-manga.png" width="32%" />
-  <img src="./.github/readme-images/dict-tab.png" width="32%" />
-  <img src="./.github/readme-images/anime.jpg" width="64%" />
-</p>
-
-## 🚀 Key Immersion Features
-
-### 📖 Novel & Manga Support
-- **Novel Reader**: E-book reader with inline dictionary lookup and an illustration viewer for art OCR and vocabulary mining.
-- **Manga Reader**: Native reading experience with support for all major online and local sources.
-- **Panel-by-Panel Navigation**: AI-driven comic panel detection and smart panel-by-panel reading navigation powered by LiteRT.
-- **Local OCR**: High-performance, on-device text recognition — no internet connection required.
-- **.mokuro Support**: Native integration for reading `.mokuro` formatted manga files with pre-rendered OCR overlays.
-
-### 🔍 Native Dictionary Lookup
-- **Dictionary Tab**: Import and manage multiple dictionary files directly in-app.
-- **Multi-Language Support**: Full support for Japanese, Chinese, Korean, and more.
-- **Recursive Lookups**: Effortlessly search within definitions to clarify complex terms.
-- **Slick Dictionary Popup**: A modern, customizable lookup interface with support for custom fonts, themes, and recursive searches.
-- **E-Ink Optimized**: High-contrast mode designed specifically for e-paper devices.
-- **Pitch Accent**: Native support for visualizing Japanese pitch accent patterns.
-
-### 🎴 Anki Integration
-- **Direct Mining**: Create Anki cards instantly from lookup results while reading.
-- **Screenshot Crop**: Manually crop images for your cards with specialized UI.
-- **Smart Markers**: Flexible field mapping for expression, reading, glossary, pitch, and context sentences.
-- **Duplicate Checking**: Reliable duplicate detection to prevent redundant flashcards.
-
-### 🌐 Screen OCR Lookup
-- **Any App**: Look up and mine text from any app — capture your screen, tap any word, and get an instant dictionary definition.
-
-### 🎬 Anime & Video Player
-- **Video Player**: Full MPV player with subtitle lookup and frame-accurate OCR for vocabulary mining.
-- **Jimaku Support**: Seamless integration for searching, fetching, and syncing Japanese subtitles.
-- **Video Frame OCR**: Look up any on-screen text, signs, or hardsubs directly from the video, even if it's not present in the subtitle file.
-- **Built-in YouTube Extension**: Stream and mine content directly from YouTube inside the app.
-- **Anime Library**: Browse, track, and organize your anime with source extensions and external tracker sync.
+</div>
 
 ---
 
-## 🛠️ Core Features (Inherited from Upstream)
-
-Chimahon retains all the features of **Komikku** and **Mihon**:
-
-<p align="center">
-  <img src="./.github/readme-images/screens.png" alt="komikku Screenshots" width="100%"/>
-</p>
-
-- **Massive Source Support**: Access thousands of manga via community-made extensions.
-- **Suggestions**: Discover related titles directly within the app.
-- **Auto-Theme**: UI colors that adapt to the cover art of what you're reading.
-- **Cloud Sync**: 2-way progress tracking with MyAnimeList, AniList, Kitsu, and more.
-- **Privacy & Backups**: Hidden categories and secure backups (Local or Cloud).
-- **Customization**: Extensive theme options, color palettes, and reader settings.
+Chimanew (EaZy Nuvio+) is a modern, high-performance multimedia platform built on top of the Mihon, Komikku, and Chimahon foundations. It unifies manga reading, novel reading, anime streaming, language immersion tools, external tracker synchronization, and personalized home recommendations into a single, cohesive Android experience.
 
 ---
 
-## 📥 Download
+## Highlights
 
-[![Stable Release](https://img.shields.io/github/v/release/sohilsayed/chimahon.svg?maxAge=3600&label=Download%20Stable&labelColor=06599d&color=043b69)](https://github.com/sohilsayed/chimahon/releases/latest)
+### Unified Multi-Media System
+* **Global Media Mode Switcher**: Seamlessly switch between Manga, Anime, and Novel modes with a single tap. The active mode synchronizes across all navigation tabs, including Home, Library, Updates, History, and Browse.
+* **Extensive Source Support**: Access thousands of online sources and local libraries across manga, light novels, web novels, EPUBs, and anime video catalogs.
 
-*Requires Android 8.0 or higher.*
+### Modern Home and Discovery
+* **Hero Carousel and Banners**: Dynamic backdrop hero carousels with smooth blur transitions, showcasing currently active, trending, and highlighted series.
+* **Personalized Recommendations**: Integrated smart recommendation carousels based on tracker libraries, genres, and reading habits.
+* **Continue Reading and Watching**: Quick-resume cards allowing immediate continuation from the exact chapter, page, or timestamp.
+
+### Native Artwork and Cover Picker
+* **Multi-Source Cover Picker**: Browse and apply official alternate covers from MangaDex, AniList, Kitsu, Bangumi, and BookWalker, or upload custom local artwork.
+* **Latest Volume Auto-Detection**: One-tap action to automatically detect, fetch, and apply the highest numbered volume cover from MangaDex.
+* **Native Lossless Resolution**: Strips downscaled thumbnails and compression suffixes (.512.jpg, .256.jpg, /large/) to serve full-resolution, uncompressed artwork across the app.
+
+### Intelligent Tracker and Update Engine
+* **Precision Hybrid Tracker Signaling**: Integrates external trackers (AniList, MyAnimeList, Kitsu, Shikimori, Bangumi, Simkl, MangaUpdates) with source scrapers.
+* **Plausibility Anomaly Window**: Prevents false-positive chapter alerts caused by trackers indexing web novel chapter counts rather than published manga chapters.
+* **Cloudflare Fast-Skip and Resolution**: Automatically detects Cloudflare verification challenges during update checks, skipping blocked titles to prevent freezes and notifying the user with direct WebView verification actions.
+* **Granular Queue Restrictions**: Respects user preferences to skip unread backlogs, unstarted titles, or completed series during background checks.
+* **Unrestricted Manual Updates**: Cleaned of artificial cooldown timers, allowing on-demand updates whenever requested.
+
+### Library Organization Parity
+* **Flexible Grouping Across All Media**: Complete grouping parity across Manga, Anime, and Novel libraries. Group items by Categories, Sources (including separate Local vs Online sources), Status, Tracking Status, or Ungrouped.
+* **Display Customization**: Customizable per-category layouts including Compact Grid, Comfortable Grid, Cover-Only Grid, and List views, with adjustable column counts for portrait and landscape orientations.
+
+### Immersion, OCR, and Language Learning
+* **Integrated Offline Dictionary**: High-performance dictionary lookups supporting Yomitan, Yomichan, and EPWING formats with recursive definitions and pitch accent visualization.
+* **On-Device OCR**: Offline text recognition on manga panels and video subtitles without requiring network access.
+* **Anki Integration**: Instant card creation from lookups with captured context sentences, screenshots, definitions, and audio sent directly to AnkiDroid.
+* **AI Panel Navigation**: Automatic comic panel boundary detection and guided navigation powered by LiteRT YOLO models.
+
+### Video Player and Subtitle Engine
+* **MPV Playback Core**: Hardware-accelerated video playback with multi-audio and soft/hard subtitle track switching.
+* **Jimaku Subtitle Fetching**: Search, download, and synchronize external subtitle tracks directly within the player.
+* **Frame-Accurate OCR**: Capture and look up text from video frames, on-screen signs, and hardcoded subtitles.
 
 ---
 
-## 🤝 Contributing & Support
-
-- **Bugs/Requests**: Please check the [Changelog](./CHANGELOG.md) and open an [Issue](https://github.com/sohilsayed/chimahon/issues).
-- **Discord**: Join our community for help and discussion: [Join Discord](https://discord.gg/Ak2sW9Nvr9)
-- **Contributing**: Pull requests are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
-
-### Credits & Acknowledgments
-
-- [Yomitan](https://github.com/yomidevs/yomitan): Inspiration for language-processing workflows.
-- [owocr](https://github.com/AuroraWright/owocr): Base for OCR merge and reconstruction logic.
-- [hoshidicts](https://github.com/Manhhao/hoshidicts/): Native dictionary engine powering our lookups.
-- [manga-panel-detector-yolo26n](https://huggingface.co/leoxs22/manga-panel-detector-yolo26n) by [@leoxs22](https://huggingface.co/leoxs22): YOLO model powering panel-by-panel navigation and speech bubble detection.
-- [Machita Chima (町田ちま)](https://www.youtube.com/channel/UCo7TRj3cS-f_1D9ZDmuTsjw): App name inspiration.
-
-### License
-
-This project is licensed under the **GNU General Public License v3.0**. See [LICENSE](./LICENSE) for details.
-
----
+## Screenshots
 
 <div align="center">
-  <p>Made with ❤️ for the immersion community.</p>
-  <a href="https://github.com/sohilsayed/chimahon/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=sohilsayed/chimahon" alt="Chimahon contributors" width="600"/>
-  </a>
+
+| Novel Reader | Manga Reader & OCR | Dictionary Lookup |
+| :---: | :---: | :---: |
+| <img src="./.github/readme-images/novel.png" width="280" alt="Novel Reader" /> | <img src="./.github/readme-images/popup-manga.png" width="280" alt="Manga Reader" /> | <img src="./.github/readme-images/dict-tab.png" width="280" alt="Dictionary Tab" /> |
+
+| Anime Player | Library & Browsing |
+| :---: | :---: |
+| <img src="./.github/readme-images/anime.jpg" width="420" alt="Anime Player" /> | <img src="./.github/readme-images/screens.png" width="420" alt="Library Screens" /> |
+
 </div>
+
+---
+
+## Download
+
+Get the latest stable release from the Releases page:
+
+* **[Download Latest Release](https://github.com/ExZyO/Chimanew/releases/latest)**
+
+*Requires Android 8.0 (API 26) or higher. Recommended for Android 10+.*
+
+---
+
+## Trackers Supported
+
+* AniList
+* MyAnimeList
+* Kitsu
+* Simkl
+* Shikimori
+* Bangumi
+* MangaUpdates
+
+---
+
+## Building from Source
+
+To build Chimanew locally, ensure you have:
+* Android Studio Ladybug or newer
+* JDK 17 or higher
+* Android SDK 35
+
+```bash
+# Clone the repository with submodules
+git clone --recursive https://github.com/ExZyO/Chimanew.git
+cd Chimanew
+
+# Build the release APK
+./gradlew assembleStandardRelease
+```
+
+---
+
+## Acknowledgments and Upstream Projects
+
+Chimanew is made possible by the open-source community and builds upon these projects:
+
+* [Chimahon](https://github.com/sohilsayed/chimahon): Base immersion reader fork for novels, anime, and dictionaries.
+* [Komikku](https://github.com/komikku-app/komikku): Upstream features, tracking, and UI enhancements.
+* [Mihon](https://github.com/mihonapp/mihon): Foundational manga reader core.
+* [Yomitan](https://github.com/yomidevs/yomitan): Language-processing workflows and dictionary parsing.
+* [owocr](https://github.com/AuroraWright/owocr): OCR merging and text reconstruction logic.
+* [hoshidicts](https://github.com/Manhhao/hoshidicts): Native dictionary engine.
+* [mpv-android](https://github.com/mpv-android/mpv-android): Video playback core.
+
+---
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](./LICENSE) file for details.
