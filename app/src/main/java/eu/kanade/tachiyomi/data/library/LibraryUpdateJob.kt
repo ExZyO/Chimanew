@@ -343,11 +343,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     val isPlausible = when {
                         latestNum != null && latestNum > 0.0 -> {
                             val diff = track.totalChapters - latestNum
-                            diff in 0.5..25.0
+                            diff >= 0.5
                         }
                         item.totalChapters > 0L -> {
                             val diff = track.totalChapters - item.totalChapters
-                            diff in 1..25
+                            diff >= 1
                         }
                         else -> true
                     }
@@ -405,11 +405,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                 val isPlausible = when {
                                                     latestNum != null && latestNum > 0.0 -> {
                                                         val diff = refreshed.totalChapters - latestNum
-                                                        diff in 0.5..25.0
+                                                        diff >= 0.5
                                                     }
                                                     item.totalChapters > 0L -> {
                                                         val diff = refreshed.totalChapters - item.totalChapters
-                                                        diff in 1..25
+                                                        diff >= 1
                                                     }
                                                     else -> true
                                                 }
@@ -469,13 +469,27 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     }
 
                     MANGA_HAS_UNREAD in restrictions && it.unreadCount != 0L -> {
-                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_caught_up))
-                        false
+                        if (it.manga.id in trackerSignaledMangaIds) {
+                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                "Bypassing MANGA_HAS_UNREAD for '${it.manga.title}' (tracker signal detected with new chapters)."
+                            }
+                            true
+                        } else {
+                            skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_caught_up))
+                            false
+                        }
                     }
 
                     MANGA_NON_READ in restrictions && it.totalChapters > 0L && !it.hasStarted -> {
-                        skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_started))
-                        false
+                        if (it.manga.id in trackerSignaledMangaIds) {
+                            ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "TrackerEngine") {
+                                "Bypassing MANGA_NON_READ for '${it.manga.title}' (tracker signal detected with new chapters)."
+                            }
+                            true
+                        } else {
+                            skippedUpdates.add(it.manga to context.stringResource(MR.strings.skipped_reason_not_started))
+                            false
+                        }
                     }
 
                     MANGA_OUTSIDE_RELEASE_PERIOD in restrictions &&

@@ -144,10 +144,29 @@ class WebtoonViewer(
         recycler.adapter = adapter
         recycler.addOnScrollListener(
             object : RecyclerView.OnScrollListener() {
+                private var lastScrollTime = 0L
+
+                override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                    if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        layoutManager.dynamicExtraLayoutSpace = layoutManager.baseExtraLayoutSpace
+                    }
+                }
+
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     onScrolled()
 
                     if (dy != 0) {
+                        // Velocity-based lookahead buffer: expand extraLayoutSpace up to 3x during high-speed flings
+                        val now = android.os.SystemClock.uptimeMillis()
+                        val dt = now - lastScrollTime
+                        lastScrollTime = now
+                        val absDy = kotlin.math.abs(dy)
+                        val velocity = if (dt in 1..200) (absDy * 1000L / dt) else 0L
+                        layoutManager.dynamicExtraLayoutSpace = when {
+                            velocity > 2500L -> layoutManager.baseExtraLayoutSpace * 3
+                            velocity > 1000L -> layoutManager.baseExtraLayoutSpace * 2
+                            else -> layoutManager.baseExtraLayoutSpace
+                        }
                         activity.onReaderScroll()
                     }
 

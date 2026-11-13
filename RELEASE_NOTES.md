@@ -1,15 +1,13 @@
-# What's New in Chimanew v2.6.73
+# What's New in Chimanew v2.6.74
 
-### Native Full-Resolution Artwork
-* **Lossless MangaDex Covers**: Removed .512.jpg preview downscaling from MangaDex cover URLs, loading native full-resolution original cover art across the application.
-* **Original Kitsu Covers**: Kitsu cover repository now serves original full-resolution artwork rather than downscaled large variants.
-* **Lossless Artwork Normalization**: The artwork picker automatically strips thumbnail and preview suffixes to persist full-resolution covers.
-* **Latest MangaDex Volume Action**: Added a quick action in the Artwork Picker to instantly detect, select, and apply the highest volume number cover available on MangaDex in full resolution.
+### Distinct Chapter Badge Deduplication
+* **Multi-Scanlator Deduplication**: Unread chapter badges now compute over distinct chapter numbers rather than raw database rows. Reading a chapter from one scanlator automatically marks that chapter number as read across all scanlators, eliminating inflated ghost badge counts.
+* **Volume and Chapter Alignment**: Volume containers and overlapping chapter entries are deduplicated against distinct chapter numbers, resolving inflated unread counts on mixed-release series.
 
-### Library Grouping Parity
-* **Anime Library Grouping**: Added the Group tab to the Anime Library settings dialog, allowing entries to be grouped by Categories, Sources, Status, Tracking Status, or Ungrouped.
-* **Novel Library Grouping**: Added the Group tab to the Novel Library settings dialog, enabling grouping by Categories, Sources (Local vs Online Sources), or Ungrouped.
+### Enhanced Tracker Update Signaling
+* **Backlog Restriction Bypass**: Tracker signals for newly released chapters now bypass user restrictions for unread backlogs (manga_fully_read) and unstarted series (manga_started), ensuring series with confirmed new chapters are checked and updated immediately.
+* **Uncapped Tracker Signal Sensitivity**: Removed the 25-chapter plausibility restriction ceiling, allowing any positive tracker chapter increase to trigger priority update signals.
 
-### Update Cooldown Removal
-* **Unrestricted Update Checks**: Removed the 15-minute cooldown restriction from LibraryUpdateJob, allowing library updates to execute whenever requested without artificial lockouts.
-* **Instant Launch Checks**: Reduced the launch update check debounce to 10 seconds.
+### Reader Engine Performance & Memory Optimization
+* **Velocity-Based Lookahead Prefetching**: Dynamic extra layout lookahead in WebtoonViewer automatically scales up to 3x based on scroll velocity, pre-rendering upcoming vertical panels during high-speed flings and eliminating white loading gaps.
+* **16-Bit RGB_565 & Hardware Bitmaps**: Configured 16-bit RGB_565 fallback and hardware bitmap decoding for webtoon pages, cutting GPU and heap memory footprint by 50% during long reading sessions.

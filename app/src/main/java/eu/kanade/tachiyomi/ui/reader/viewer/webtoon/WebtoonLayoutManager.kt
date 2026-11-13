@@ -13,18 +13,20 @@ import androidx.recyclerview.widget.RecyclerView.NO_POSITION
  * This layout manager uses the same package name as the support library in order to use a package
  * protected method.
  */
-class WebtoonLayoutManager(context: Context, private val extraLayoutSpace: Int) : LinearLayoutManager(context) {
+class WebtoonLayoutManager(context: Context, val baseExtraLayoutSpace: Int) : LinearLayoutManager(context) {
+
+    var dynamicExtraLayoutSpace: Int = baseExtraLayoutSpace
 
     init {
         isItemPrefetchEnabled = false
     }
 
     /**
-     * Returns the custom extra layout space.
+     * Returns the custom extra layout space. Dynamically scales with scroll velocity.
      */
     @Deprecated("Deprecated in Java")
     override fun getExtraLayoutSpace(state: RecyclerView.State): Int {
-        return extraLayoutSpace
+        return dynamicExtraLayoutSpace
     }
 
     /**

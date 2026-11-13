@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.reader.viewer
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.drawable.Animatable
@@ -36,6 +37,7 @@ import coil3.imageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
+import coil3.request.bitmapConfig
 import coil3.request.crossfade
 import coil3.size.Dimension
 import coil3.size.Precision
@@ -659,6 +661,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     .data(data)
                     .memoryCachePolicy(CachePolicy.DISABLED)
                     .diskCachePolicy(CachePolicy.DISABLED)
+                    .bitmapConfig(if (ImageUtil.canUseHardwareBitmap(data)) Bitmap.Config.HARDWARE else Bitmap.Config.RGB_565)
                     .target(
                         onSuccess = { result ->
                             val image = result as BitmapImage

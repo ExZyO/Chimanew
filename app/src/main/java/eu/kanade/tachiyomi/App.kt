@@ -306,7 +306,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             )
 
             crossfade((150 * this@App.animatorDurationScale).toInt())
-            allowRgb565(DeviceUtil.isLowRamDevice(this@App))
+            allowRgb565(true)
             // KMK -->
             if (EHLogLevel.isExtraLogging()) logger(DebugLogger())
             // KMK <--

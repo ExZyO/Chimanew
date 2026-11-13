@@ -16,14 +16,14 @@ FROM mangas M
 LEFT JOIN (
     SELECT
         chapters.manga_id,
-        count(*) AS total,
-        sum(read) AS readCount,
+        count(DISTINCT CASE WHEN chapters.chapter_number >= 0 THEN chapters.chapter_number ELSE chapters._id END) AS total,
+        CAST(count(DISTINCT CASE WHEN chapters.read = 1 AND chapters.chapter_number >= 0 THEN chapters.chapter_number WHEN chapters.read = 1 THEN chapters._id END) AS REAL) AS readCount,
         coalesce(max(chapters.date_upload), 0) AS latestUpload,
         coalesce(max(history.last_read), 0) AS lastRead,
         coalesce(max(chapters.date_fetch), 0) AS fetchedAt,
-        sum(chapters.bookmark) AS bookmarkCount,
+        CAST(count(DISTINCT CASE WHEN chapters.bookmark = 1 AND chapters.chapter_number >= 0 THEN chapters.chapter_number WHEN chapters.bookmark = 1 THEN chapters._id END) AS REAL) AS bookmarkCount,
         -- KMK -->
-        sum(CASE WHEN chapters.bookmark = 1 AND chapters.read = 1 THEN 1 ELSE 0 END) AS bookmarkReadCount,
+        count(DISTINCT CASE WHEN chapters.bookmark = 1 AND chapters.read = 1 AND chapters.chapter_number >= 0 THEN chapters.chapter_number WHEN chapters.bookmark = 1 AND chapters.read = 1 THEN chapters._id END) AS bookmarkReadCount,
         -- KMK <--
         excluded_scanlators.scanlator AS ex_scanlator
     FROM chapters
@@ -66,14 +66,14 @@ ON ME.merge_id = M._id
 LEFT JOIN(
     SELECT
         ME.merge_id,
-        count(*) AS total,
-        sum(read) AS readCount,
+        count(DISTINCT CASE WHEN chapters.chapter_number >= 0 THEN chapters.chapter_number ELSE chapters._id END) AS total,
+        CAST(count(DISTINCT CASE WHEN chapters.read = 1 AND chapters.chapter_number >= 0 THEN chapters.chapter_number WHEN chapters.read = 1 THEN chapters._id END) AS REAL) AS readCount,
         coalesce(max(chapters.date_upload), 0) AS latestUpload,
         coalesce(max(history.last_read), 0) AS lastRead,
         coalesce(max(chapters.date_fetch), 0) AS fetchedAt,
-        sum(chapters.bookmark) AS bookmarkCount,
+        CAST(count(DISTINCT CASE WHEN chapters.bookmark = 1 AND chapters.chapter_number >= 0 THEN chapters.chapter_number WHEN chapters.bookmark = 1 THEN chapters._id END) AS REAL) AS bookmarkCount,
         -- KMK -->
-        sum(CASE WHEN chapters.bookmark = 1 AND chapters.read = 1 THEN 1 ELSE 0 END) AS bookmarkReadCount,
+        count(DISTINCT CASE WHEN chapters.bookmark = 1 AND chapters.read = 1 AND chapters.chapter_number >= 0 THEN chapters.chapter_number WHEN chapters.bookmark = 1 AND chapters.read = 1 THEN chapters._id END) AS bookmarkReadCount,
         -- KMK <--
         excluded_scanlators.scanlator AS ex_scanlator
     FROM chapters
