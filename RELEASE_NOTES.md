@@ -1,13 +1,16 @@
-# What's New in Chimanew v2.6.74
+# What's New in Chimanew v2.6.75
 
-### Distinct Chapter Badge Deduplication
-* **Multi-Scanlator Deduplication**: Unread chapter badges now compute over distinct chapter numbers rather than raw database rows. Reading a chapter from one scanlator automatically marks that chapter number as read across all scanlators, eliminating inflated ghost badge counts.
-* **Volume and Chapter Alignment**: Volume containers and overlapping chapter entries are deduplicated against distinct chapter numbers, resolving inflated unread counts on mixed-release series.
+### Uncapped Home Screen Shelves and Categories
+* **Removed Shelf Size Limits**: Completely removed artificial item limits (previously capped at 15 items) across all home shelves, including Recently Updated Manga, Recently Added Anime, and Recently Added Novels. Shelves now show all matching library and history entries.
+* **Uncapped Hero Item Selection**: Hero carousel candidate selection now accesses the entire reading history and library pools without 15-item caps.
 
-### Enhanced Tracker Update Signaling
-* **Backlog Restriction Bypass**: Tracker signals for newly released chapters now bypass user restrictions for unread backlogs (manga_fully_read) and unstarted series (manga_started), ensuring series with confirmed new chapters are checked and updated immediately.
-* **Uncapped Tracker Signal Sensitivity**: Removed the 25-chapter plausibility restriction ceiling, allowing any positive tracker chapter increase to trigger priority update signals.
+### Zero-Lag Home Screen Performance Architecture
+* **Single-Pass AsyncImage Rendering**: Replaced subcomposition-based image loading in cards with direct single-pass AsyncImage rendering and graceful background error fallbacks. This completely stops UI-thread layout thrashing and dropped frames during fast scrolling.
+* **Compose Slot Recycling**: Added explicit contentType specifications and composite unique keys across both vertical shelf columns and horizontal card rows, enabling instant Compose layout slot reuse and buttery smooth 60/120fps scrolling on par with the Library, History, and Updates tabs.
 
-### Reader Engine Performance & Memory Optimization
-* **Velocity-Based Lookahead Prefetching**: Dynamic extra layout lookahead in WebtoonViewer automatically scales up to 3x based on scroll velocity, pre-rendering upcoming vertical panels during high-speed flings and eliminating white loading gaps.
-* **16-Bit RGB_565 & Hardware Bitmaps**: Configured 16-bit RGB_565 fallback and hardware bitmap decoding for webtoon pages, cutting GPU and heap memory footprint by 50% during long reading sessions.
+### Continue Reading History Management & Parity Dialog
+* **Remove from History Action**: Long-pressing any card in Continue Reading (or any read entry on the home screen) surfaces a Remove option matching the History tab.
+* **Parity Removal Dialog**: Features the exact History tab confirmation dialog with options to either remove the read date of the current chapter or reset all chapters for the entry.
+
+### Quick Tracker Access in Long-Press Menu
+* **Direct Status and Progress Updates**: Added an Update Tracking shortcut to the card long-press sheet, allowing instant tracker status, score, and progress management without opening the full details screen.

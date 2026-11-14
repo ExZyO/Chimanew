@@ -24,13 +24,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -38,9 +41,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.AsyncImage
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import eu.kanade.presentation.util.rememberResourceBitmapPainter
+import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.presentation.util.formatChapterNumber
 import tachiyomi.domain.manga.model.MangaCover
@@ -104,26 +109,28 @@ fun NuvioMangaCard(
             ),
     ) {
         // 1. Cover image: Prioritize custom cover if set, then high-res AniList cover, falling back to local coverData
-        // EaZy Nuvio+ / Chimanew: resilient cover fallback
+        // EaZy Nuvio+ / Chimanew: resilient, high-performance direct AsyncImage with zero subcomposition lag
         val coverCache = remember { Injekt.get<CoverCache>() }
-        val imageModel: Any = if (item.coverData is MangaCover && coverCache.hasCustomCover(item.mangaId)) {
-            item.coverData
+        val defaultCover = item.coverData
+        val customCoverExists = item.coverData is MangaCover && coverCache.hasCustomCover(item.mangaId)
+        var loadFailed by remember(item.mangaId, item.highResCoverUrl) { mutableStateOf(false) }
+
+        val imageModel: Any = if (customCoverExists || loadFailed || item.highResCoverUrl == null) {
+            defaultCover
         } else {
-            item.highResCoverUrl ?: item.coverData
+            item.highResCoverUrl
         }
-        SubcomposeAsyncImage(
+
+        AsyncImage(
             model = imageModel,
+            placeholder = ColorPainter(CoverPlaceholderColor),
+            error = rememberResourceBitmapPainter(id = R.drawable.cover_error),
             contentDescription = item.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
-            error = {
-                if (item.highResCoverUrl != null) {
-                    SubcomposeAsyncImage(
-                        model = item.coverData,
-                        contentDescription = item.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+            onError = {
+                if (!loadFailed && item.highResCoverUrl != null && !customCoverExists) {
+                    loadFailed = true
                 }
             },
         )
@@ -268,3 +275,5 @@ fun NuvioMangaCard(
         }
     }
 }
+
+private val CoverPlaceholderColor = Color(0x1F888888)

@@ -65,8 +65,12 @@ import tachiyomi.domain.history.interactor.GetAnimeHistory
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.interactor.GetNextChapters
 import tachiyomi.domain.history.interactor.GetNextEpisodes
+import tachiyomi.domain.history.interactor.RemoveAnimeHistory
+import tachiyomi.domain.history.interactor.RemoveHistory
 import tachiyomi.domain.history.model.AnimeHistoryWithRelations
 import tachiyomi.domain.history.model.HistoryWithRelations
+import tachiyomi.domain.history.repository.AnimeHistoryRepository
+import tachiyomi.domain.history.repository.HistoryRepository
 import tachiyomi.domain.library.model.LibraryAnime
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.interactor.GetLibraryManga
@@ -117,6 +121,7 @@ data class HomeMangaItem(
     val primaryTrackStatus: Long? = null,
     val mediaType: Int = MEDIA_TYPE_MANGA,
     val isDiscovery: Boolean = false,
+    val historyId: Long? = null,
 )
 
 val HomeMangaItem.coverUrl: String?
@@ -156,6 +161,8 @@ class ChimanewHomeScreenModel(
     private val anilistCoverRepository: AnilistCoverRepository = Injekt.get(),
     private val artworkWaterfallRepository: ArtworkWaterfallRepository = Injekt.get(),
     private val discoveryRepository: DiscoveryRepository = Injekt.get(),
+    private val removeHistory: RemoveHistory = Injekt.get(),
+    private val historyRepository: HistoryRepository = Injekt.get(),
     // Anime
     private val getAnimeHistory: GetAnimeHistory = Injekt.get(),
     private val getLibraryAnime: GetLibraryAnime = Injekt.get(),
@@ -163,6 +170,8 @@ class ChimanewHomeScreenModel(
     private val getNextEpisodes: GetNextEpisodes = Injekt.get(),
     private val getAnime: GetAnime = Injekt.get(),
     private val getAnimeTracks: GetAnimeTracks = Injekt.get(),
+    private val removeAnimeHistory: RemoveAnimeHistory = Injekt.get(),
+    private val animeHistoryRepository: AnimeHistoryRepository = Injekt.get(),
     // Novels
     private val novelRepository: NovelRepository = Injekt.get(),
     private val novelHistoryRepository: NovelHistoryRepository = Injekt.get(),
@@ -240,6 +249,65 @@ class ChimanewHomeScreenModel(
             triggerRefresh()
             delay(800L)
             mutableState.update { it.copy(isRefreshing = false) }
+        }
+    }
+
+    fun removeFromHistory(item: HomeMangaItem, all: Boolean) {
+        screenModelScope.launchIO {
+            when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> {
+                    if (all) {
+                        removeAnimeHistory.awaitAnime(listOf(item.mangaId))
+                    } else {
+                        val targetHistoryId = item.historyId ?: runCatching {
+                            animeHistoryRepository.getHistoryByAnimeId(item.mangaId).let { list ->
+                                if (item.lastChapterId != null) {
+                                    list.firstOrNull { it.episodeId == item.lastChapterId }?.id
+                                } else {
+                                    list.firstOrNull()?.id
+                                }
+                            }
+                        }.getOrNull()
+                        if (targetHistoryId != null) {
+                            removeAnimeHistory.await(listOf(targetHistoryId))
+                        }
+                    }
+                }
+                MEDIA_TYPE_NOVEL -> {
+                    if (all) {
+                        val chapterIds = runCatching {
+                            novelChapterRepository.getChaptersByNovelId(item.mangaId).map { it.id }
+                        }.getOrNull().orEmpty()
+                        if (chapterIds.isNotEmpty()) {
+                            novelHistoryRepository.resetHistoryByChapterIds(chapterIds)
+                        }
+                    } else {
+                        val chapterId = item.lastChapterId
+                        if (chapterId != null) {
+                            novelHistoryRepository.resetHistoryByChapterIds(listOf(chapterId))
+                        }
+                    }
+                }
+                else -> {
+                    // Manga
+                    if (all) {
+                        removeHistory.awaitManga(listOf(item.mangaId))
+                    } else {
+                        val targetHistoryId = item.historyId ?: runCatching {
+                            historyRepository.getHistoryByMangaId(item.mangaId).let { list ->
+                                if (item.lastChapterId != null) {
+                                    list.firstOrNull { it.chapterId == item.lastChapterId }?.id
+                                } else {
+                                    list.firstOrNull()?.id
+                                }
+                            }
+                        }.getOrNull()
+                        if (targetHistoryId != null) {
+                            removeHistory.await(listOf(targetHistoryId))
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -386,6 +454,7 @@ class ChimanewHomeScreenModel(
                 description: String? = null,
                 inLibrary: Boolean = false,
                 primaryTrackStatus: Long? = null,
+                historyId: Long? = null,
             ): HomeMangaItem {
                 val cachedArt = artworkWaterfallRepository.getCached(title, mangaId = mangaId, mediaType = MEDIA_TYPE_MANGA)
                 val customHeroBanner = preferences.mangaCustomHeroBannerUrl(mangaId).get().takeIf { it.isNotBlank() }
@@ -408,6 +477,7 @@ class ChimanewHomeScreenModel(
                     inLibrary = inLibrary,
                     primaryTrackStatus = primaryTrackStatus,
                     mediaType = MEDIA_TYPE_MANGA,
+                    historyId = historyId,
                 )
             }
 
@@ -416,6 +486,7 @@ class ChimanewHomeScreenModel(
                 val libManga = libraryByMangaId[h.mangaId]
                 createItem(
                     mangaId = h.mangaId,
+                    historyId = h.id,
                     title = h.title,
                     coverData = h.coverData,
                     lastChapterNumber = h.chapterNumber.takeIf { it >= 0 },
@@ -526,7 +597,7 @@ class ChimanewHomeScreenModel(
                 else -> {
                     // History with library fallback
                     if (continueReadingItems.isNotEmpty()) {
-                        selectHeroItems(continueReadingItems.take(15), mediaType = MEDIA_TYPE_MANGA)
+                        selectHeroItems(continueReadingItems, mediaType = MEDIA_TYPE_MANGA)
                     } else {
                         val libItems = data.libraryList.map { lib ->
                             createItem(
@@ -593,7 +664,6 @@ class ChimanewHomeScreenModel(
             // Recently Updated
             val updatedItems = data.libraryList
                 .sortedByDescending { it.latestUpload.coerceAtLeast(it.chapterFetchedAt) }
-                .take(15)
                 .map { lib ->
                     createItem(
                         mangaId = lib.manga.id,
@@ -707,6 +777,7 @@ class ChimanewHomeScreenModel(
                 genres: List<String> = emptyList(),
                 description: String? = null,
                 inLibrary: Boolean = false,
+                historyId: Long? = null,
             ): HomeMangaItem {
                 val cachedArt = artworkWaterfallRepository.getCached(title, mangaId = animeId, mediaType = MEDIA_TYPE_ANIME)
                 val customHeroBanner = preferences.animeCustomHeroBannerUrl(animeId).get().takeIf { it.isNotBlank() }
@@ -727,6 +798,7 @@ class ChimanewHomeScreenModel(
                     description = description,
                     inLibrary = inLibrary,
                     mediaType = MEDIA_TYPE_ANIME,
+                    historyId = historyId,
                 )
             }
 
@@ -735,6 +807,7 @@ class ChimanewHomeScreenModel(
                 val lib = libraryByAnimeId[h.animeId]
                 createAnimeItem(
                     animeId = h.animeId,
+                    historyId = h.id,
                     title = h.title,
                     coverData = h.coverData,
                     lastEpisodeNumber = h.episodeNumber.takeIf { it >= 0 },
@@ -837,7 +910,7 @@ class ChimanewHomeScreenModel(
                 else -> {
                     // History with library fallback
                     if (continueWatchingItems.isNotEmpty()) {
-                        selectHeroItems(continueWatchingItems.take(15), mediaType = MEDIA_TYPE_ANIME)
+                        selectHeroItems(continueWatchingItems, mediaType = MEDIA_TYPE_ANIME)
                     } else {
                         val libItems = data.libraryList.map { lib ->
                             createAnimeItem(
@@ -904,7 +977,6 @@ class ChimanewHomeScreenModel(
             // Recently Added
             val addedItems = data.libraryList
                 .sortedByDescending { it.anime.dateAdded }
-                .take(15)
                 .map { lib ->
                     createAnimeItem(
                         animeId = lib.anime.id,
@@ -1009,6 +1081,7 @@ class ChimanewHomeScreenModel(
                 genres: List<String> = emptyList(),
                 description: String? = null,
                 inLibrary: Boolean = false,
+                historyId: Long? = null,
             ): HomeMangaItem {
                 val cachedArt = artworkWaterfallRepository.getCached(title, mangaId = novelId, mediaType = MEDIA_TYPE_NOVEL)
                 val customHeroBanner = preferences.novelCustomHeroBannerUrl(novelId).get().takeIf { it.isNotBlank() }
@@ -1025,6 +1098,7 @@ class ChimanewHomeScreenModel(
                     description = description,
                     inLibrary = inLibrary,
                     mediaType = MEDIA_TYPE_NOVEL,
+                    historyId = historyId,
                 )
             }
 
@@ -1033,6 +1107,7 @@ class ChimanewHomeScreenModel(
                 val fav = favoritesByNovelId[h.novelId]
                 createNovelItem(
                     novelId = h.novelId,
+                    historyId = h.id,
                     title = h.novelTitle,
                     thumbnailUrl = h.novelThumbnailUrl,
                     lastChapterNumber = h.chapterNumber.toDouble().takeIf { it >= 0 },
@@ -1094,7 +1169,7 @@ class ChimanewHomeScreenModel(
                 3 -> selectHeroItems(trendingNovelsItems, mediaType = MEDIA_TYPE_NOVEL)
                 else -> {
                     if (continueReadingItems.isNotEmpty()) {
-                        selectHeroItems(continueReadingItems.take(15), mediaType = MEDIA_TYPE_NOVEL)
+                        selectHeroItems(continueReadingItems, mediaType = MEDIA_TYPE_NOVEL)
                     } else {
                         selectHeroItems(libraryItems, mediaType = MEDIA_TYPE_NOVEL)
                     }
@@ -1145,7 +1220,7 @@ class ChimanewHomeScreenModel(
             }
 
             // Recently Added
-            val addedItems = data.favoritesList.take(15).map { novel ->
+            val addedItems = data.favoritesList.map { novel ->
                 createNovelItem(
                     novelId = novel.id,
                     title = novel.title,

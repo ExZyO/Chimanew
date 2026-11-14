@@ -28,11 +28,13 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -76,6 +78,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
+import eu.kanade.presentation.history.components.HistoryDeleteDialog
 import eu.kanade.presentation.more.settings.screen.SettingsNuvioScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
@@ -138,6 +141,7 @@ data object ChimanewHomeTab : Tab {
 
         var selectedLongPressItem by remember { mutableStateOf<HomeMangaItem?>(null) }
         var quickTrackerItem by remember { mutableStateOf<HomeMangaItem?>(null) }
+        var itemToRemoveFromHistory by remember { mutableStateOf<HomeMangaItem?>(null) }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         val trackerManager = remember { Injekt.get<TrackerManager>() }
@@ -285,6 +289,7 @@ data object ChimanewHomeTab : Tab {
                     items(
                         items = state.shelves,
                         key = { "${it.id}_${state.activeMedia}" },
+                        contentType = { "nuvio_manga_shelf" },
                     ) { shelf ->
                         NuvioMangaShelf(
                             title = shelf.title,
@@ -584,8 +589,61 @@ data object ChimanewHomeTab : Tab {
                                 onResumeClick(item)
                             },
                         )
+
+                        // Action 3: Quick Tracking & Status
+                        if (!item.isDiscovery) {
+                            ListItem(
+                                headlineContent = { Text("Update Tracking") },
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Sync,
+                                        contentDescription = null,
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    val target = item
+                                    selectedLongPressItem = null
+                                    onTrackerClick(target)
+                                },
+                            )
+                        }
+
+                        // Action 4: Remove from History
+                        if (item.historyId != null || item.lastChapterId != null || item.lastChapterNumber != null) {
+                            ListItem(
+                                headlineContent = {
+                                    Text(
+                                        text = stringResource(MR.strings.action_remove),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    val target = item
+                                    selectedLongPressItem = null
+                                    itemToRemoveFromHistory = target
+                                },
+                            )
+                        }
                     }
                 }
+            }
+
+            // Remove from History Confirmation Dialog (exact parity with History tab)
+            itemToRemoveFromHistory?.let { item ->
+                HistoryDeleteDialog(
+                    onDismissRequest = { itemToRemoveFromHistory = null },
+                    onDelete = { all ->
+                        screenModel.removeFromHistory(item, all)
+                        itemToRemoveFromHistory = null
+                    },
+                )
             }
 
             // Tracking Modal Sheet

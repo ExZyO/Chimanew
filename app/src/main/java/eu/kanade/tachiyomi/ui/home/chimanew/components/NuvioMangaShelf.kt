@@ -77,7 +77,8 @@ fun NuvioMangaShelf(
         ) {
             items(
                 items = items,
-                key = { it.mangaId },
+                key = { "${it.mangaId}_${it.mediaType}" },
+                contentType = { "nuvio_manga_card" },
             ) { item ->
                 NuvioMangaCard(
                     item = item,
