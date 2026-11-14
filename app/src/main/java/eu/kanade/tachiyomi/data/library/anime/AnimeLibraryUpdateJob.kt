@@ -203,9 +203,14 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val skippedUpdates = mutableListOf<Pair<Anime, String?>>()
         val (_, fetchWindowUpperBound) = fetchInterval.getWindow(ZonedDateTime.now())
 
+        val now = System.currentTimeMillis()
         animeToUpdate = listToUpdateWithSeasons
             .filter {
+                val lastChecked = lastCheckedAnimeTimestamps[it.anime.id] ?: 0L
+                val isRecentlyChecked = lastChecked > 0L && (now - lastChecked) < 15 * 60 * 1000L
+
                 when {
+                    isRecentlyChecked -> false
                     it.anime.updateStrategy == UpdateStrategy.ONLY_FETCH_ONCE && it.totalEpisodes > 0L -> {
                         skippedUpdates.add(
                             it.anime to context.stringResource(MR.strings.skipped_reason_not_always_update),
@@ -290,6 +295,14 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                             .sortedByDescending { it.sourceOrder }
 
                                         if (newEpisodes.isNotEmpty()) {
+                                            val distinctNewEpisodes = newEpisodes.distinctBy { ep ->
+                                                if (ep.isRecognizedNumber) {
+                                                    "num_${ep.episodeNumber}"
+                                                } else {
+                                                    "name_${ep.name.trim().lowercase()}"
+                                                }
+                                            }
+                                            val distinctNewCount = distinctNewEpisodes.size
                                             val episodesToDownload = filterEpisodesForDownload.await(anime, newEpisodes)
 
                                             if (episodesToDownload.isNotEmpty()) {
@@ -298,10 +311,11 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                             }
 
                                             libraryPreferences.newAnimeUpdatesCount()
-                                                .getAndSet { it + newEpisodes.size }
+                                                .getAndSet { it + distinctNewCount }
 
-                                            newUpdates.add(anime to newEpisodes.toTypedArray())
+                                            newUpdates.add(anime to distinctNewEpisodes.toTypedArray())
                                         }
+                                        lastCheckedAnimeTimestamps[anime.id] = System.currentTimeMillis()
                                     } catch (e: Throwable) {
                                         val errorMessage = when (e) {
                                         is NoResultsException -> context.stringResource(
@@ -418,6 +432,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     }
 
     companion object {
+        val lastCheckedAnimeTimestamps = java.util.concurrent.ConcurrentHashMap<Long, Long>()
         private const val TAG = "AnimeLibraryUpdate"
         private const val WORK_NAME_AUTO = "AnimeLibraryUpdate-auto"
         private const val WORK_NAME_MANUAL = "AnimeLibraryUpdate-manual"

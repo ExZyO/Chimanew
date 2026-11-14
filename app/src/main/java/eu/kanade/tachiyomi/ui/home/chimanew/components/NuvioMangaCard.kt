@@ -4,6 +4,7 @@ package eu.kanade.tachiyomi.ui.home.chimanew.components
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -30,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -140,16 +142,18 @@ fun NuvioMangaCard(
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp),
+                    .padding(6.dp)
+                    .shadow(3.dp, shape = RoundedCornerShape(8.dp)),
                 shape = RoundedCornerShape(8.dp),
-                color = accentColor.copy(alpha = 0.92f),
+                color = MaterialTheme.colorScheme.primary,
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
             ) {
                 Text(
                     text = "+${item.unreadCount}",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimary,
                     ),
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 )

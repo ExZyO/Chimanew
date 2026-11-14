@@ -39,11 +39,13 @@ class CloudflareInterceptor(
     private val activeChallenges = ConcurrentHashMap<String, CountDownLatch>()
 
     override fun shouldIntercept(response: Response): Boolean {
-        val isChallenge = response.header("cf-mitigated") == "challenge"
-        val isCloudflare = response.header("Server") in SERVER_CHECK
+        val server = response.header("Server")?.lowercase().orEmpty()
+        val isCloudflareServer = server in SERVER_CHECK || server.contains("cloudflare")
+        val isChallenge = response.header("cf-mitigated") == "challenge" ||
+            response.header("cf-chl-bypass") != null ||
+            response.headers("Set-Cookie").any { it.contains("cf_clearance") || it.contains("__cf_bm") }
         val isErrorCode = response.code in ERROR_CODES
-        val should = (isChallenge && (isCloudflare || response.header("Server") == null)) ||
-            (isErrorCode && isCloudflare)
+        val should = isChallenge || (isErrorCode && (isCloudflareServer || response.header("Server").isNullOrBlank()))
         if (should) {
             logcat(LogPriority.INFO) {
                 "[CLOUDFLARE] Intercept trigger: code=${response.code}, cf-mitigated=${response.header("cf-mitigated")}, server=${response.header("Server")}, url=${response.request.url}"
@@ -468,7 +470,7 @@ private val CHIMAHON_USER_AGENT_REGEX = Regex("\\s+Chimahon/\\S+", RegexOption.I
 private val MIHON_USER_AGENT_REGEX = Regex("\\s+Mihon/\\S+", RegexOption.IGNORE_CASE)
 private val CHROME_VERSION_REGEX = Regex("Chrome/(\\d+)")
 
-private class CloudflareBypassException : Exception()
+class CloudflareBypassException(message: String = "Cloudflare verification required") : Exception(message)
 
 object ActivityTracker : android.app.Application.ActivityLifecycleCallbacks {
     var activeActivity: java.lang.ref.WeakReference<android.app.Activity>? = null

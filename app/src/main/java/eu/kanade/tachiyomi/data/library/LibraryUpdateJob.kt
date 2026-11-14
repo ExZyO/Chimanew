@@ -5,6 +5,8 @@ import android.content.pm.ServiceInfo
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
+import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -29,12 +31,14 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.sync.SyncDataJob
 import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.network.interceptor.CloudflareBypassException
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.isRunning
 import eu.kanade.tachiyomi.util.system.setForegroundSafely
+import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.workManager
 import exh.log.xLogE
 import exh.md.utils.FollowStatus
@@ -45,6 +49,7 @@ import exh.source.mangaDexSourceIds
 import exh.util.WorkerUtil
 import exh.util.nullIfBlank
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -54,6 +59,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import mihon.domain.chapter.interactor.FilterChaptersForDownload
 import mihon.domain.source.interactor.UpdateMangaFromRemote
@@ -449,9 +455,16 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             .filter {
                 val lastChecked = lastCheckedMangaTimestamps[it.manga.id] ?: 0L
                 val lastTime = maxOf(lastChecked, it.manga.lastUpdate)
-                val isRecentlyChecked = lastTime > 0L && (now - lastTime) < 15 * 60 * 1000L
+                val isRecentlyChecked = lastChecked > 0L && (now - lastChecked) < 15 * 60 * 1000L
 
                 when {
+                    isRecentlyChecked && it.manga.id !in trackerSignaledMangaIds -> {
+                        ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
+                            "Skipping recently checked '${it.manga.title}' (checked ${(now - lastChecked) / 1000}s ago)."
+                        }
+                        false
+                    }
+
                     it.manga.updateStrategy == UpdateStrategy.ONLY_FETCH_ONCE && it.totalChapters > 0L -> {
                         skippedUpdates.add(
                             it.manga to
@@ -639,8 +652,16 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                             .sortedByDescending { it.sourceOrder }
 
                                         if (newChapters.isNotEmpty()) {
+                                            val distinctNewChapters = newChapters.distinctBy { chapter ->
+                                                if (chapter.isRecognizedNumber) {
+                                                    "num_${chapter.chapterNumber}"
+                                                } else {
+                                                    "name_${chapter.name.trim().lowercase()}"
+                                                }
+                                            }
+                                            val distinctNewCount = distinctNewChapters.size
                                             ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
-                                                "[$currentIdx/${mangaToUpdate.size}] '${manga.title}' -> +${newChapters.size} new chapters!"
+                                                "[$currentIdx/${mangaToUpdate.size}] '${manga.title}' -> +$distinctNewCount new chapters!"
                                             }
                                             val chaptersToDownload = filterChaptersForDownload.await(manga, newChapters)
 
@@ -649,16 +670,16 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                 hasDownloads.store(true)
                                             }
 
-                                            libraryPreferences.newUpdatesCount().getAndSet { it + newChapters.size }
+                                            libraryPreferences.newUpdatesCount().getAndSet { it + distinctNewCount }
 
                                             // Convert to the manga that contains new chapters
-                                            newUpdates.add(manga to newChapters.toTypedArray())
+                                            newUpdates.add(manga to distinctNewChapters.toTypedArray())
 
                                             // Keep local track chapter counts aligned
                                             if (libraryPreferences.trackerAssistedUpdates().get()) {
                                                 try {
                                                     val tracks = getTracks.await(manga.id)
-                                                    val updatedTotal = libraryManga.totalChapters + newChapters.size
+                                                    val updatedTotal = libraryManga.totalChapters + distinctNewCount
                                                     for (track in tracks) {
                                                         if (track.totalChapters < updatedTotal) {
                                                             insertTrack.await(track.copy(totalChapters = updatedTotal))
@@ -676,7 +697,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                         clearErrorFromDB(mangaId = manga.id)
                                         lastCheckedMangaTimestamps[manga.id] = System.currentTimeMillis()
                                     } catch (e: Throwable) {
-                                        val isCloudflare = e.message?.contains("cloudflare", ignoreCase = true) == true
+                                        val isCloudflare = e is CloudflareBypassException ||
+                                            e.cause is CloudflareBypassException ||
+                                            (e is HttpException && (e.code == 403 || e.code == 503)) ||
+                                            (e.cause is HttpException && ((e.cause as HttpException).code == 403 || (e.cause as HttpException).code == 503)) ||
+                                            e.message?.contains("cloudflare", ignoreCase = true) == true
                                         if (isCloudflare) {
                                             cloudflareBlockedSources.add(manga.source)
                                             if (notifiedCloudflareSources.add(manga.source)) {
@@ -684,6 +709,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                 val sourceName = source?.name ?: "Source"
                                                 val httpUrl = (source as? eu.kanade.tachiyomi.source.online.HttpSource)?.baseUrl ?: manga.url
                                                 notifier.showCloudflareNotification(sourceName, manga.source, httpUrl)
+                                                withContext(Dispatchers.Main) {
+                                                    context.toast("Cloudflare verification required: $sourceName", Toast.LENGTH_LONG)
+                                                }
                                             }
                                         }
                                         val errorMessage = when (e) {

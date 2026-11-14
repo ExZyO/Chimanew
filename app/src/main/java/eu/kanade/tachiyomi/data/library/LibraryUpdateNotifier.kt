@@ -208,7 +208,7 @@ class LibraryUpdateNotifier(
 
         context.notify(
             notificationId,
-            Notifications.CHANNEL_LIBRARY_ERROR,
+            Notifications.CHANNEL_CLOUDFLARE,
         ) {
             setContentTitle("Cloudflare verification required: $sourceName")
             setContentText("Tap to open WebView and complete verification")
@@ -216,6 +216,16 @@ class LibraryUpdateNotifier(
             setColor(ContextCompat.getColor(context, R.color.ic_launcher))
             setContentIntent(intent)
             setAutoCancel(true)
+            priority = NotificationCompat.PRIORITY_MAX
+            setCategory(NotificationCompat.CATEGORY_ALARM)
+            setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            if (!mangaUrl.isNullOrEmpty()) {
+                addAction(
+                    R.drawable.globe,
+                    "Verify in WebView",
+                    intent,
+                )
+            }
         }
     }
 
@@ -373,7 +383,14 @@ class LibraryUpdateNotifier(
     }
 
     private fun getNewChaptersDescription(chapters: Array<Chapter>): String {
-        val displayableChapterNumbers = chapters
+        val distinctChapters = chapters.distinctBy { chapter ->
+            if (chapter.isRecognizedNumber) {
+                "num_${chapter.chapterNumber}"
+            } else {
+                "name_${chapter.name.trim().lowercase()}"
+            }
+        }
+        val displayableChapterNumbers = distinctChapters
             .filter { it.isRecognizedNumber }
             .sortedBy { it.chapterNumber }
             .map { formatChapterNumber(it.chapterNumber) }
@@ -385,13 +402,13 @@ class LibraryUpdateNotifier(
                 // "1 new chapter" or "5 new chapters"
                 context.pluralStringResource(
                     MR.plurals.notification_chapters_generic,
-                    chapters.size,
-                    chapters.size,
+                    distinctChapters.size,
+                    distinctChapters.size,
                 )
             }
             // Only 1 chapter has a parsed chapter number
             1 -> {
-                val remaining = chapters.size - displayableChapterNumbers.size
+                val remaining = distinctChapters.size - displayableChapterNumbers.size
                 if (remaining == 0) {
                     // "Chapter 2.5"
                     context.stringResource(

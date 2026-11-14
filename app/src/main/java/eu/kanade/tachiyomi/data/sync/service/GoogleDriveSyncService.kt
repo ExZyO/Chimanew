@@ -320,7 +320,7 @@ class GoogleDriveService(private val context: Context) {
 
         return flow.newAuthorizationUrl()
             .setRedirectUri(redirectUri)
-            .setApprovalPrompt("force")
+            .set("prompt", "consent select_account")
             .build()
     }
 
@@ -349,23 +349,27 @@ class GoogleDriveService(private val context: Context) {
             syncPreferences.googleDriveAccessToken().set(newAccessToken)
             setupGoogleDriveService(newAccessToken, credential.refreshToken)
         } catch (e: TokenResponseException) {
-            if (e.details?.error == "invalid_grant") {
-                // The refresh token is invalid, prompt the user to sign in again
+            val isInvalidGrant = e.details?.error == "invalid_grant" || e.statusCode == 400
+            if (isInvalidGrant) {
+                // The refresh token is invalid/expired, clear stale credentials so we don't loop
                 this@GoogleDriveService.logcat(LogPriority.ERROR, throwable = e) {
-                    "Refresh token is invalid, prompt user to sign in again"
+                    "Refresh token is invalid or revoked (HTTP ${e.statusCode}), cleared stale credentials."
                 }
-                throw e.message?.let { Exception(it, e) } ?: Exception("Unknown error", e)
+                syncPreferences.googleDriveAccessToken().set("")
+                syncPreferences.googleDriveRefreshToken().set("")
+                driveService = null
+                throw Exception("Google Drive authorization expired or revoked. Please sign in again in Settings > Data and storage > Sync.", e)
             } else {
                 // Token refresh failed; handle this situation
                 this@GoogleDriveService.logcat(LogPriority.ERROR) { "Failed to refresh access token ${e.message}" }
                 this@GoogleDriveService.logcat(LogPriority.ERROR) { "Google Drive sync will be disabled" }
-                throw e.message?.let { Exception(it, e) } ?: Exception("Unknown error", e)
+                throw Exception("Google Drive token refresh failed (${e.statusCode}): ${e.details?.errorDescription ?: e.message}", e)
             }
         } catch (e: IOException) {
             // Token refresh failed; handle this situation
             this@GoogleDriveService.logcat(LogPriority.ERROR, throwable = e) { "Failed to refresh access token" }
             this@GoogleDriveService.logcat(LogPriority.ERROR) { "Google Drive sync will be disabled" }
-            throw e.message?.let { Exception(it, e) } ?: Exception("Unknown error", e)
+            throw Exception("Google Drive connection error: ${e.localizedMessage ?: "Network unreachable"}", e)
         }
     }
 
@@ -435,13 +439,15 @@ class GoogleDriveService(private val context: Context) {
 
             // Save the access token and refresh token
             val accessToken = tokenResponse.accessToken
-            val refreshToken = tokenResponse.refreshToken
+            val newRefreshToken = tokenResponse.refreshToken
+            val currentRefreshToken = syncPreferences.googleDriveRefreshToken().get()
+            val effectiveRefreshToken = if (!newRefreshToken.isNullOrBlank()) newRefreshToken else currentRefreshToken
 
             // Save the tokens to SyncPreferences
             syncPreferences.googleDriveAccessToken().set(accessToken)
-            syncPreferences.googleDriveRefreshToken().set(refreshToken)
+            syncPreferences.googleDriveRefreshToken().set(effectiveRefreshToken)
 
-            setupGoogleDriveService(accessToken, refreshToken)
+            setupGoogleDriveService(accessToken, effectiveRefreshToken)
             initGoogleDriveService()
 
             activity.runOnUiThread {

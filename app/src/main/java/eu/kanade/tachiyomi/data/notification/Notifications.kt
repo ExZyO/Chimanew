@@ -57,6 +57,7 @@ object Notifications {
     const val CHANNEL_MODEL_UPDATE = "model_update_channel"
     const val ID_PANEL_PROGRESS = -205
     const val CHANNEL_PANEL_MODEL_DOWNLOAD = "panel_model_download_channel"
+    const val CHANNEL_CLOUDFLARE = "cloudflare_channel"
     const val CHANNEL_DOWNLOADER_ERROR = "downloader_error_channel"
     const val ID_DOWNLOAD_CHAPTER_ERROR = -202
 
@@ -212,6 +213,11 @@ object Notifications {
                     setName(context.stringResource(MR.strings.channel_errors))
                     setGroup(GROUP_LIBRARY)
                     setShowBadge(false)
+                },
+                buildNotificationChannel(CHANNEL_CLOUDFLARE, IMPORTANCE_HIGH) {
+                    setName("Cloudflare verification")
+                    setGroup(GROUP_LIBRARY)
+                    setShowBadge(true)
                 },
                 buildNotificationChannel(CHANNEL_NEW_CHAPTERS, IMPORTANCE_DEFAULT) {
                     setName(context.stringResource(MR.strings.channel_new_chapters))
