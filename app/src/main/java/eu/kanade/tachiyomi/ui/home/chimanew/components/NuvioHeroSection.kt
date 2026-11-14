@@ -726,13 +726,15 @@ fun NuvioHeroSection(
                             }
 
                             val progressText = buildString {
+                                val prefix = if (item.mediaType == 1) "Ep." else "Ch."
+                                val totalLabel = if (item.mediaType == 1) "Episodes" else "Chapters"
                                 if (item.lastChapterNumber != null) {
-                                    append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
+                                    append("$prefix ${formatChapterNumber(item.lastChapterNumber)}")
                                     if (item.totalChapters > 0) {
                                         append(" / ${item.totalChapters}")
                                     }
                                 } else if (item.totalChapters > 0) {
-                                    append("${item.totalChapters} Chapters")
+                                    append("${item.totalChapters} $totalLabel")
                                 }
                             }
                             if (progressText.isNotBlank()) {
@@ -855,24 +857,27 @@ private fun HeroAmbientForegroundContent(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             val progressText = buildString {
+                val prefix = if (item.mediaType == 1) "Ep." else "Ch."
+                val totalLabel = if (item.mediaType == 1) "Episodes" else "Chapters"
                 if (item.lastChapterNumber != null) {
-                    append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
+                    append("$prefix ${formatChapterNumber(item.lastChapterNumber)}")
                     if (item.totalChapters > 0) {
                         append(" / ${item.totalChapters}")
                     }
                 } else if (item.totalChapters > 0) {
-                    append("${item.totalChapters} Chapters")
+                    append("${item.totalChapters} $totalLabel")
                 }
             }
 
             val compactProgressText = buildString {
+                val prefix = if (item.mediaType == 1) "Ep." else "Ch."
                 if (item.lastChapterNumber != null) {
-                    append("Ch. ${formatChapterNumber(item.lastChapterNumber)}")
+                    append("$prefix ${formatChapterNumber(item.lastChapterNumber)}")
                     if (item.totalChapters > 0) {
                         append(" / ${item.totalChapters}")
                     }
                 } else if (item.totalChapters > 0) {
-                    append("${item.totalChapters} Ch.")
+                    append("${item.totalChapters} $prefix")
                 }
             }
 

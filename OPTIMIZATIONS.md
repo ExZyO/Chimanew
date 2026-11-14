@@ -52,6 +52,9 @@ This document provides a comprehensive technical index of all optimizations, low
   * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/components/NuvioFloatingDock.kt`
 * **Mechanism**: Utilizes a physics-based scroll accumulator to smoothly auto-hide and reveal the floating navigation bar. Offloads translation and alpha interpolation directly to the GPU render thread without triggering Compose recomposition passes.
 
+### Stack-Based Hierarchical Navigation
+* **Mechanism**: Multi-hop navigation (e.g. exploring through related titles, franchise rails, voice actors, and cross-media adaptations) is retained using full backstack preservation (`Navigator`). Pressing the Android system Back button pops exactly one level at a time without discarding the user's browsing journey or state. Open modal sheets consume the Back event before popping the screen stack.
+
 ---
 
 ## 3. Bitmap, RAM & GPU Render Pipeline
@@ -107,6 +110,13 @@ This document provides a comprehensive technical index of all optimizations, low
 
 ### Decoupled Hero & Detail Banner Caching
 * **Mechanism**: Isolates memory cache keys between Home hero carousels and Details backdrops, preventing cache collision and eviction loops during navigation.
+
+### Defensive String Sanitization (`cleanString`)
+* **Implementation Files**:
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/data/AnilistCoverRepository.kt`
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/data/KitsuCoverRepository.kt`
+* **Mechanism**: Sanitizes raw API strings via `.takeIf { it.isNotBlank() && it != "null" && it != "N/A" }`, rejecting literal `"null"`, `"N/A"`, or blank string representations from external JSON responses.
+* **Impact**: Completely eliminates broken UI subtitles and labels such as `"Format: null • Year: null"` or `"Bio: null"`.
 
 ---
 
@@ -245,6 +255,14 @@ This document provides a comprehensive technical index of all optimizations, low
 
 ### Fast Search Across 46,000+ Updates Catalog
 * **Mechanism**: Employs an in-memory indexed structure with a 10,000-item ceiling window, preventing UI lockups on massive update histories.
+
+### Nested Vertical Scroll Crash Prevention
+* **Mechanism**: Restricts scrolling layouts to single-direction measurement constraints. Avoids nesting unconstrained `LazyColumn` or vertical scrollers inside outer vertical containers (which triggers `IllegalStateException: Vertically scrollable component was measured with an infinity maximum height constraints`). Instead, hierarchical/threaded items (e.g., nested comment trees) are flattened into a single list with depth-based indentation (`depth * 12.dp`) and clean subtree collapse toggling.
+
+### Media-Adaptive Progress Terminology
+* **Implementation File**:
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/components/NuvioHeroSection.kt`
+* **Mechanism**: Evaluates `item.mediaType` to dynamically adapt UI progress labels, badges, and counters. Shows `"Ep."` and `"Episodes"` for video/anime titles (`mediaType == 1`) and `"Ch."` and `"Chapters"` for reading/manga/novel titles (`mediaType == 0`), eliminating improper "12 Chapters" labels on anime series.
 
 ---
 

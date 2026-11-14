@@ -289,7 +289,7 @@ class AnilistCoverRepository(
 
     private fun JsonElement?.asStringOrNull(): String? {
         if (this == null || this is JsonNull) return null
-        return (this as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
+        return (this as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" && it != "N/A" }
     }
 
     fun getCached(remoteId: Long): AnilistMediaArtwork? = cache[remoteId]

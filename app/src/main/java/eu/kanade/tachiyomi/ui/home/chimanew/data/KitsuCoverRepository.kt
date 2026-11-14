@@ -70,10 +70,10 @@ class KitsuCoverRepository(
                 val attributes = dataObj["attributes"] as? JsonObject ?: return@withContext null
 
                 val bannerUrl = (attributes["coverImage"] as? JsonObject)?.let {
-                    it["original"]?.jsonPrimitive?.contentOrNull ?: it["large"]?.jsonPrimitive?.contentOrNull
+                    it["original"]?.jsonPrimitive?.contentOrNull.cleanString() ?: it["large"]?.jsonPrimitive?.contentOrNull.cleanString()
                 }
                 val posterUrl = (attributes["posterImage"] as? JsonObject)?.let {
-                    it["original"]?.jsonPrimitive?.contentOrNull ?: it["large"]?.jsonPrimitive?.contentOrNull
+                    it["original"]?.jsonPrimitive?.contentOrNull.cleanString() ?: it["large"]?.jsonPrimitive?.contentOrNull.cleanString()
                 }
                 val avgRating = attributes["averageRating"]?.jsonPrimitive?.contentOrNull?.toFloatOrNull()
                 val score10 = avgRating?.let { it / 10f }
@@ -220,6 +220,10 @@ class KitsuCoverRepository(
                 }
             }
             return false
+        }
+
+        fun String?.cleanString(): String? {
+            return this?.takeIf { it.isNotBlank() && it != "null" && it != "N/A" }
         }
 
         private fun normalizeForComparison(s: String): String {
