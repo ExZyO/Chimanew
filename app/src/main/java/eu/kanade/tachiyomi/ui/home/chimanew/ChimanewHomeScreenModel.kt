@@ -9,16 +9,31 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.navigator.Navigator
 import chimahon.novel.interactor.GetNextNovelChapters
+import chimahon.novel.interactor.SetNovelCategories
+import chimahon.novel.interactor.SetNovelReadStatus
+import tachiyomi.domain.library.service.NovelLibraryPreferences
 import chimahon.novel.interactor.UpdateNovel
 import chimahon.novel.source.LocalNovelFiles
 import chimahon.novel.ui.detail.NovelDetailScreen
 import chimahon.novel.ui.reader.NovelReaderActivity
+import eu.kanade.domain.chapter.interactor.SetReadStatus
+import eu.kanade.domain.entries.anime.interactor.UpdateAnime
+import eu.kanade.domain.entries.anime.model.toSAnime
+import eu.kanade.domain.episode.interactor.SetSeenStatus
+import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.presentation.more.settings.screen.chimanew.HomeRowsCustomizerScreen
 import eu.kanade.presentation.util.Screen
+import eu.kanade.presentation.util.formatChapterNumber
+import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
+import eu.kanade.tachiyomi.data.animedownload.AnimeDownloadManager
 import eu.kanade.tachiyomi.data.cache.CoverCache
+import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.track.TrackStatus
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.ui.home.chimanew.data.AnilistCoverRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.home.chimanew.data.CommunityRating
@@ -71,8 +86,13 @@ import tachiyomi.domain.history.model.AnimeHistoryWithRelations
 import tachiyomi.domain.history.model.HistoryWithRelations
 import tachiyomi.domain.history.repository.AnimeHistoryRepository
 import tachiyomi.domain.history.repository.HistoryRepository
+import tachiyomi.domain.category.interactor.SetAnimeCategories
+import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.library.model.LibraryAnime
 import tachiyomi.domain.library.model.LibraryManga
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.source.anime.service.AnimeSourceManager
+import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
@@ -163,6 +183,12 @@ class ChimanewHomeScreenModel(
     private val discoveryRepository: DiscoveryRepository = Injekt.get(),
     private val removeHistory: RemoveHistory = Injekt.get(),
     private val historyRepository: HistoryRepository = Injekt.get(),
+    private val sourceManager: SourceManager = Injekt.get(),
+    private val updateManga: UpdateManga = Injekt.get(),
+    private val setMangaCategories: SetMangaCategories = Injekt.get(),
+    private val setReadStatus: SetReadStatus = Injekt.get(),
+    private val downloadManager: DownloadManager = Injekt.get(),
+    private val libraryPreferences: LibraryPreferences = Injekt.get(),
     // Anime
     private val getAnimeHistory: GetAnimeHistory = Injekt.get(),
     private val getLibraryAnime: GetLibraryAnime = Injekt.get(),
@@ -172,11 +198,20 @@ class ChimanewHomeScreenModel(
     private val getAnimeTracks: GetAnimeTracks = Injekt.get(),
     private val removeAnimeHistory: RemoveAnimeHistory = Injekt.get(),
     private val animeHistoryRepository: AnimeHistoryRepository = Injekt.get(),
+    private val animeSourceManager: AnimeSourceManager = Injekt.get(),
+    private val updateAnime: UpdateAnime = Injekt.get(),
+    private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
+    private val setSeenStatus: SetSeenStatus = Injekt.get(),
+    private val animeDownloadManager: AnimeDownloadManager = Injekt.get(),
     // Novels
     private val novelRepository: NovelRepository = Injekt.get(),
     private val novelHistoryRepository: NovelHistoryRepository = Injekt.get(),
     private val novelCategoryRepository: NovelCategoryRepository = Injekt.get(),
     private val novelChapterRepository: NovelChapterRepository = Injekt.get(),
+    private val getNextNovelChapters: GetNextNovelChapters = Injekt.get(),
+    private val setNovelCategories: SetNovelCategories = Injekt.get(),
+    private val setNovelReadStatus: SetNovelReadStatus = Injekt.get(),
+    private val novelLibraryPreferences: NovelLibraryPreferences = Injekt.get(),
 ) : StateScreenModel<ChimanewHomeScreenModel.State>(
     cachedMediaStates[preferences.homeActiveMedia().get()] ?: State(activeMedia = preferences.homeActiveMedia().get())
 ) {
@@ -305,6 +340,262 @@ class ChimanewHomeScreenModel(
                         if (targetHistoryId != null) {
                             removeHistory.await(listOf(targetHistoryId))
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    fun markNextAsRead(item: HomeMangaItem, context: Context) {
+        screenModelScope.launchIO {
+            when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> {
+                    val nextEp = getNextEpisodes.await(item.mangaId).firstOrNull()
+                    if (nextEp != null) {
+                        setSeenStatus.await(true, nextEp)
+                        withContext(Dispatchers.Main) {
+                            context.toast("Marked Episode ${formatChapterNumber(nextEp.episodeNumber)} as watched")
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            context.toast("No unread episodes")
+                        }
+                    }
+                }
+                MEDIA_TYPE_NOVEL -> {
+                    val nextCh = getNextNovelChapters.await(item.mangaId).firstOrNull()
+                    if (nextCh != null) {
+                        setNovelReadStatus.await(true, listOf(nextCh))
+                        withContext(Dispatchers.Main) {
+                            context.toast("Marked Chapter ${nextCh.chapterNumber} as read")
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            context.toast("No unread chapters")
+                        }
+                    }
+                }
+                else -> {
+                    val nextCh = getNextChapters.await(item.mangaId).firstOrNull()
+                    if (nextCh != null) {
+                        setReadStatus.await(true, nextCh)
+                        withContext(Dispatchers.Main) {
+                            context.toast("Marked Chapter ${formatChapterNumber(nextCh.chapterNumber)} as read")
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            context.toast("No unread chapters")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun downloadNext(item: HomeMangaItem, context: Context) {
+        screenModelScope.launchIO {
+            when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> {
+                    val anime = getAnime.await(item.mangaId) ?: return@launchIO
+                    val nextEp = getNextEpisodes.await(item.mangaId).firstOrNull()
+                    if (nextEp != null) {
+                        animeDownloadManager.downloadEpisodes(anime, listOf(nextEp))
+                        withContext(Dispatchers.Main) {
+                            context.toast("Downloading Episode ${formatChapterNumber(nextEp.episodeNumber)}")
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            context.toast("No new episodes to download")
+                        }
+                    }
+                }
+                MEDIA_TYPE_NOVEL -> {
+                    withContext(Dispatchers.Main) {
+                        context.toast("Novel downloading not supported from quick menu")
+                    }
+                }
+                else -> {
+                    val manga = getManga.await(item.mangaId) ?: return@launchIO
+                    val nextCh = getNextChapters.await(item.mangaId).firstOrNull()
+                    if (nextCh != null) {
+                        downloadManager.downloadChapters(manga, listOf(nextCh))
+                        withContext(Dispatchers.Main) {
+                            context.toast("Downloading Chapter ${formatChapterNumber(nextCh.chapterNumber)}")
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            context.toast("No new chapters to download")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun openChangeCategories(
+        item: HomeMangaItem,
+        onCategoriesReady: (List<Category>, List<Long>) -> Unit,
+    ) {
+        screenModelScope.launchIO {
+            when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> {
+                    val allCategories = getAnimeCategories.await()
+                    val assigned = getAnimeCategories.await(item.mangaId).map { it.id }
+                    val mapped = allCategories.map { ac ->
+                        Category(
+                            id = ac.id,
+                            name = ac.name,
+                            order = ac.order,
+                            flags = ac.flags,
+                            hidden = ac.hidden,
+                        )
+                    }
+                    withContext(Dispatchers.Main) {
+                        onCategoriesReady(mapped, assigned)
+                    }
+                }
+                MEDIA_TYPE_NOVEL -> {
+                    val allCategories = novelCategoryRepository.getAll()
+                    val assigned = novelCategoryRepository.getCategoryIdsByNovelIds(listOf(item.mangaId))[item.mangaId].orEmpty()
+                    val mapped = allCategories.map { nc ->
+                        Category(
+                            id = nc.id,
+                            name = nc.name,
+                            order = nc.order.toLong(),
+                            flags = nc.flags,
+                            hidden = nc.hidden,
+                        )
+                    }
+                    withContext(Dispatchers.Main) {
+                        onCategoriesReady(mapped, assigned)
+                    }
+                }
+                else -> {
+                    val allCategories = getCategories.await()
+                    val assigned = getCategories.await(item.mangaId).map { it.id }
+                    withContext(Dispatchers.Main) {
+                        onCategoriesReady(allCategories, assigned)
+                    }
+                }
+            }
+        }
+    }
+
+    fun setCategories(item: HomeMangaItem, categoryIds: List<Long>) {
+        screenModelScope.launchIO {
+            when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> setAnimeCategories.await(item.mangaId, categoryIds)
+                MEDIA_TYPE_NOVEL -> setNovelCategories.await(item.mangaId, categoryIds)
+                else -> setMangaCategories.await(item.mangaId, categoryIds)
+            }
+        }
+    }
+
+    fun toggleFavorite(
+        item: HomeMangaItem,
+        context: Context,
+        onNeedCategorySelection: ((List<Category>, List<Long>) -> Unit)? = null,
+    ) {
+        screenModelScope.launchIO {
+            when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> {
+                    val anime = getAnime.await(item.mangaId) ?: return@launchIO
+                    val newFav = !anime.favorite
+                    updateAnime.awaitUpdateFavorite(anime.id, newFav)
+                    if (newFav) {
+                        val categories = getAnimeCategories.await()
+                        val defaultCatId = libraryPreferences.defaultAnimeCategory().get().toLong()
+                        val defaultCat = categories.find { it.id == defaultCatId }
+                        if (defaultCat != null) {
+                            setAnimeCategories.await(anime.id, listOf(defaultCat.id))
+                            withContext(Dispatchers.Main) { context.toast("Added to Library") }
+                        } else if (defaultCatId == 0L || categories.isEmpty()) {
+                            setAnimeCategories.await(anime.id, emptyList())
+                            withContext(Dispatchers.Main) { context.toast("Added to Library") }
+                        } else {
+                            val mapped = categories.map { Category(it.id, it.name, it.order, it.flags, it.hidden) }
+                            withContext(Dispatchers.Main) {
+                                onNeedCategorySelection?.invoke(mapped, emptyList())
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) { context.toast("Removed from Library") }
+                    }
+                }
+                MEDIA_TYPE_NOVEL -> {
+                    val novel = runCatching { novelRepository.getNovelById(item.mangaId) }.getOrNull() ?: return@launchIO
+                    val newFav = !novel.favorite
+                    novelRepository.setFavorite(novel.id, newFav)
+                    if (newFav) {
+                        val categories = novelCategoryRepository.getAll()
+                        val defaultCatId = novelLibraryPreferences.defaultCategory().get().toLong()
+                        val defaultCat = categories.find { it.id == defaultCatId }
+                        if (defaultCat != null) {
+                            setNovelCategories.await(novel.id, listOf(defaultCat.id))
+                            withContext(Dispatchers.Main) { context.toast("Added to Library") }
+                        } else if (defaultCatId == 0L || categories.isEmpty()) {
+                            setNovelCategories.await(novel.id, emptyList())
+                            withContext(Dispatchers.Main) { context.toast("Added to Library") }
+                        } else {
+                            val mapped = categories.map { Category(it.id, it.name, it.order.toLong(), it.flags, it.hidden) }
+                            withContext(Dispatchers.Main) {
+                                onNeedCategorySelection?.invoke(mapped, emptyList())
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) { context.toast("Removed from Library") }
+                    }
+                }
+                else -> {
+                    val manga = getManga.await(item.mangaId) ?: return@launchIO
+                    val newFav = !manga.favorite
+                    updateManga.awaitUpdateFavorite(manga.id, newFav)
+                    if (newFav) {
+                        val categories = getCategories.await()
+                        val defaultCatId = libraryPreferences.defaultCategory().get().toLong()
+                        val defaultCat = categories.find { it.id == defaultCatId }
+                        if (defaultCat != null) {
+                            setMangaCategories.await(manga.id, listOf(defaultCat.id))
+                            withContext(Dispatchers.Main) { context.toast("Added to Library") }
+                        } else if (defaultCatId == 0L || categories.isEmpty()) {
+                            setMangaCategories.await(manga.id, emptyList())
+                            withContext(Dispatchers.Main) { context.toast("Added to Library") }
+                        } else {
+                            withContext(Dispatchers.Main) {
+                                onNeedCategorySelection?.invoke(categories, emptyList())
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) { context.toast("Removed from Library") }
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun getEntryUrl(item: HomeMangaItem): Pair<String, Long>? {
+        return withIOContext {
+            when (item.mediaType) {
+                MEDIA_TYPE_ANIME -> {
+                    val anime = getAnime.await(item.mangaId) ?: return@withIOContext null
+                    val source = animeSourceManager.getOrStub(anime.source) as? AnimeHttpSource ?: return@withIOContext null
+                    try {
+                        source.getAnimeUrl(anime.toSAnime()) to source.id
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                MEDIA_TYPE_NOVEL -> {
+                    val novel = runCatching { novelRepository.getNovelById(item.mangaId) }.getOrNull() ?: return@withIOContext null
+                    novel.url.takeIf { it.isNotBlank() }?.let { it to novel.source }
+                }
+                else -> {
+                    val manga = getManga.await(item.mangaId) ?: return@withIOContext null
+                    val source = sourceManager.getOrStub(manga.source) as? HttpSource ?: return@withIOContext null
+                    try {
+                        source.getMangaUrl(manga.toSManga()) to source.id
+                    } catch (e: Exception) {
+                        null
                     }
                 }
             }

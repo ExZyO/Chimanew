@@ -1,6 +1,7 @@
 // EaZy Nuvio+ / Chimanew
 package eu.kanade.tachiyomi.ui.home.chimanew
 
+import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,19 +23,29 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Done
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Sync
+import androidx.core.net.toUri
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,6 +88,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.history.components.HistoryDeleteDialog
 import eu.kanade.presentation.more.settings.screen.SettingsNuvioScreen
@@ -87,6 +99,7 @@ import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.browse.animesource.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import chimahon.novel.ui.browse.globalsearch.GlobalNovelSearchScreen
+import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
 import eu.kanade.tachiyomi.ui.entries.anime.track.AnimeTrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
@@ -98,10 +111,18 @@ import eu.kanade.tachiyomi.ui.manga.track.TrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import eu.kanade.tachiyomi.ui.webview.WebViewScreen
+import eu.kanade.tachiyomi.util.system.toShareIntent
+import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import tachiyomi.core.common.preference.CheckboxState
+import tachiyomi.core.common.preference.mapAsCheckboxState
+import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.entries.anime.model.AnimeCover
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.i18n.MR
@@ -142,6 +163,7 @@ data object ChimanewHomeTab : Tab {
         var selectedLongPressItem by remember { mutableStateOf<HomeMangaItem?>(null) }
         var quickTrackerItem by remember { mutableStateOf<HomeMangaItem?>(null) }
         var itemToRemoveFromHistory by remember { mutableStateOf<HomeMangaItem?>(null) }
+        var categoryDialogData by remember { mutableStateOf<CategoryDialogData?>(null) }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         val trackerManager = remember { Injekt.get<TrackerManager>() }
@@ -507,6 +529,7 @@ data object ChimanewHomeTab : Tab {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                             .padding(bottom = 24.dp),
                     ) {
                         // Header: Cover + Title
@@ -559,6 +582,14 @@ data object ChimanewHomeTab : Tab {
                             MEDIA_TYPE_ANIME -> "Resume Watching"
                             else -> "Resume Reading"
                         }
+                        val markNextLabel = when (item.mediaType) {
+                            MEDIA_TYPE_ANIME -> "Mark Next Episode as Watched"
+                            else -> "Mark Next Chapter as Read"
+                        }
+                        val downloadNextLabel = when (item.mediaType) {
+                            MEDIA_TYPE_ANIME -> "Download Next Episode"
+                            else -> "Download Next Chapter"
+                        }
 
                         // Action 1: Open Details Page
                         ListItem(
@@ -590,7 +621,43 @@ data object ChimanewHomeTab : Tab {
                             },
                         )
 
-                        // Action 3: Quick Tracking & Status
+                        // Action 3: Mark Next as Read / Watched
+                        if (!item.isDiscovery) {
+                            ListItem(
+                                headlineContent = { Text(markNextLabel) },
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Done,
+                                        contentDescription = null,
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    val target = item
+                                    selectedLongPressItem = null
+                                    screenModel.markNextAsRead(target, context)
+                                },
+                            )
+                        }
+
+                        // Action 4: Download Next Chapter / Episode
+                        if (!item.isDiscovery && item.mediaType != MEDIA_TYPE_NOVEL) {
+                            ListItem(
+                                headlineContent = { Text(downloadNextLabel) },
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Download,
+                                        contentDescription = null,
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    val target = item
+                                    selectedLongPressItem = null
+                                    screenModel.downloadNext(target, context)
+                                },
+                            )
+                        }
+
+                        // Action 5: Quick Tracking & Status
                         if (!item.isDiscovery) {
                             ListItem(
                                 headlineContent = { Text("Update Tracking") },
@@ -608,7 +675,130 @@ data object ChimanewHomeTab : Tab {
                             )
                         }
 
-                        // Action 4: Remove from History
+                        // Action 6: Library Management
+                        if (!item.isDiscovery) {
+                            if (!item.inLibrary) {
+                                ListItem(
+                                    headlineContent = { Text("Add to Library") },
+                                    leadingContent = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.BookmarkBorder,
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    modifier = Modifier.clickable {
+                                        val target = item
+                                        selectedLongPressItem = null
+                                        screenModel.toggleFavorite(target, context) { categories, assigned ->
+                                            categoryDialogData = CategoryDialogData(
+                                                item = target,
+                                                selection = categories.mapAsCheckboxState { it.id in assigned }.toImmutableList(),
+                                            )
+                                        }
+                                    },
+                                )
+                            } else {
+                                ListItem(
+                                    headlineContent = { Text(stringResource(MR.strings.action_edit_categories)) },
+                                    leadingContent = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Folder,
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    modifier = Modifier.clickable {
+                                        val target = item
+                                        selectedLongPressItem = null
+                                        screenModel.openChangeCategories(target) { categories, assigned ->
+                                            categoryDialogData = CategoryDialogData(
+                                                item = target,
+                                                selection = categories.mapAsCheckboxState { it.id in assigned }.toImmutableList(),
+                                            )
+                                        }
+                                    },
+                                )
+                                ListItem(
+                                    headlineContent = { Text("Remove from Library") },
+                                    leadingContent = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.BookmarkRemove,
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    modifier = Modifier.clickable {
+                                        val target = item
+                                        selectedLongPressItem = null
+                                        screenModel.toggleFavorite(target, context)
+                                    },
+                                )
+                            }
+                        }
+
+                        // Action 7: Open in WebView
+                        if (!item.isDiscovery) {
+                            ListItem(
+                                headlineContent = { Text(stringResource(MR.strings.action_open_in_web_view)) },
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Public,
+                                        contentDescription = null,
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    val target = item
+                                    selectedLongPressItem = null
+                                    scope.launch {
+                                        val pair = screenModel.getEntryUrl(target)
+                                        if (pair != null) {
+                                            navigator.push(
+                                                WebViewScreen(
+                                                    url = pair.first,
+                                                    initialTitle = target.title,
+                                                    sourceId = pair.second,
+                                                ),
+                                            )
+                                        } else {
+                                            context.toast("Source URL not available")
+                                        }
+                                    }
+                                },
+                            )
+                        }
+
+                        // Action 8: Share
+                        ListItem(
+                            headlineContent = { Text(stringResource(MR.strings.action_share)) },
+                            leadingContent = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Share,
+                                    contentDescription = null,
+                                )
+                            },
+                            modifier = Modifier.clickable {
+                                val target = item
+                                selectedLongPressItem = null
+                                scope.launch {
+                                    val pair = screenModel.getEntryUrl(target)
+                                    val url = pair?.first
+                                    if (!url.isNullOrBlank()) {
+                                        try {
+                                            val intent = url.toUri().toShareIntent(context, type = "text/plain")
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            context.toast(e.message)
+                                        }
+                                    } else {
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, target.title)
+                                        }
+                                        context.startActivity(Intent.createChooser(intent, target.title))
+                                    }
+                                }
+                            },
+                        )
+
+                        // Action 9: Remove from History
                         if (item.historyId != null || item.lastChapterId != null || item.lastChapterNumber != null) {
                             ListItem(
                                 headlineContent = {
@@ -646,6 +836,27 @@ data object ChimanewHomeTab : Tab {
                 )
             }
 
+            // Change Category Dialog
+            categoryDialogData?.let { data ->
+                ChangeCategoryDialog(
+                    initialSelection = data.selection,
+                    onDismissRequest = { categoryDialogData = null },
+                    onEditCategories = {
+                        categoryDialogData = null
+                        val tab = when (data.item.mediaType) {
+                            MEDIA_TYPE_ANIME -> CategoryScreen.Tab.ANIME
+                            MEDIA_TYPE_NOVEL -> CategoryScreen.Tab.NOVELS
+                            else -> CategoryScreen.Tab.MANGA
+                        }
+                        navigator.push(CategoryScreen(tab))
+                    },
+                    onConfirm = { include, _ ->
+                        screenModel.setCategories(data.item, include)
+                        categoryDialogData = null
+                    },
+                )
+            }
+
             // Tracking Modal Sheet
             quickTrackerItem?.let { item ->
                 if (item.mediaType == MEDIA_TYPE_ANIME) {
@@ -675,3 +886,8 @@ data object ChimanewHomeTab : Tab {
         }
     }
 }
+
+private data class CategoryDialogData(
+    val item: HomeMangaItem,
+    val selection: ImmutableList<CheckboxState<Category>>,
+)

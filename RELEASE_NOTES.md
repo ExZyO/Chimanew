@@ -1,16 +1,14 @@
-# What's New in Chimanew v2.6.75
+# What's New in Chimanew v2.6.76
 
-### Uncapped Home Screen Shelves and Categories
-* **Removed Shelf Size Limits**: Completely removed artificial item limits (previously capped at 15 items) across all home shelves, including Recently Updated Manga, Recently Added Anime, and Recently Added Novels. Shelves now show all matching library and history entries.
-* **Uncapped Hero Item Selection**: Hero carousel candidate selection now accesses the entire reading history and library pools without 15-item caps.
-
-### Zero-Lag Home Screen Performance Architecture
-* **Single-Pass AsyncImage Rendering**: Replaced subcomposition-based image loading in cards with direct single-pass AsyncImage rendering and graceful background error fallbacks. This completely stops UI-thread layout thrashing and dropped frames during fast scrolling.
-* **Compose Slot Recycling**: Added explicit contentType specifications and composite unique keys across both vertical shelf columns and horizontal card rows, enabling instant Compose layout slot reuse and buttery smooth 60/120fps scrolling on par with the Library, History, and Updates tabs.
-
-### Continue Reading History Management & Parity Dialog
-* **Remove from History Action**: Long-pressing any card in Continue Reading (or any read entry on the home screen) surfaces a Remove option matching the History tab.
-* **Parity Removal Dialog**: Features the exact History tab confirmation dialog with options to either remove the read date of the current chapter or reset all chapters for the entry.
-
-### Quick Tracker Access in Long-Press Menu
-* **Direct Status and Progress Updates**: Added an Update Tracking shortcut to the card long-press sheet, allowing instant tracker status, score, and progress management without opening the full details screen.
+### Complete Home Quick Actions & Convenience Suite
+* **Full Context Actions Menu**: Extended the entry long-press bottom sheet into a comprehensive convenience hub across all Manga, Anime, and Novel cards on the Home screen.
+* **Instant Mark Next as Read / Watched**: Mark the next unread chapter or episode as completed with a single tap directly from the bottom sheet, with automatic status updates and real-time toast feedback.
+* **Download Next Chapter / Episode**: Trigger background downloads for the next upcoming chapter or episode without having to navigate into the full entry screen.
+* **Quick Library & Category Management**:
+  - Add to Library shortcut for untracked entries with default category assignment or category selection prompt.
+  - Edit Categories dialog directly from the home screen for library items, with instant category assignment across Manga, Anime, and Novel categories.
+  - Remove from Library shortcut with instant confirmation.
+* **Direct Webview & Browser Launch**: Open the original source web page immediately in the built-in WebView or external browser for any online manga, anime, or novel entry.
+* **System Share Integration**: Share entry titles and web source URLs directly via the Android native system share sheet.
+* **Parity History Removal**: Retained the History tab parity dialog for Continue Reading entries, supporting both single-chapter read date removal and full entry history reset.
+* **Scrollable Action Sheet**: Added smooth vertical scrolling to the action sheet to guarantee seamless usability across all device screen sizes and orientations.
