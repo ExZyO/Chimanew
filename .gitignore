@@ -46,3 +46,4 @@ UPDATE_GUIDE.md
 /docs
 artifacts_*/
 *.apk
+/tools

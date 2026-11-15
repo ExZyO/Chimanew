@@ -226,6 +226,12 @@ This document provides a comprehensive technical index of all optimizations, low
   ```
   Evaluates touch fling velocity in real-time, dynamically expanding prefetch layout space up to $3\times$ ahead of the viewport to pre-decode images before they scroll into view.
 
+### Cross-Page Seam OCR Augmentation
+* **Implementation Files**:
+  * `core/common/src/main/kotlin/tachiyomi/core/common/util/system/ImageUtil.kt`
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonViewer.kt`
+* **Mechanism**: Vertically joins page seams with boundary overlap strips, scaled coordinate translation, and immediate bitmap recycling. Enables uninterrupted OCR text recognition across continuous webtoon page splits without duplicate text recognition.
+
 ### Aggressive Parallel Rolling Chunking
 * **Implementation File**: `app/src/main/java/eu/kanade/tachiyomi/ui/reader/loader/HttpPageLoader.kt`
 * **Mechanism**: Executes `loadByRollingChunked(0, 3, 5)` on chapter open and `(page.index, 2, 4)` during scrolling, keeping adjacent pages decoded ahead of the viewport.
@@ -258,6 +264,12 @@ This document provides a comprehensive technical index of all optimizations, low
 
 ### Nested Vertical Scroll Crash Prevention
 * **Mechanism**: Restricts scrolling layouts to single-direction measurement constraints. Avoids nesting unconstrained `LazyColumn` or vertical scrollers inside outer vertical containers (which triggers `IllegalStateException: Vertically scrollable component was measured with an infinity maximum height constraints`). Instead, hierarchical/threaded items (e.g., nested comment trees) are flattened into a single list with depth-based indentation (`depth * 12.dp`) and clean subtree collapse toggling.
+
+### Native Compose Dictionary Glossary Renderer
+* **Implementation Files**:
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/dictionary/compose/DictionaryEntryCompose.kt`
+  * `chimahon/src/main/cpp/dictionary_core_jni.cpp`
+* **Mechanism**: Bypasses Android WebView allocation and HTML/CSS layout overhead by rendering dictionary cards, pitch accent graphs, and definitions directly via native Jetpack Compose and C++ rendering backends. Delivers zero-latency card popups and low RAM utilization during immersion lookups.
 
 ### Media-Adaptive Progress Terminology
 * **Implementation File**:
