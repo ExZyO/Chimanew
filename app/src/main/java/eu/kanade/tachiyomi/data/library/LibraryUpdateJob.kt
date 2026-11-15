@@ -171,6 +171,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
         cloudflareBlockedSources.clear()
         notifiedCloudflareSources.clear()
+        pruneExpiredChecks(context)
 
         deleteLibraryUpdateErrors.cleanUnrelevantMangaErrors()
         // KMK <--
@@ -453,12 +454,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             .distinctBy { it.manga.id }
             // SY <--
             .filter {
-                val lastChecked = lastCheckedMangaTimestamps[it.manga.id] ?: 0L
-                val lastTime = maxOf(lastChecked, it.manga.lastUpdate)
+                val lastChecked = getLastCheckedTimestamp(context, it.manga.id)
                 val isRecentlyChecked = lastChecked > 0L && (now - lastChecked) < 15 * 60 * 1000L
 
                 when {
-                    isRecentlyChecked && it.manga.id !in trackerSignaledMangaIds -> {
+                    isRecentlyChecked -> {
                         ChimanewDiagnostics.log(DiagnosticCategory.UPDATES, "Sync") {
                             "Skipping recently checked '${it.manga.title}' (checked ${(now - lastChecked) / 1000}s ago)."
                         }
@@ -695,7 +695,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                             }
                                         }
                                         clearErrorFromDB(mangaId = manga.id)
-                                        lastCheckedMangaTimestamps[manga.id] = System.currentTimeMillis()
+                                        recordMangaChecked(context, manga.id)
                                     } catch (e: Throwable) {
                                         val isCloudflare = e is CloudflareBypassException ||
                                             e.cause is CloudflareBypassException ||
@@ -971,6 +971,49 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val lastCheckedMangaTimestamps = java.util.concurrent.ConcurrentHashMap<Long, Long>()
         val cloudflareBlockedSources = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
         val notifiedCloudflareSources = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+
+        private const val PREFS_RECENT_CHECKS = "library_recent_checks"
+
+        fun recordMangaChecked(context: Context, mangaId: Long, timestamp: Long = System.currentTimeMillis()) {
+            lastCheckedMangaTimestamps[mangaId] = timestamp
+            try {
+                context.getSharedPreferences(PREFS_RECENT_CHECKS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putLong("manga_$mangaId", timestamp)
+                    .apply()
+            } catch (_: Exception) {}
+        }
+
+        fun getLastCheckedTimestamp(context: Context, mangaId: Long): Long {
+            lastCheckedMangaTimestamps[mangaId]?.let { return it }
+            return try {
+                val ts = context.getSharedPreferences(PREFS_RECENT_CHECKS, Context.MODE_PRIVATE)
+                    .getLong("manga_$mangaId", 0L)
+                if (ts > 0L) {
+                    lastCheckedMangaTimestamps[mangaId] = ts
+                }
+                ts
+            } catch (_: Exception) {
+                0L
+            }
+        }
+
+        fun pruneExpiredChecks(context: Context) {
+            try {
+                val prefs = context.getSharedPreferences(PREFS_RECENT_CHECKS, Context.MODE_PRIVATE)
+                val all = prefs.all
+                val now = System.currentTimeMillis()
+                val editor = prefs.edit()
+                var changed = false
+                for ((key, value) in all) {
+                    if (value is Long && (now - value) > 60 * 60 * 1000L) {
+                        editor.remove(key)
+                        changed = true
+                    }
+                }
+                if (changed) editor.apply()
+            } catch (_: Exception) {}
+        }
 
         private const val TAG = "LibraryUpdate"
         private const val WORK_NAME_AUTO = "LibraryUpdate-auto"

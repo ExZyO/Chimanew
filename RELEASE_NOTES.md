@@ -1,7 +1,6 @@
-# What's New in Chimanew v2.6.80
+# What's New in Chimanew v2.6.81
 
-### Updates Feed Chapter & Episode Deduplication
-* **Accurate New Chapter Counters**: The Updates feed expander badges (`+X`) across Manga, Anime, and Novels now deduplicate multi-scanlator uploads by recognized chapter/episode number and standardized name. Prevents inflated counters from counting every duplicate scanlator release, ensuring the badge shows the true number of distinct new chapters.
-
-### Updates Feed Selected Artwork Integration
-* **Unified Artwork Priority**: The Updates feed items now resolve directly against `ArtworkWaterfallRepository`. Prioritizes user custom covers and cached high-resolution artwork from AniList, Kitsu, ComicK, and MangaDex rather than displaying low-resolution default source covers.
+### Persistent Library Update Queue Resumption & Grace Window
+* **15-Minute Cancellation Recovery**: Fixed library update queue re-evaluation when updates are cancelled and restarted. Verified titles are now persisted to both memory and atomic disk preferences (`library_recent_checks` and `anime_library_recent_checks`), surviving cancellations, background task restarts, and process reloads.
+* **Tracker-Assisted Parity**: Removed the exception that exempted tracker-assisted titles from the recent-check grace period. Prevents hundreds of tracker-linked titles from being redundantly re-queried immediately after a check, ensuring true resumption from where the queue left off.
+* **Automatic Expiration Pruning**: Automatically prunes check records older than 1 hour upon starting a library update, maintaining a lightweight preference footprint.

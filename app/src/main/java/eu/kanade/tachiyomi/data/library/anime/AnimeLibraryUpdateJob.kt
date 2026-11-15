@@ -104,6 +104,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         if (!chimanewPreferences.enableAnimeModule().get()) {
             return Result.success()
         }
+        pruneExpiredChecks(context)
         if (tags.contains(WORK_NAME_AUTO)) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                 val preferences = Injekt.get<LibraryPreferences>()
@@ -206,7 +207,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val now = System.currentTimeMillis()
         animeToUpdate = listToUpdateWithSeasons
             .filter {
-                val lastChecked = lastCheckedAnimeTimestamps[it.anime.id] ?: 0L
+                val lastChecked = getLastCheckedTimestamp(context, it.anime.id)
                 val isRecentlyChecked = lastChecked > 0L && (now - lastChecked) < 15 * 60 * 1000L
 
                 when {
@@ -315,7 +316,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
                                             newUpdates.add(anime to distinctNewEpisodes.toTypedArray())
                                         }
-                                        lastCheckedAnimeTimestamps[anime.id] = System.currentTimeMillis()
+                                        recordAnimeChecked(context, anime.id)
                                     } catch (e: Throwable) {
                                         val errorMessage = when (e) {
                                         is NoResultsException -> context.stringResource(
@@ -433,6 +434,48 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
     companion object {
         val lastCheckedAnimeTimestamps = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+        private const val PREFS_RECENT_CHECKS = "anime_library_recent_checks"
+
+        fun recordAnimeChecked(context: Context, animeId: Long, timestamp: Long = System.currentTimeMillis()) {
+            lastCheckedAnimeTimestamps[animeId] = timestamp
+            try {
+                context.getSharedPreferences(PREFS_RECENT_CHECKS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putLong("anime_$animeId", timestamp)
+                    .apply()
+            } catch (_: Exception) {}
+        }
+
+        fun getLastCheckedTimestamp(context: Context, animeId: Long): Long {
+            lastCheckedAnimeTimestamps[animeId]?.let { return it }
+            return try {
+                val ts = context.getSharedPreferences(PREFS_RECENT_CHECKS, Context.MODE_PRIVATE)
+                    .getLong("anime_$animeId", 0L)
+                if (ts > 0L) {
+                    lastCheckedAnimeTimestamps[animeId] = ts
+                }
+                ts
+            } catch (_: Exception) {
+                0L
+            }
+        }
+
+        fun pruneExpiredChecks(context: Context) {
+            try {
+                val prefs = context.getSharedPreferences(PREFS_RECENT_CHECKS, Context.MODE_PRIVATE)
+                val all = prefs.all
+                val now = System.currentTimeMillis()
+                val editor = prefs.edit()
+                var changed = false
+                for ((key, value) in all) {
+                    if (value is Long && (now - value) > 60 * 60 * 1000L) {
+                        editor.remove(key)
+                        changed = true
+                    }
+                }
+                if (changed) editor.apply()
+            } catch (_: Exception) {}
+        }
         private const val TAG = "AnimeLibraryUpdate"
         private const val WORK_NAME_AUTO = "AnimeLibraryUpdate-auto"
         private const val WORK_NAME_MANUAL = "AnimeLibraryUpdate-manual"

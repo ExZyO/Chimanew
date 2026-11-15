@@ -299,8 +299,12 @@ This document provides a comprehensive technical index of all optimizations, low
   Deduplicates incoming chapters and episodes by recognized number (`"num_${chapter.chapterNumber}"` / `"num_${parsedNumber}"`) and normalized title (`"name_${chapter.name}"`).
 * **Impact**: Solves the "+600 chapters" bug when series have multiple scanlator groups or translations. Ensures accurate badge numbers, update feeds, grouped "+X" expander counts, and notification summaries.
 
-### Cancelled Update Queue Recovery (15-Minute Grace Window)
-* **Mechanism**: Tracks successful check timestamps in `lastCheckedMangaTimestamps`. If a library update is cancelled after verifying 110 of 270 entries, starting it again skips the 110 entries and processes only the remaining 160.
+### Persistent Cancelled Update Recovery (15-Minute Grace Window)
+* **Implementation Files**:
+  * `app/src/main/java/eu/kanade/tachiyomi/data/library/LibraryUpdateJob.kt`
+  * `app/src/main/java/eu/kanade/tachiyomi/data/library/anime/AnimeLibraryUpdateJob.kt`
+* **Mechanism**: Persists verified entry check timestamps in memory (`ConcurrentHashMap`) and atomic disk preferences (`library_recent_checks` / `anime_library_recent_checks`). Enforces the 15-minute grace window across both standard and tracker-assisted titles, ensuring that previously verified entries are skipped even if the update is cancelled, restarted, or the app process is restarted.
+* **Impact**: Guarantees true queue resumption ($265 - 91 = 174$) without redundant network queries on already verified titles. Automatically prunes records older than 1 hour.
 
 ### Tracker-Assisted Smart Update Engine
 * **Mechanism**: Cross-checks tracker signals (ComicK, AniList, MAL, Kitsu, MangaUpdates) to prioritize titles with confirmed new chapters and bypass static fetch intervals.
