@@ -59,7 +59,9 @@ import eu.kanade.presentation.manga.components.swipeActionThreshold
 import eu.kanade.presentation.util.animateItemFastScroll
 import eu.kanade.presentation.util.relativeTimeSpanString
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.model.Download
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.updates.UpdatesItem
 import eu.kanade.tachiyomi.ui.updates.UpdatesScreenModel.UpdateSelectionOptions
 import eu.kanade.tachiyomi.ui.updates.groupByDateAndManga
@@ -73,6 +75,8 @@ import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.selectedBackground
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 internal fun LazyListScope.updatesLastUpdatedItem(
     lastUpdated: Long,
@@ -369,6 +373,23 @@ private fun UpdatesUiItem(
         ) {
             // KMK -->
             val mangaCover = update.coverData
+            val coverCache = remember { Injekt.get<CoverCache>() }
+            val artworkWaterfall = remember { Injekt.get<ArtworkWaterfallRepository>() }
+            val hasCustomCover = remember(update.mangaId) { coverCache.hasCustomCover(update.mangaId) }
+            val cachedArtwork = remember(update.mangaId, update.mangaTitle) {
+                if (!hasCustomCover) {
+                    artworkWaterfall.getCached(
+                        title = update.mangaTitle,
+                        defaultCoverUrl = update.coverData.ogUrl,
+                        mangaId = update.mangaId,
+                    )
+                } else null
+            }
+            val coverDataToDisplay: Any = if (hasCustomCover || cachedArtwork?.posterUrl == null) {
+                mangaCover
+            } else {
+                cachedArtwork.posterUrl!!
+            }
             val coverIsWide = coverRatio.floatValue <= RatioSwitchToPanorama
             val bgColor = mangaCover.dominantCoverColors?.first?.let { Color(it) }
             val onBgColor = mangaCover.dominantCoverColors?.second
@@ -386,7 +407,7 @@ private fun UpdatesUiItem(
                         MangaCover.Panorama(
                             modifier = Modifier
                                 .width(UpdateItemPanoramaWidth),
-                            data = mangaCover,
+                            data = coverDataToDisplay,
                             onClick = onClickCover,
                             // KMK -->
                             bgColor = bgColor,
@@ -405,7 +426,7 @@ private fun UpdatesUiItem(
                                 // KMK -->
                                 .width(UpdateItemWidth),
                             // KMK <--
-                            data = mangaCover,
+                            data = coverDataToDisplay,
                             onClick = onClickCover,
                             // KMK -->
                             bgColor = bgColor,

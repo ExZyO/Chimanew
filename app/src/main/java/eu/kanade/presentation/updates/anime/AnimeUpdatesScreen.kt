@@ -193,7 +193,10 @@ sealed interface AnimeUpdatesUiModel {
         override val isExpandable: Boolean,
         val allItems: List<AnimeUpdatesItem> = listOf(item),
     ) : Item(item, isExpandable) {
-        val extraCount: Int get() = (allItems.size - 1).coerceAtLeast(0)
+        val distinctCount: Int get() = allItems.distinctBy {
+            extractEpisodeIdentifier(it.update.episodeName)
+        }.size
+        val extraCount: Int get() = (distinctCount - 1).coerceAtLeast(0)
         val latestDateFetch: Long get() = allItems.maxOfOrNull { it.update.dateFetch } ?: item.update.dateFetch
         val earliestUnseenItem: AnimeUpdatesItem get() = allItems.firstOrNull { !it.update.seen } ?: item
         val latestItem: AnimeUpdatesItem get() = allItems.maxByOrNull { it.update.dateFetch } ?: item
@@ -201,5 +204,18 @@ sealed interface AnimeUpdatesUiModel {
         val hasBookmark: Boolean get() = allItems.any { it.update.bookmark }
         val hasFillermark: Boolean get() = allItems.any { it.update.fillermark }
         val isAllSelected: Boolean get() = allItems.isNotEmpty() && allItems.all { it.selected }
+    }
+}
+
+private val episodeNumberRegex = Regex("""(?i)(?:episode|ep\.?)\s*(\d+(?:\.\d+)?)""")
+private val looseAnimeNumberRegex = Regex("""\b(\d+(?:\.\d+)?)\b""")
+
+fun extractEpisodeIdentifier(name: String): String {
+    val match = episodeNumberRegex.find(name) ?: looseAnimeNumberRegex.find(name)
+    val num = match?.groupValues?.get(1)?.toDoubleOrNull()
+    return if (num != null) {
+        "num_${if (num % 1.0 == 0.0) num.toLong().toString() else num.toString()}"
+    } else {
+        "name_${name.trim().lowercase()}"
     }
 }

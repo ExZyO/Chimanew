@@ -23,6 +23,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +34,8 @@ import eu.kanade.presentation.entries.components.DotSeparatorText
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.updates.CollapseButton
 import eu.kanade.presentation.util.relativeTimeSpanString
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_NOVEL
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.updates.novel.groupByDateAndNovel
 import tachiyomi.domain.updates.novel.model.NovelUpdatesWithRelations
 import tachiyomi.i18n.MR
@@ -42,6 +45,8 @@ import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun NovelUpdatesScreen(
@@ -96,7 +101,8 @@ fun NovelUpdatesScreen(
                     val latestChapter = chapters.maxByOrNull { it.dateFetch } ?: chapters.first()
                     val hasUnread = unreadChapters.isNotEmpty()
                     val hasBookmark = chapters.any { it.bookmark }
-                    val extraCount = (chapters.size - 1).coerceAtLeast(0)
+                    val distinctCount = chapters.distinctBy { extractNovelChapterIdentifier(it.chapterName) }.size
+                    val extraCount = (distinctCount - 1).coerceAtLeast(0)
 
                     item(key = "novelUpdatesLeader-$key") {
                         NovelUpdatesUiItem(
@@ -171,12 +177,22 @@ private fun NovelUpdatesUiItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isLeader) {
+            val artworkWaterfall = remember { Injekt.get<ArtworkWaterfallRepository>() }
+            val cachedArtwork = remember(update.novelId, update.novelTitle) {
+                artworkWaterfall.getCached(
+                    title = update.novelTitle,
+                    defaultCoverUrl = update.coverData.ogUrl,
+                    mangaId = update.novelId,
+                    mediaType = MEDIA_TYPE_NOVEL,
+                )
+            }
+            val coverDataToDisplay: Any = cachedArtwork?.posterUrl ?: update.coverData
             ItemCover.Book(
                 modifier = Modifier
                     .padding(vertical = 6.dp)
                     .width(48.dp)
                     .fillMaxHeight(),
-                data = update.coverData,
+                data = coverDataToDisplay,
             )
         } else {
             Box(
@@ -264,5 +280,18 @@ private fun NovelUpdatesUiItem(
                 collapseToggle = collapseToggle,
             )
         }
+    }
+}
+
+private val novelChapterNumberRegex = Regex("""(?i)(?:chapter|ch\.?)\s*(\d+(?:\.\d+)?)""")
+private val looseNovelNumberRegex = Regex("""\b(\d+(?:\.\d+)?)\b""")
+
+fun extractNovelChapterIdentifier(name: String): String {
+    val match = novelChapterNumberRegex.find(name) ?: looseNovelNumberRegex.find(name)
+    val num = match?.groupValues?.get(1)?.toDoubleOrNull()
+    return if (num != null) {
+        "num_${if (num % 1.0 == 0.0) num.toLong().toString() else num.toString()}"
+    } else {
+        "name_${name.trim().lowercase()}"
     }
 }

@@ -55,6 +55,8 @@ import eu.kanade.presentation.updates.CollapseButton
 import eu.kanade.presentation.util.animateItemFastScroll
 import eu.kanade.presentation.util.relativeTimeSpanString
 import eu.kanade.tachiyomi.data.animedownload.model.AnimeDownload
+import eu.kanade.tachiyomi.ui.home.chimanew.MEDIA_TYPE_ANIME
+import eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository
 import eu.kanade.tachiyomi.ui.updates.anime.AnimeUpdatesItem
 import eu.kanade.tachiyomi.ui.updates.anime.groupByDateAndAnime
 import me.saket.swipe.SwipeableActionsBox
@@ -67,6 +69,8 @@ import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.selectedBackground
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.util.concurrent.TimeUnit
 
 internal fun LazyListScope.animeUpdatesLastUpdatedItem(
@@ -346,6 +350,16 @@ private fun AnimeUpdatesUiItem(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val animeCover = update.coverData
+            val artworkWaterfall = remember { Injekt.get<ArtworkWaterfallRepository>() }
+            val cachedArtwork = remember(update.animeId, update.animeTitle) {
+                artworkWaterfall.getCached(
+                    title = update.animeTitle,
+                    defaultCoverUrl = update.coverData.ogUrl,
+                    mangaId = update.animeId,
+                    mediaType = MEDIA_TYPE_ANIME,
+                )
+            }
+            val coverDataToDisplay: Any = cachedArtwork?.posterUrl ?: animeCover
             val coverIsWide = coverRatio.floatValue <= RatioSwitchToPanorama
             val bgColor = animeCover.dominantCoverColors?.first?.let { Color(it) }
             val onBgColor = animeCover.dominantCoverColors?.second
@@ -353,7 +367,7 @@ private fun AnimeUpdatesUiItem(
                 if (usePanoramaCover && coverIsWide) {
                     AnimeCover.Panorama(
                         modifier = Modifier.width(AnimeUpdateItemPanoramaWidth),
-                        data = animeCover,
+                        data = coverDataToDisplay,
                         onClick = onClickCover,
                         bgColor = bgColor,
                         tint = onBgColor,
@@ -368,7 +382,7 @@ private fun AnimeUpdatesUiItem(
                         modifier = Modifier
                             .padding(vertical = 6.dp)
                             .width(AnimeUpdateItemWidth),
-                        data = animeCover,
+                        data = coverDataToDisplay,
                         onClick = onClickCover,
                         bgColor = bgColor,
                         tint = onBgColor,

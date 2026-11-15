@@ -118,6 +118,13 @@ This document provides a comprehensive technical index of all optimizations, low
 * **Mechanism**: Sanitizes raw API strings via `.takeIf { it.isNotBlank() && it != "null" && it != "N/A" }`, rejecting literal `"null"`, `"N/A"`, or blank string representations from external JSON responses.
 * **Impact**: Completely eliminates broken UI subtitles and labels such as `"Format: null • Year: null"` or `"Bio: null"`.
 
+### Updates Feed Selected Artwork Integration
+* **Implementation Files**:
+  * `app/src/main/java/eu/kanade/presentation/updates/UpdatesUiItem.kt`
+  * `app/src/main/java/eu/kanade/presentation/updates/anime/AnimeUpdatesUiItem.kt`
+  * `app/src/main/java/eu/kanade/presentation/updates/novel/NovelUpdatesScreen.kt`
+* **Mechanism**: Connects Manga, Anime, and Novel updates feed items directly to `ArtworkWaterfallRepository`. Prioritizes user custom covers and cached high-res artwork from AniList, Kitsu, ComicK, and MangaDex instead of falling back to low-resolution default source covers.
+
 ---
 
 ## 5. Three-Tier Cache Architecture
@@ -285,9 +292,12 @@ This document provides a comprehensive technical index of all optimizations, low
   * `app/src/main/java/eu/kanade/tachiyomi/data/library/LibraryUpdateJob.kt`
   * `app/src/main/java/eu/kanade/tachiyomi/data/library/anime/AnimeLibraryUpdateJob.kt`
   * `app/src/main/java/eu/kanade/tachiyomi/data/library/LibraryUpdateNotifier.kt`
+  * `app/src/main/java/eu/kanade/presentation/updates/UpdatesScreen.kt`
+  * `app/src/main/java/eu/kanade/presentation/updates/anime/AnimeUpdatesScreen.kt`
+  * `app/src/main/java/eu/kanade/presentation/updates/novel/NovelUpdatesScreen.kt`
 * **Mechanism**:
-  Deduplicates incoming chapters and episodes by recognized number (`"num_${chapter.chapterNumber}"`) and normalized title (`"name_${chapter.name}"`).
-* **Impact**: Solves the "+600 chapters" bug when series have multiple scanlator groups or translations. Ensures accurate badge numbers, update feeds, and notification summaries.
+  Deduplicates incoming chapters and episodes by recognized number (`"num_${chapter.chapterNumber}"` / `"num_${parsedNumber}"`) and normalized title (`"name_${chapter.name}"`).
+* **Impact**: Solves the "+600 chapters" bug when series have multiple scanlator groups or translations. Ensures accurate badge numbers, update feeds, grouped "+X" expander counts, and notification summaries.
 
 ### Cancelled Update Queue Recovery (15-Minute Grace Window)
 * **Mechanism**: Tracks successful check timestamps in `lastCheckedMangaTimestamps`. If a library update is cancelled after verifying 110 of 270 entries, starting it again skips the 110 entries and processes only the remaining 160.

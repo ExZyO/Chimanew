@@ -187,7 +187,10 @@ sealed interface UpdatesUiModel {
         override val isExpandable: Boolean,
         val allItems: List<UpdatesItem> = listOf(item),
     ) : Item(item, isExpandable) {
-        val extraCount: Int get() = (allItems.size - 1).coerceAtLeast(0)
+        val distinctCount: Int get() = allItems.distinctBy {
+            extractChapterIdentifier(it.update.chapterName)
+        }.size
+        val extraCount: Int get() = (distinctCount - 1).coerceAtLeast(0)
         val latestDateFetch: Long get() = allItems.maxOfOrNull { it.update.dateFetch } ?: item.update.dateFetch
         val earliestUnreadItem: UpdatesItem get() = allItems.firstOrNull { !it.update.read } ?: item
         val latestItem: UpdatesItem get() = allItems.maxByOrNull { it.update.dateFetch } ?: item
@@ -196,4 +199,17 @@ sealed interface UpdatesUiModel {
         val isAllSelected: Boolean get() = allItems.isNotEmpty() && allItems.all { it.selected }
     }
     // KMK <--
+}
+
+private val chapterNumberRegex = Regex("""(?i)(?:chapter|ch\.?|ep\.?|episode)\s*(\d+(?:\.\d+)?)""")
+private val looseNumberRegex = Regex("""\b(\d+(?:\.\d+)?)\b""")
+
+fun extractChapterIdentifier(name: String): String {
+    val match = chapterNumberRegex.find(name) ?: looseNumberRegex.find(name)
+    val num = match?.groupValues?.get(1)?.toDoubleOrNull()
+    return if (num != null) {
+        "num_${if (num % 1.0 == 0.0) num.toLong().toString() else num.toString()}"
+    } else {
+        "name_${name.trim().lowercase()}"
+    }
 }
