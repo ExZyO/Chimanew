@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.network.jsonMime
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics
+import eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
