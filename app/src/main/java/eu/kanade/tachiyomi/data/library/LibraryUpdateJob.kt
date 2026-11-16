@@ -349,12 +349,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     if (track.totalChapters <= 0L) return@firstOrNull false
                     val isPlausible = when {
                         latestNum != null && latestNum > 0.0 -> {
-                            val diff = track.totalChapters - latestNum
+                            val diff = track.totalChapters.toDouble() - latestNum
                             diff in 0.5..5.0
                         }
                         item.totalChapters > 0L -> {
                             val diff = track.totalChapters - item.totalChapters
-                            diff in 1.0..5.0
+                            diff in 1L..5L
                         }
                         else -> true
                     }
@@ -411,12 +411,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                 }
                                                 val isPlausible = when {
                                                     latestNum != null && latestNum > 0.0 -> {
-                                                        val diff = refreshed.totalChapters - latestNum
+                                                        val diff = refreshed.totalChapters.toDouble() - latestNum
                                                         diff in 0.5..5.0
                                                     }
                                                     item.totalChapters > 0L -> {
                                                         val diff = refreshed.totalChapters - item.totalChapters
-                                                        diff in 1.0..5.0
+                                                        diff in 1L..5L
                                                     }
                                                     else -> true
                                                 }

@@ -446,14 +446,8 @@ class ArtworkWaterfallRepository(
                 else -> preferences.mangaCustomBannerUrl(mangaId).get()
             }.takeIf { it.isNotBlank() }
 
-            val titleToCheck = entryTitle ?: runBlocking {
-                try {
-                    if (mediaType == MEDIA_TYPE_MANGA) getManga.await(mangaId)?.let { it.ogTitle ?: it.title } else null
-                } catch (_: Exception) { null }
-            }
-
-            if (rawPref != null && !titleToCheck.isNullOrBlank() && !isCustomBannerValidForEntry(rawPref, titleToCheck)) {
-                logcat(LogPriority.WARN) { "Discarding mismatched custom banner '$rawPref' for '$titleToCheck' (id=$mangaId)" }
+            if (rawPref != null && !entryTitle.isNullOrBlank() && !isCustomBannerValidForEntry(rawPref, entryTitle)) {
+                logcat(LogPriority.WARN) { "Discarding mismatched custom banner '$rawPref' for '$entryTitle' (id=$mangaId)" }
                 when (mediaType) {
                     MEDIA_TYPE_ANIME -> preferences.animeCustomBannerUrl(mangaId).delete()
                     MEDIA_TYPE_NOVEL -> preferences.novelCustomBannerUrl(mangaId).delete()
@@ -676,6 +670,7 @@ class ArtworkWaterfallRepository(
                     mangaId = mangaId,
                     categoryIds = effCategories,
                     mediaType = MEDIA_TYPE_ANIME,
+                    entryTitle = title,
                 )
             }
 
@@ -780,6 +775,7 @@ class ArtworkWaterfallRepository(
                 mangaId = mangaId,
                 categoryIds = effCategories,
                 mediaType = MEDIA_TYPE_ANIME,
+                entryTitle = title,
             )
         }
 
