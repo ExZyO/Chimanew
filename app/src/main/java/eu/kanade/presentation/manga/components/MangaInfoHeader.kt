@@ -215,8 +215,8 @@ fun MangaInfoBox(
         detailsBackdropArtwork,
         categoryArtworkRulesUpdated,
     ) {
+        value = if (useAnilistArtwork) cachedArtwork else null
         if (!useAnilistArtwork) {
-            value = null
             return@produceState
         }
         withContext(Dispatchers.IO) {
@@ -238,6 +238,26 @@ fun MangaInfoBox(
         }
     }
 
+    val isCustomBannerValid = remember(customBannerUrl, manga.title, manga.ogTitle) {
+        customBannerUrl.isBlank() ||
+            customBannerUrl.equals("NONE", ignoreCase = true) ||
+            customBannerUrl.equals("COVER", ignoreCase = true) ||
+            ArtworkWaterfallRepository.isCustomBannerValidForEntry(customBannerUrl, manga.ogTitle ?: manga.title)
+    }
+    val effectiveCustomBanner = if (isCustomBannerValid) customBannerUrl else null
+
+    androidx.compose.runtime.LaunchedEffect(isCustomBannerValid, customBannerUrl, manga.id) {
+        if (!isCustomBannerValid && customBannerUrl.isNotBlank()) {
+            eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.ChimanewDiagnostics.log(
+                eu.kanade.tachiyomi.ui.home.chimanew.diagnostics.DiagnosticCategory.DETAILS,
+                "Backdrop",
+            ) {
+                "Automatically cleaned mismatched custom banner '$customBannerUrl' for '${manga.title}' (id=${manga.id})"
+            }
+            chimanewPreferences.mangaCustomBannerUrl(manga.id).delete()
+        }
+    }
+
     val detailsAllowCoverFallback by chimanewPreferences.detailsAllowCoverFallback().collectAsState()
     val isBannerDisabled = detailsBackdropArtwork == 3 ||
         excludedBanners.contains("ALL") ||
@@ -245,8 +265,8 @@ fun MangaInfoBox(
 
     val chosenArtworkModel: Any? = when {
         isBannerDisabled -> null
-        customBannerUrl.equals("COVER", ignoreCase = true) -> manga
-        !customBannerUrl.isNullOrBlank() -> customBannerUrl
+        effectiveCustomBanner.equals("COVER", ignoreCase = true) -> manga
+        !effectiveCustomBanner.isNullOrBlank() -> effectiveCustomBanner
         !useAnilistArtwork -> if (detailsAllowCoverFallback) manga else null
         detailsBackdropArtwork == 0 -> {
             if (!unifiedArtwork?.bannerUrl.isNullOrBlank()) {
@@ -282,7 +302,7 @@ fun MangaInfoBox(
             val type = when {
                 chosenArtworkModel == null -> "Disabled / None"
                 chosenArtworkModel == manga -> "Default Library Cover (manga.thumbnailUrl)"
-                chosenArtworkModel == customBannerUrl -> "Custom User Banner ($customBannerUrl)"
+                chosenArtworkModel == effectiveCustomBanner -> "Custom User Banner ($effectiveCustomBanner)"
                 chosenArtworkModel == unifiedArtwork?.bannerUrl -> "Authentic HD Banner (${unifiedArtwork?.bannerUrl})"
                 chosenArtworkModel == unifiedArtwork?.posterUrl -> "HD Poster (${unifiedArtwork?.posterUrl})"
                 else -> "Model: $chosenArtworkModel"
@@ -301,7 +321,7 @@ fun MangaInfoBox(
 
     // Determine if rendering an official wide landscape banner or falling back to ambient canvas
     val isWideBanner = (chosenArtworkModel != null) && (chosenArtworkModel != manga) && (chosenArtworkModel is String) && (
-        chosenArtworkModel == customBannerUrl ||
+        chosenArtworkModel == effectiveCustomBanner ||
         (unifiedArtwork != null && chosenArtworkModel == unifiedArtwork?.bannerUrl)
     )
 

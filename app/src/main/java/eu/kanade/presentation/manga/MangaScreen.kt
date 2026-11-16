@@ -646,28 +646,30 @@ private fun MangaScreenSmallImpl(
                     ),
                 ) {
                     item(
-                        key = MangaScreenItem.INFO_BOX,
+                        key = "${MangaScreenItem.INFO_BOX}_${state.manga.id}",
                         contentType = MangaScreenItem.INFO_BOX,
                     ) {
-                        MangaInfoBox(
-                            isTabletUi = false,
-                            appBarPadding = topPadding,
-                            manga = state.manga,
-                            sourceName = remember { state.source.getNameForMangaInfo(state.mergedData?.sources) },
-                            isStubSource = remember { state.source is StubSource },
-                            // KMK -->
-                            isSourceIncognito = remember { state.source.isIncognitoModeEnabled() },
-                            // KMK <--
-                            onCoverClick = onCoverClicked,
-                            doSearch = onSearch,
-                            // KMK -->
-                            librarySearch = librarySearch,
-                            onSourceClick = onSourceClick,
-                            onCoverLoaded = onCoverLoaded,
-                            coverRatio = coverRatio,
-                            // KMK <--
-                            readingTime = readingTime,
-                        )
+                        key(state.manga.id) {
+                            MangaInfoBox(
+                                isTabletUi = false,
+                                appBarPadding = topPadding,
+                                manga = state.manga,
+                                sourceName = remember { state.source.getNameForMangaInfo(state.mergedData?.sources) },
+                                isStubSource = remember { state.source is StubSource },
+                                // KMK -->
+                                isSourceIncognito = remember { state.source.isIncognitoModeEnabled() },
+                                // KMK <--
+                                onCoverClick = onCoverClicked,
+                                doSearch = onSearch,
+                                // KMK -->
+                                librarySearch = librarySearch,
+                                onSourceClick = onSourceClick,
+                                onCoverLoaded = onCoverLoaded,
+                                coverRatio = coverRatio,
+                                // KMK <--
+                                readingTime = readingTime,
+                            )
+                        }
                     }
 
                     item(
@@ -1120,25 +1122,27 @@ private fun MangaScreenLargeImpl(
                             .verticalScroll(rememberScrollState())
                             .padding(bottom = contentPadding.calculateBottomPadding()),
                     ) {
-                        MangaInfoBox(
-                            isTabletUi = true,
-                            appBarPadding = contentPadding.calculateTopPadding(),
-                            manga = state.manga,
-                            sourceName = remember { state.source.getNameForMangaInfo(state.mergedData?.sources) },
-                            isStubSource = remember { state.source is StubSource },
-                            // KMK -->
-                            isSourceIncognito = remember { state.source.isIncognitoModeEnabled() },
-                            // KMK <--
-                            onCoverClick = onCoverClicked,
-                            doSearch = onSearch,
-                            // KMK -->
-                            librarySearch = librarySearch,
-                            onSourceClick = onSourceClick,
-                            onCoverLoaded = onCoverLoaded,
-                            coverRatio = coverRatio,
-                            // KMK <--
-                            readingTime = readingTime,
-                        )
+                        key(state.manga.id) {
+                            MangaInfoBox(
+                                isTabletUi = true,
+                                appBarPadding = contentPadding.calculateTopPadding(),
+                                manga = state.manga,
+                                sourceName = remember { state.source.getNameForMangaInfo(state.mergedData?.sources) },
+                                isStubSource = remember { state.source is StubSource },
+                                // KMK -->
+                                isSourceIncognito = remember { state.source.isIncognitoModeEnabled() },
+                                // KMK <--
+                                onCoverClick = onCoverClicked,
+                                doSearch = onSearch,
+                                // KMK -->
+                                librarySearch = librarySearch,
+                                onSourceClick = onSourceClick,
+                                onCoverLoaded = onCoverLoaded,
+                                coverRatio = coverRatio,
+                                // KMK <--
+                                readingTime = readingTime,
+                            )
+                        }
                         MangaActionRow(
                             favorite = state.manga.favorite,
                             trackingCount = state.trackingCount,

@@ -215,18 +215,17 @@ abstract class SyncService(
                     val remoteTime = remote.lastModifiedAt
                     val localTime = local.lastModifiedAt
                     val chosenCustomThumbnail = when {
-                        remote.customThumbnailUrl != null && local.customThumbnailUrl == null -> remote.customThumbnailUrl
-                        local.customThumbnailUrl != null && remote.customThumbnailUrl == null -> local.customThumbnailUrl
-                        remoteTime > localTime -> remote.customThumbnailUrl
                         localTime > remoteTime -> local.customThumbnailUrl
-                        else -> remote.customThumbnailUrl ?: local.customThumbnailUrl
+                        remoteTime > localTime -> remote.customThumbnailUrl
+                        else -> local.customThumbnailUrl ?: remote.customThumbnailUrl
                     }
                     val chosenCustomBanner = when {
-                        remote.customBannerUrl != null && local.customBannerUrl == null -> remote.customBannerUrl
-                        local.customBannerUrl != null && remote.customBannerUrl == null -> local.customBannerUrl
-                        remoteTime > localTime -> remote.customBannerUrl
                         localTime > remoteTime -> local.customBannerUrl
-                        else -> remote.customBannerUrl ?: local.customBannerUrl
+                        remoteTime > localTime -> remote.customBannerUrl
+                        else -> local.customBannerUrl ?: remote.customBannerUrl
+                    }?.takeIf { banner ->
+                        val entryTitle = local.title.ifBlank { remote.title }
+                        eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.isCustomBannerValidForEntry(banner, entryTitle)
                     }
                     val chosenExcludedBanners = if (remoteTime > localTime) {
                         remote.excludedBannerSources.ifEmpty { local.excludedBannerSources }

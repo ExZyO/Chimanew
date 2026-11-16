@@ -76,8 +76,13 @@ class MangaBackupCreator(
 
         // EaZy Nuvio+ / Chimanew: Backup custom banner and artwork exclusions
         if (options.customBanners) {
-            preferences.mangaCustomBannerUrl(manga.id).get().takeIf { it.isNotBlank() }?.let {
-                mangaObject.customBannerUrl = it
+            preferences.mangaCustomBannerUrl(manga.id).get().takeIf { it.isNotBlank() }?.let { banner ->
+                val title = manga.ogTitle ?: manga.title
+                if (eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.isCustomBannerValidForEntry(banner, title)) {
+                    mangaObject.customBannerUrl = banner
+                } else {
+                    preferences.mangaCustomBannerUrl(manga.id).delete()
+                }
             }
             preferences.mangaExcludedBannerSources(manga.id).get().takeIf { it.isNotEmpty() }?.let {
                 mangaObject.excludedBannerSources = it.toList()

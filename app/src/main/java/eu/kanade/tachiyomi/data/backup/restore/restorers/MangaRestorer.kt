@@ -390,7 +390,7 @@ class MangaRestorer(
         flatMetadata?.let { restoreFlatMetadata(manga.id, it) }
         restoreEditedInfo(customManga?.copy(id = manga.id))
         // SY <--
-        restoreCustomBanner(manga.id, customBannerUrl)
+        restoreCustomBanner(manga, customBannerUrl)
         if (excludedBannerSources.isNotEmpty()) {
             preferences.mangaExcludedBannerSources(manga.id).set(excludedBannerSources.toSet())
         }
@@ -633,11 +633,16 @@ class MangaRestorer(
         }
     }
 
-    private fun restoreCustomBanner(mangaId: Long, bannerUrl: String?) {
+    private fun restoreCustomBanner(manga: Manga, bannerUrl: String?) {
         if (bannerUrl == null) return
-        val currentBanner = preferences.mangaCustomBannerUrl(mangaId).get()
+        val title = manga.ogTitle ?: manga.title
+        if (!eu.kanade.tachiyomi.ui.home.chimanew.data.ArtworkWaterfallRepository.isCustomBannerValidForEntry(bannerUrl, title)) {
+            preferences.mangaCustomBannerUrl(manga.id).delete()
+            return
+        }
+        val currentBanner = preferences.mangaCustomBannerUrl(manga.id).get()
         if (currentBanner != bannerUrl) {
-            preferences.mangaCustomBannerUrl(mangaId).set(bannerUrl)
+            preferences.mangaCustomBannerUrl(manga.id).set(bannerUrl)
             context.imageLoader.memoryCache?.clear()
             ChimanewHomeScreenModel.triggerRefresh()
         }

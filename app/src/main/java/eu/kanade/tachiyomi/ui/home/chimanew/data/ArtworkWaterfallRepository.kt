@@ -347,6 +347,7 @@ class ArtworkWaterfallRepository(
         mangaId: Long? = null,
         categoryIds: List<Long>? = null,
         mediaType: Int = MEDIA_TYPE_MANGA,
+        entryTitle: String? = null,
     ): UnifiedArtwork {
         val excludedBanners = when {
             mangaId == null -> emptySet()
@@ -439,11 +440,29 @@ class ArtworkWaterfallRepository(
         }
 
         val customBanner = if (mangaId != null) {
-            when (mediaType) {
+            val rawPref = when (mediaType) {
                 MEDIA_TYPE_ANIME -> preferences.animeCustomBannerUrl(mangaId).get()
                 MEDIA_TYPE_NOVEL -> preferences.novelCustomBannerUrl(mangaId).get()
                 else -> preferences.mangaCustomBannerUrl(mangaId).get()
             }.takeIf { it.isNotBlank() }
+
+            val titleToCheck = entryTitle ?: runBlocking {
+                try {
+                    if (mediaType == MEDIA_TYPE_MANGA) getManga.await(mangaId)?.let { it.ogTitle ?: it.title } else null
+                } catch (_: Exception) { null }
+            }
+
+            if (rawPref != null && !titleToCheck.isNullOrBlank() && !isCustomBannerValidForEntry(rawPref, titleToCheck)) {
+                logcat(LogPriority.WARN) { "Discarding mismatched custom banner '$rawPref' for '$titleToCheck' (id=$mangaId)" }
+                when (mediaType) {
+                    MEDIA_TYPE_ANIME -> preferences.animeCustomBannerUrl(mangaId).delete()
+                    MEDIA_TYPE_NOVEL -> preferences.novelCustomBannerUrl(mangaId).delete()
+                    else -> preferences.mangaCustomBannerUrl(mangaId).delete()
+                }
+                null
+            } else {
+                rawPref
+            }
         } else null
 
         val isBannerDisabled = customBanner.equals("NONE", ignoreCase = true) || excludedBanners.contains("ALL")
@@ -547,7 +566,7 @@ class ArtworkWaterfallRepository(
     ): UnifiedArtwork? {
         val key = makeKey(title, mediaType)
         val raw = cache[key] ?: (if (mediaType == MEDIA_TYPE_MANGA) cache[cleanTitle(title)] else null) ?: return null
-        val effective = getEffectiveArtwork(raw, defaultCoverUrl, mangaId, categoryIds, mediaType)
+        val effective = getEffectiveArtwork(raw, defaultCoverUrl, mangaId, categoryIds, mediaType, entryTitle = title)
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Cache") {
             "Memory cache HIT for '[$mediaType] $title': banner=${effective.bannerUrl}, poster=${effective.posterUrl}"
         }
@@ -848,7 +867,7 @@ class ArtworkWaterfallRepository(
         if (cachedEntry != null && !forceRefresh) {
             val missingProviders = requestedProviders - cachedEntry.queriedProviders
             if (missingProviders.isEmpty()) {
-                val cached = getEffectiveArtwork(cachedEntry, defaultCoverUrl, mangaId, effCategories)
+                val cached = getEffectiveArtwork(cachedEntry, defaultCoverUrl, mangaId, effCategories, entryTitle = title)
                 ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
                     "Resolved from cache for '$title': banner=${cached.bannerUrl}, poster=${cached.posterUrl}"
                 }
@@ -1155,7 +1174,7 @@ class ArtworkWaterfallRepository(
             }
             scheduleSaveToDisk()
         }
-        val effective = getEffectiveArtwork(rawResult, defaultCoverUrl, mangaId, effCategories, mediaType)
+        val effective = getEffectiveArtwork(rawResult, defaultCoverUrl, mangaId, effCategories, mediaType, entryTitle = title)
         ChimanewDiagnostics.log(DiagnosticCategory.ARTWORK, "Waterfall") {
             "Network discovery completed for '$title' -> banner=${effective.bannerUrl}, cover=${effective.posterUrl} (covers=${mergedCovers.size}, banners=${mergedBanners.size})"
         }
@@ -1172,27 +1191,70 @@ class ArtworkWaterfallRepository(
         fun containsHanzi(text: String): Boolean = HANZI_REGEX.containsMatchIn(text)
         fun containsJapanese(text: String): Boolean = JAPANESE_REGEX.containsMatchIn(text)
 
+        private val TITLE_STOP_WORDS = setOf(
+            "the", "a", "an", "and", "or", "of", "in", "to", "for", "with",
+            "on", "at", "by", "from", "is", "it", "s", "no", "not", "i", "me", "my",
+        )
+
+        fun isCustomBannerValidForEntry(bannerUrl: String, title: String): Boolean {
+            if (bannerUrl.isBlank() || bannerUrl.equals("NONE", ignoreCase = true) || bannerUrl.equals("COVER", ignoreCase = true)) {
+                return true
+            }
+            if (bannerUrl.startsWith("file:", ignoreCase = true) || bannerUrl.startsWith("content:", ignoreCase = true)) {
+                return true
+            }
+            val filename = bannerUrl.substringAfterLast('/').substringBefore('?')
+            // If filename contains a UUID or long hex string, it is opaque and cannot be matched against a title slug
+            if (filename.contains(Regex("""[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"""))) {
+                return true
+            }
+            val rawSlug = filename.substringBeforeLast('.')
+                .replace(Regex("""\.[a-f0-9]{5,}$""", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("""[-_]"""), " ")
+                .trim()
+                .lowercase()
+
+            val slugTokens = rawSlug.split(" ")
+                .filter { it.isNotBlank() && it.length > 2 && !it.all { ch -> ch.isDigit() } }
+
+            // Require at least 2 readable word tokens (containing letters outside basic hex) to form a title slug
+            val readableWordTokens = slugTokens.filter { token -> token.any { ch -> ch in 'g'..'z' } }
+            if (readableWordTokens.size < 2) return true
+
+            val cleanTitleTokens = normalizeForComparison(cleanTitle(title))
+                .split(" ")
+                .filter { it.isNotBlank() && it.length > 2 }
+                .toSet()
+
+            val latinTitleTokens = cleanTitleTokens.filter { token -> token.any { ch -> ch in 'a'..'z' } }
+            if (latinTitleTokens.isEmpty()) {
+                // Non-Latin title (Hangul, Japanese, Chinese, etc.). Cannot compare Latin slug against non-Latin script.
+                return true
+            }
+
+            return readableWordTokens.any { it in latinTitleTokens }
+        }
+
         fun isTitleMatch(queryTitle: String, candidateTitles: List<String>): Boolean {
             val qNorm = normalizeForComparison(queryTitle)
             if (qNorm.isBlank()) return false
-            val qTokens = qNorm.split(" ").filter { it.isNotBlank() }.toSet()
+            val qTokens = qNorm.split(" ").filter { it.isNotBlank() && it !in TITLE_STOP_WORDS }.toSet()
 
             for (candidate in candidateTitles) {
                 val cNorm = normalizeForComparison(candidate)
                 if (cNorm.isBlank()) continue
                 if (qNorm == cNorm) return true
-                if (cNorm.startsWith(qNorm) || qNorm.startsWith(cNorm)) return true
-                if (qNorm.contains(cNorm) || cNorm.contains(qNorm)) {
-                    val minLen = minOf(qNorm.length, cNorm.length)
-                    val maxLen = maxOf(qNorm.length, cNorm.length)
-                    if (minLen.toFloat() / maxLen >= 0.35f) return true
-                }
-                val cTokens = cNorm.split(" ").filter { it.isNotBlank() }.toSet()
+                val cTokens = cNorm.split(" ").filter { it.isNotBlank() && it !in TITLE_STOP_WORDS }.toSet()
                 if (qTokens.isNotEmpty() && cTokens.isNotEmpty()) {
+                    if (qTokens == cTokens) return true
                     val intersection = qTokens.intersect(cTokens).size
-                    if (intersection.toFloat() / qTokens.size >= 0.6f) return true
-                    val union = qTokens.union(cTokens).size
-                    if (intersection.toFloat() / union >= 0.35f) return true
+                    val shorterLen = minOf(qTokens.size, cTokens.size)
+                    val longerLen = maxOf(qTokens.size, cTokens.size)
+                    if (intersection.toFloat() / shorterLen >= 0.75f && intersection.toFloat() / longerLen >= 0.50f) {
+                        return true
+                    }
+                } else if (qNorm.length >= 4 && cNorm.length >= 4) {
+                    if (qNorm == cNorm) return true
                 }
             }
             return false

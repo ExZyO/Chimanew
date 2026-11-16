@@ -618,7 +618,10 @@ class ChimanewHomeScreenModel(
 
             val updatedHeroItems = currentState.heroItems.map { item ->
                 if (item.mangaId == id) {
-                    val fallbackBanner = effectiveUrl ?: artworkWaterfallRepository.getCached(item.title, mangaId = id, mediaType = mediaType)?.bannerUrl
+                    val validEffectiveUrl = effectiveUrl?.takeIf {
+                        ArtworkWaterfallRepository.isCustomBannerValidForEntry(it, item.title)
+                    }
+                    val fallbackBanner = validEffectiveUrl ?: artworkWaterfallRepository.getCached(item.title, mangaId = id, mediaType = mediaType)?.bannerUrl
                     item.copy(highResBannerUrl = fallbackBanner)
                 } else item
             }
@@ -627,7 +630,10 @@ class ChimanewHomeScreenModel(
                 shelf.copy(
                     items = shelf.items.map { item ->
                         if (item.mangaId == id) {
-                            val fallbackBanner = effectiveUrl ?: artworkWaterfallRepository.getCached(item.title, mangaId = id, mediaType = mediaType)?.bannerUrl
+                            val validEffectiveUrl = effectiveUrl?.takeIf {
+                                ArtworkWaterfallRepository.isCustomBannerValidForEntry(it, item.title)
+                            }
+                            val fallbackBanner = validEffectiveUrl ?: artworkWaterfallRepository.getCached(item.title, mangaId = id, mediaType = mediaType)?.bannerUrl
                             item.copy(highResBannerUrl = fallbackBanner)
                         } else item
                     }
@@ -748,7 +754,13 @@ class ChimanewHomeScreenModel(
                 historyId: Long? = null,
             ): HomeMangaItem {
                 val cachedArt = artworkWaterfallRepository.getCached(title, mangaId = mangaId, mediaType = MEDIA_TYPE_MANGA)
-                val customHeroBanner = preferences.mangaCustomHeroBannerUrl(mangaId).get().takeIf { it.isNotBlank() }
+                val rawHeroBanner = preferences.mangaCustomHeroBannerUrl(mangaId).get().takeIf { it.isNotBlank() }
+                val customHeroBanner = if (rawHeroBanner != null && !ArtworkWaterfallRepository.isCustomBannerValidForEntry(rawHeroBanner, title)) {
+                    preferences.mangaCustomHeroBannerUrl(mangaId).delete()
+                    null
+                } else {
+                    rawHeroBanner
+                }
                 return HomeMangaItem(
                     mangaId = mangaId,
                     title = title,
