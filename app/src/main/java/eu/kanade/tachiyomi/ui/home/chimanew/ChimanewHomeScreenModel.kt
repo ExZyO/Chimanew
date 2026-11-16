@@ -238,13 +238,14 @@ class ChimanewHomeScreenModel(
 
     private fun selectHeroItems(candidates: List<HomeMangaItem>, mediaType: Int = mutableState.value.activeMedia, maxCount: Int = 7): List<HomeMangaItem> {
         if (candidates.isEmpty()) return emptyList()
+        val distinct = candidates.distinctBy { it.mangaId }
         val saved = persistentHeroIdsByMedia[mediaType]
         if (!saved.isNullOrEmpty()) {
-            val byId = candidates.associateBy { it.mangaId }
-            val matched = saved.mapNotNull { byId[it] }
+            val byId = distinct.associateBy { it.mangaId }
+            val matched = saved.distinct().mapNotNull { byId[it] }
             if (matched.isNotEmpty()) return matched
         }
-        val selected = candidates.shuffled().take(maxCount)
+        val selected = distinct.shuffled().take(maxCount)
         persistentHeroIdsByMedia[mediaType] = selected.map { it.mangaId }
         return selected
     }

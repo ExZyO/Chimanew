@@ -134,7 +134,7 @@ fun NuvioHeroSection(
         items, heroStyle, heroRequireSelectedArtwork, heroStrictArtworkRequirements,
         heroArtworkSources, heroArtworkPairing,
     ) {
-        if (!heroRequireSelectedArtwork) {
+        val filtered = if (!heroRequireSelectedArtwork) {
             items
         } else {
             val enforceBanner = "banner" in heroStrictArtworkRequirements
@@ -167,6 +167,7 @@ fun NuvioHeroSection(
                 accepted
             }
         }
+        filtered.distinctBy { it.mangaId }
     }
     if (displayItems.isEmpty()) return
 
@@ -179,11 +180,19 @@ fun NuvioHeroSection(
     } else 0
 
     val heroListKey = remember(displayItems) { displayItems.map { it.mangaId } }
-    val pagerState = key(heroListKey) {
-        rememberPagerState(
-            initialPage = startIndex,
-            pageCount = { virtualCount },
-        )
+    val pagerState = rememberPagerState(
+        initialPage = startIndex,
+        pageCount = { virtualCount },
+    )
+
+    LaunchedEffect(heroListKey) {
+        if (displayItems.isNotEmpty() && !pagerState.isScrollInProgress) {
+            val currentMod = if (isLooping) pagerState.currentPage % displayItems.size else pagerState.currentPage
+            val targetPage = if (isLooping) startIndex + currentMod else currentMod.coerceIn(0, displayItems.lastIndex)
+            try {
+                pagerState.scrollToPage(targetPage)
+            } catch (_: Exception) {}
+        }
     }
 
     // Dynamic Ambient Palette Extraction (Option A: Smooth Vertical Gradient)
@@ -244,12 +253,14 @@ fun NuvioHeroSection(
     )
 
     // Auto-advance carousel smoothly forward every 6 seconds unless user is scrolling
-    LaunchedEffect(displayItems.size, isLooping) {
+    LaunchedEffect(pagerState, displayItems.size, isLooping) {
         if (!isLooping) return@LaunchedEffect
         while (isActive) {
             delay(6000L)
             if (!pagerState.isScrollInProgress) {
-                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                try {
+                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                } catch (_: Exception) {}
             }
         }
     }
@@ -777,8 +788,12 @@ fun NuvioHeroSection(
     }
 
         // EaZy Nuvio+ / Chimanew: Netflix-style morphing active pill indicator
-        if (items.size > 1) {
-            val activeIndex = pagerState.currentPage % items.size
+        if (displayItems.size > 1) {
+            val activeIndex = if (isLooping) {
+                (pagerState.currentPage % displayItems.size).coerceIn(0, displayItems.lastIndex)
+            } else {
+                pagerState.currentPage.coerceIn(0, displayItems.lastIndex)
+            }
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -786,7 +801,7 @@ fun NuvioHeroSection(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                repeat(items.size) { index ->
+                repeat(displayItems.size) { index ->
                     val isSelected = activeIndex == index
                     val width by animateDpAsState(
                         targetValue = if (isSelected) 22.dp else 5.dp,
