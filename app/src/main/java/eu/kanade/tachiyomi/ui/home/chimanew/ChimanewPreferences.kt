@@ -193,6 +193,7 @@ class ChimanewPreferences(
 
     // Artwork priority order tracking for smart re-evaluation on reorder // EaZy Nuvio+ / Chimanew
     fun artworkPriorityOrderHash() = preferenceStore.getString("pref_chimanew_artwork_priority_order_hash", "")
+    fun artworkCacheSanitizedVersion() = preferenceStore.getInt("pref_nuvio_artwork_cache_sanitized_v", 0)
 
     // Media sections toggle // EaZy Nuvio+ / Chimanew
     fun enableAnimeModule() = preferenceStore.getBoolean("pref_chimanew_enable_anime", true)

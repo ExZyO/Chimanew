@@ -1,6 +1,6 @@
-# What's New in Chimanew v2.6.81
+# What's New in Chimanew v2.6.82
 
-### Persistent Library Update Queue Resumption & Grace Window
-* **15-Minute Cancellation Recovery**: Fixed library update queue re-evaluation when updates are cancelled and restarted. Verified titles are now persisted to both memory and atomic disk preferences (`library_recent_checks` and `anime_library_recent_checks`), surviving cancellations, background task restarts, and process reloads.
-* **Tracker-Assisted Parity**: Removed the exception that exempted tracker-assisted titles from the recent-check grace period. Prevents hundreds of tracker-linked titles from being redundantly re-queried immediately after a check, ensuring true resumption from where the queue left off.
-* **Automatic Expiration Pruning**: Automatically prunes check records older than 1 hour upon starting a library update, maintaining a lightweight preference footprint.
+### Hero Carousel Precision & Artwork Alignment
+* **Keyed Pager State Architecture**: Keyed the hero carousel pager state to the active list of hero items. When refreshing the Home screen or shuffling hero items, the pager resets cleanly at page index 0 without rendering stale slide positions or transient frames from prior entries.
+* **Strict Title Validation Across Providers**: Added comprehensive Unicode-safe title validation (`isTitleMatch`) across AniList, Bangumi, Kuaikan, and tracker lookup pipelines. Fuzzy searches and tracker records for unrelated titles (e.g. tracks for different series) are strictly rejected, preventing foreign banners from being linked to an entry.
+* **Automated Legacy Cache Sanitization**: Added an automated one-time cache purge (`pref_nuvio_artwork_cache_sanitized_v`) on upgrade to v2.6.82, wiping corrupted legacy disk mappings and ensuring only authentic, verified banners are cached.

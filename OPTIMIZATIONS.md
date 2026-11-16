@@ -125,6 +125,20 @@ This document provides a comprehensive technical index of all optimizations, low
   * `app/src/main/java/eu/kanade/presentation/updates/novel/NovelUpdatesScreen.kt`
 * **Mechanism**: Connects Manga, Anime, and Novel updates feed items directly to `ArtworkWaterfallRepository`. Prioritizes user custom covers and cached high-res artwork from AniList, Kitsu, ComicK, and MangaDex instead of falling back to low-resolution default source covers.
 
+### Strict Multi-Source Artwork Validation & Anti-Poisoning
+* **Implementation Files**:
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/data/ArtworkWaterfallRepository.kt`
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/data/AnilistCoverRepository.kt`
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/data/BangumiCoverRepository.kt`
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/data/KuaikanCoverRepository.kt`
+* **Mechanism**: Introduces a shared Unicode-safe title validation algorithm (`ArtworkWaterfallRepository.isTitleMatch`) across all providers and tracking services. Strictly compares query titles against English, Romaji, Native (Hangul, Hanzi, Kanji), and synonym titles. Rejects fuzzy AniList results, unvalidated Bangumi hits, blind Kuaikan fallbacks, and mismatched tracker bindings, preventing foreign artwork from poisoning the cache.
+* **Disk Cache Sanitization**: Added an automated one-time cache purge (`pref_nuvio_artwork_cache_sanitized_v`) on upgrade to v2.6.82, wiping stale and corrupted mappings and ensuring persistent disk caches only retain authentic artwork.
+
+### Keyed Hero Carousel Pager State
+* **Implementation File**:
+  * `app/src/main/java/eu/kanade/tachiyomi/ui/home/chimanew/components/NuvioHeroSection.kt`
+* **Mechanism**: Keys the Compose `rememberPagerState` by the list of active hero item IDs (`heroListKey`). Whenever the Home screen is refreshed or hero items change, the pager state resets cleanly to the virtual loop center (`startIndex`, aligned to index 0). Completely eliminates modulo misalignment, off-by-one page retention, and transient rendering of previous items' banner artwork during refresh.
+
 ---
 
 ## 5. Three-Tier Cache Architecture

@@ -95,7 +95,13 @@ class BangumiCoverRepository(
                 val data = root["data"] as? JsonArray
 
                 if (!data.isNullOrEmpty()) {
-                    val first = data.firstOrNull() as? JsonObject ?: return@withContext null
+                    val first = data.firstNotNullOfOrNull { elem ->
+                        val obj = elem as? JsonObject ?: return@firstNotNullOfOrNull null
+                        val name = obj["name"]?.jsonPrimitive?.contentOrNull
+                        val nameCn = obj["name_cn"]?.jsonPrimitive?.contentOrNull
+                        val candidateTitles = listOfNotNull(name, nameCn)
+                        if (ArtworkWaterfallRepository.isTitleMatch(query, candidateTitles)) obj else null
+                    } ?: return@withContext null
                     val subjectId = first["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                     val titleName = first["name"]?.jsonPrimitive?.contentOrNull
                         ?: first["name_cn"]?.jsonPrimitive?.contentOrNull

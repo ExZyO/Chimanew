@@ -74,9 +74,11 @@ class KuaikanCoverRepository(
                     val queryClean = query.replace(" ", "").lowercase()
                     val matchedObj = hits.firstNotNullOfOrNull { elem ->
                         val obj = elem as? JsonObject ?: return@firstNotNullOfOrNull null
-                        val name = obj["title"]?.jsonPrimitive?.contentOrNull.orEmpty().replace(" ", "").lowercase()
-                        if (name == queryClean || name.contains(queryClean) || queryClean.contains(name)) obj else null
-                    } ?: hits.firstOrNull() as? JsonObject ?: return@withContext null
+                        val rawTitle = obj["title"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        val name = rawTitle.replace(" ", "").lowercase()
+                        if (name == queryClean || name.contains(queryClean) || queryClean.contains(name) ||
+                            ArtworkWaterfallRepository.isTitleMatch(query, listOf(rawTitle))) obj else null
+                    } ?: return@withContext null
 
                     val topicId = matchedObj["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                     val rawBanner = matchedObj["cover_image_url"]?.jsonPrimitive?.contentOrNull

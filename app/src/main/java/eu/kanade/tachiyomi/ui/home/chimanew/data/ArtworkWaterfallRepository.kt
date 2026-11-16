@@ -224,7 +224,12 @@ class ArtworkWaterfallRepository(
     private var saveJob: Job? = null
 
     init {
-        loadFromDisk()
+        if (preferences.artworkCacheSanitizedVersion().get() < 20682) {
+            preferences.artworkCacheSanitizedVersion().set(20682)
+            clearCache()
+        } else {
+            loadFromDisk()
+        }
     }
 
     private fun loadFromDisk() {
@@ -839,7 +844,7 @@ class ArtworkWaterfallRepository(
         val isAniListRequested = "ANILIST" in requestedProviders
         val needsAsianBridge = isNaverRequested || isKuaikanRequested || isBangumiRequested || isBookWalkerRequested
 
-        val cachedEntry = cache[title]
+        val cachedEntry = cache[cacheKey] ?: (if (mediaType == MEDIA_TYPE_MANGA) cache[title] else null)
         if (cachedEntry != null && !forceRefresh) {
             val missingProviders = requestedProviders - cachedEntry.queriedProviders
             if (missingProviders.isEmpty()) {
@@ -869,19 +874,6 @@ class ArtworkWaterfallRepository(
 
         if (mangaId != null) {
             try {
-                val tracks = trackRepository.getTracksByMangaId(mangaId)
-                if (effectiveAniListId == null) {
-                    effectiveAniListId = tracks.firstOrNull { it.trackerId == 2L }?.remoteId?.takeIf { it > 0 }
-                }
-                if (effectiveMalId == null) {
-                    effectiveMalId = tracks.firstOrNull { it.trackerId == 1L }?.remoteId?.takeIf { it > 0 }
-                }
-                if (effectiveKitsuId == null) {
-                    effectiveKitsuId = tracks.firstOrNull { it.trackerId == 3L }?.remoteId?.takeIf { it > 0 }
-                }
-                val mdTrack = tracks.firstOrNull { it.trackerId == 60L }
-                effectiveMangadexId = mdTrack?.remoteUrl?.substringAfter("/manga/")?.substringBefore("/")?.substringBefore("?")?.trim()?.takeIf { it.length >= 32 }
-
                 val mangaObj = getManga.await(mangaId)
                 if (mangaObj != null) {
                     if (effectiveMangadexId == null && mangaObj.url.contains("/manga/")) {
@@ -897,6 +889,29 @@ class ArtworkWaterfallRepository(
                             effectiveAltTitle = mTitle
                         }
                     }
+                }
+
+                val tracks = trackRepository.getTracksByMangaId(mangaId)
+                val cleanRaw = cleanTitle(rawTitle)
+                val candidateMangaTitles = listOfNotNull(rawTitle, cleanRaw, mangaObj?.title, mangaObj?.ogTitle, effectiveAltTitle).distinct()
+                fun isTrackValid(trackTitle: String): Boolean {
+                    if (trackTitle.isBlank()) return true
+                    return isTitleMatch(trackTitle, candidateMangaTitles)
+                }
+
+                if (effectiveAniListId == null) {
+                    effectiveAniListId = tracks.firstOrNull { it.trackerId == 2L && isTrackValid(it.title) }?.remoteId?.takeIf { it > 0 }
+                }
+                if (effectiveMalId == null) {
+                    effectiveMalId = tracks.firstOrNull { it.trackerId == 1L && isTrackValid(it.title) }?.remoteId?.takeIf { it > 0 }
+                }
+                if (effectiveKitsuId == null) {
+                    effectiveKitsuId = tracks.firstOrNull { it.trackerId == 3L && isTrackValid(it.title) }?.remoteId?.takeIf { it > 0 }
+                }
+                val mdTrack = tracks.firstOrNull { it.trackerId == 60L }
+                val mdUrlId = mdTrack?.remoteUrl?.substringAfter("/manga/")?.substringBefore("/")?.substringBefore("?")?.trim()?.takeIf { it.length >= 32 }
+                if (mdUrlId != null && isTrackValid(mdTrack.title)) {
+                    effectiveMangadexId = mdUrlId
                 }
             } catch (_: Exception) {}
         }
@@ -1156,6 +1171,39 @@ class ArtworkWaterfallRepository(
         fun containsHangul(text: String): Boolean = HANGUL_REGEX.containsMatchIn(text)
         fun containsHanzi(text: String): Boolean = HANZI_REGEX.containsMatchIn(text)
         fun containsJapanese(text: String): Boolean = JAPANESE_REGEX.containsMatchIn(text)
+
+        fun isTitleMatch(queryTitle: String, candidateTitles: List<String>): Boolean {
+            val qNorm = normalizeForComparison(queryTitle)
+            if (qNorm.isBlank()) return false
+            val qTokens = qNorm.split(" ").filter { it.isNotBlank() }.toSet()
+
+            for (candidate in candidateTitles) {
+                val cNorm = normalizeForComparison(candidate)
+                if (cNorm.isBlank()) continue
+                if (qNorm == cNorm) return true
+                if (cNorm.startsWith(qNorm) || qNorm.startsWith(cNorm)) return true
+                if (qNorm.contains(cNorm) || cNorm.contains(qNorm)) {
+                    val minLen = minOf(qNorm.length, cNorm.length)
+                    val maxLen = maxOf(qNorm.length, cNorm.length)
+                    if (minLen.toFloat() / maxLen >= 0.35f) return true
+                }
+                val cTokens = cNorm.split(" ").filter { it.isNotBlank() }.toSet()
+                if (qTokens.isNotEmpty() && cTokens.isNotEmpty()) {
+                    val intersection = qTokens.intersect(cTokens).size
+                    if (intersection.toFloat() / qTokens.size >= 0.6f) return true
+                    val union = qTokens.union(cTokens).size
+                    if (intersection.toFloat() / union >= 0.35f) return true
+                }
+            }
+            return false
+        }
+
+        fun normalizeForComparison(s: String): String {
+            return s.lowercase()
+                .replace(Regex("""[^\p{L}\p{N}\s]"""), " ")
+                .replace(Regex("""\s+"""), " ")
+                .trim()
+        }
 
         fun cleanTitle(title: String): String {
             val cleaned = title

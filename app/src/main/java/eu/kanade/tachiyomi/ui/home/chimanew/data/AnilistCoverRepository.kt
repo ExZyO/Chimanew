@@ -157,14 +157,23 @@ class AnilistCoverRepository(
                         }
                     }
 
-                    // 3. Link Titles by memory reference
+                    // 3. Link Titles by memory reference (with title validation)
                     for ((title, id) in diskCache.titleToId) {
-                        diskCache.byId[id]?.let { titleCache[title] = it }
+                        val art = diskCache.byId[id]
+                        if (art != null) {
+                            val candidateTitles = listOfNotNull(art.englishTitle, art.romajiTitle, art.nativeTitle) + art.synonyms
+                            if (ArtworkWaterfallRepository.isTitleMatch(title, candidateTitles)) {
+                                titleCache[title] = art
+                            }
+                        }
                     }
                     for ((title, art) in diskCache.byTitle) {
                         if (!titleCache.containsKey(title)) {
-                            val canonical = diskCache.byId.values.firstOrNull { it.romajiTitle == art.romajiTitle && it.nativeTitle == art.nativeTitle } ?: art
-                            titleCache[title] = canonical
+                            val candidateTitles = listOfNotNull(art.englishTitle, art.romajiTitle, art.nativeTitle) + art.synonyms
+                            if (ArtworkWaterfallRepository.isTitleMatch(title, candidateTitles)) {
+                                val canonical = diskCache.byId.values.firstOrNull { it.romajiTitle == art.romajiTitle && it.nativeTitle == art.nativeTitle } ?: art
+                                titleCache[title] = canonical
+                            }
                         }
                     }
 
@@ -671,6 +680,19 @@ class AnilistCoverRepository(
                     val romaji = titleObj?.get("romaji").asStringOrNull()
                     val native = titleObj?.get("native").asStringOrNull()
                     val synonymsList = (media["synonyms"] as? JsonArray)?.mapNotNull { it.asStringOrNull() } ?: emptyList()
+                    val candidateTitles = listOfNotNull(english, romaji, native) + synonymsList
+                    if (!ArtworkWaterfallRepository.isTitleMatch(title, candidateTitles)) {
+                        ChimanewDiagnostics.log(DiagnosticCategory.NETWORK, "AniList") {
+                            "Rejected AniList title mismatch for '$title': got candidates $candidateTitles"
+                        }
+                        titleCache[cacheKey] = EMPTY_ARTWORK
+                        if (!isAnime) {
+                            titleCache[title] = EMPTY_ARTWORK
+                        }
+                        scheduleSaveToDisk()
+                        return@withContext EMPTY_ARTWORK
+                    }
+
                     val banner = media["bannerImage"].asStringOrNull()
                     val coverObj = media["coverImage"] as? JsonObject
                     val extraLarge = coverObj?.get("extraLarge").asStringOrNull()

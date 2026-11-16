@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -177,15 +178,12 @@ fun NuvioHeroSection(
         middle - (middle % displayItems.size)
     } else 0
 
-    val pagerState = rememberPagerState(
-        initialPage = startIndex,
-        pageCount = { virtualCount },
-    )
-
-    LaunchedEffect(displayItems.map { it.mangaId }) {
-        if (displayItems.isNotEmpty()) {
-            pagerState.scrollToPage(startIndex)
-        }
+    val heroListKey = remember(displayItems) { displayItems.map { it.mangaId } }
+    val pagerState = key(heroListKey) {
+        rememberPagerState(
+            initialPage = startIndex,
+            pageCount = { virtualCount },
+        )
     }
 
     // Dynamic Ambient Palette Extraction (Option A: Smooth Vertical Gradient)
@@ -275,12 +273,12 @@ fun NuvioHeroSection(
             key = { page ->
                 val actualIndex = if (isLooping) page % displayItems.size else page
                 val item = displayItems.getOrNull(actualIndex)
-                "${page}_${item?.mangaId ?: actualIndex}"
+                "${item?.mangaId ?: actualIndex}_$page"
             },
             modifier = Modifier.fillMaxSize(),
         ) { page ->
             val actualIndex = if (isLooping) page % displayItems.size else page
-            val item = displayItems[actualIndex]
+            val item = displayItems.getOrNull(actualIndex) ?: return@HorizontalPager
             val accentColor = item.vibrantColor
                 ?: MaterialTheme.colorScheme.primary
             val surfaceColor = MaterialTheme.colorScheme.background
