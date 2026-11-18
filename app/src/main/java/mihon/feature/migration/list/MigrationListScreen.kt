@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,7 +37,14 @@ class MigrationListScreen(
     // KMK <--
 ) : Screen() {
 
-    private var matchOverride by mutableStateOf<Pair<Long, Long>?>(null)
+    @Transient
+    private var _matchOverride: MutableState<Pair<Long, Long>?>? = null
+
+    private var matchOverride: Pair<Long, Long>?
+        get() = (_matchOverride ?: mutableStateOf<Pair<Long, Long>?>(null).also { _matchOverride = it }).value
+        set(value) {
+            (_matchOverride ?: mutableStateOf<Pair<Long, Long>?>(null).also { _matchOverride = it }).value = value
+        }
 
     fun addMatchOverride(current: Long, target: Long) {
         matchOverride = current to target

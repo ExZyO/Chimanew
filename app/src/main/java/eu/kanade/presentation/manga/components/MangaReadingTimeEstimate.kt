@@ -7,11 +7,11 @@ import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
 /**
- * Returns estimated reading time calculated from the provided chapters.
- * Deduplicates multi-scanlation chapters to ensure accurate estimates.
+ * Returns the count of distinct chapters across all scanlators.
+ * Deduplicates multi-scanlation chapters to ensure accurate display counts.
  */
-internal fun List<ChapterList.Item>.toEstimatedReadingTime(context: Context): String? {
-    val uniqueCount = distinctBy { item ->
+internal fun List<ChapterList.Item>.distinctChapterCount(): Int {
+    return distinctBy { item ->
         if (item.chapter.isRecognizedNumber) {
             "num:${item.chapter.chapterNumber}"
         } else {
@@ -19,8 +19,14 @@ internal fun List<ChapterList.Item>.toEstimatedReadingTime(context: Context): St
             if (normalized.isNotEmpty()) "name:$normalized" else "id:${item.chapter.id}"
         }
     }.size
+}
 
-    return uniqueCount.toEstimatedReadingTime(context)
+/**
+ * Returns estimated reading time calculated from the provided chapters.
+ * Deduplicates multi-scanlation chapters to ensure accurate estimates.
+ */
+internal fun List<ChapterList.Item>.toEstimatedReadingTime(context: Context): String? {
+    return distinctChapterCount().toEstimatedReadingTime(context)
 }
 
 /**

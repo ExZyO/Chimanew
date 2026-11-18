@@ -85,6 +85,7 @@ import eu.kanade.presentation.manga.components.PagePreviewItems
 import eu.kanade.presentation.manga.components.PagePreviews
 import eu.kanade.presentation.manga.components.RelatedMangasRow
 import eu.kanade.presentation.manga.components.SearchMetadataChips
+import eu.kanade.presentation.manga.components.distinctChapterCount
 import eu.kanade.presentation.manga.components.toEstimatedReadingTime
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.data.download.model.Download
@@ -454,8 +455,11 @@ private fun MangaScreenSmallImpl(
         )
     }
     val context = LocalContext.current
-    val readingTime = remember(chapters, context) {
-        chapters.toEstimatedReadingTime(context)
+    val distinctChapterCount = remember(chapters) {
+        chapters.distinctChapterCount()
+    }
+    val readingTime = remember(distinctChapterCount, context) {
+        distinctChapterCount.toEstimatedReadingTime(context)
     }
     // SY -->
     val metadataDescription = metadataDescription(state.source)
@@ -817,7 +821,7 @@ private fun MangaScreenSmallImpl(
                         }
                         ChapterHeader(
                             enabled = !isAnySelected,
-                            chapterCount = chapters.size,
+                            chapterCount = distinctChapterCount,
                             missingChapterCount = missingChapterCount,
                             onClick = onFilterClicked,
                         )
@@ -936,8 +940,11 @@ private fun MangaScreenLargeImpl(
         )
     }
     val context = LocalContext.current
-    val readingTime = remember(chapters, context) {
-        chapters.toEstimatedReadingTime(context)
+    val distinctChapterCount = remember(chapters) {
+        chapters.distinctChapterCount()
+    }
+    val readingTime = remember(distinctChapterCount, context) {
+        distinctChapterCount.toEstimatedReadingTime(context)
     }
 
     // SY -->
@@ -1273,7 +1280,7 @@ private fun MangaScreenLargeImpl(
                                 }
                                 ChapterHeader(
                                     enabled = !isAnySelected,
-                                    chapterCount = chapters.size,
+                                    chapterCount = distinctChapterCount,
                                     missingChapterCount = missingChapterCount,
                                     onClick = onFilterButtonClicked,
                                 )
